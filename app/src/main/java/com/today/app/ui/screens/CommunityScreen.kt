@@ -42,6 +42,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.input.KeyboardActionHandler
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.text.input.rememberTextFieldState
@@ -50,16 +51,26 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -78,7 +89,7 @@ import com.today.app.data.ChatMessage
 import com.today.app.data.Friend
 import com.today.app.data.TodayViewModel
 import com.today.app.i18n.LocalStrings
-import com.today.app.ui.components.PixelAvatar
+import com.today.app.ui.components.FriendAvatar
 import com.today.app.ui.theme.Coral
 import com.today.app.ui.theme.DmGradient
 import com.today.app.ui.theme.Mint
@@ -124,7 +135,7 @@ private fun FriendList(vm: TodayViewModel) {
                 contentPadding = PaddingValues(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                items(vm.friends, key = { it.id }) { f ->
+                items(vm.visibleFriends, key = { it.id }) { f ->
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier.clickable { vm.openChat(f.id) },
@@ -138,7 +149,10 @@ private fun FriendList(vm: TodayViewModel) {
             Spacer(Modifier.height(16.dp))
             HorizontalDivider(color = NightSurfaceHigh)
         }
-        items(vm.friends, key = { "row-${it.id}" }) { f ->
+        if (vm.visibleFriends.isEmpty()) {
+            item { Text(s.noFriends, color = TextMuted, modifier = Modifier.padding(24.dp)) }
+        }
+        items(vm.visibleFriends, key = { "row-${it.id}" }) { f ->
             val last = vm.chats[f.id]?.lastOrNull()
             val isTyping = vm.typing[f.id] == true
             val isUnread = vm.unread[f.id] == true
@@ -175,46 +189,15 @@ private fun FriendList(vm: TodayViewModel) {
     }
 }
 
-/** Round avatar showing the friend's pixel character, with optional IG story ring + online dot. */
-@Composable
-private fun FriendAvatar(friend: Friend, size: Dp, storyRing: Boolean = false) {
-    Box {
-        Box(
-            Modifier
-                .size(size)
-                .clip(CircleShape)
-                .then(if (storyRing) Modifier.background(StoryGradient) else Modifier)
-                .padding(if (storyRing) 3.dp else 0.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.background)
-                .padding(if (storyRing) 2.dp else 0.dp)
-                .clip(CircleShape)
-                .background(Brush.verticalGradient(listOf(Color(0xFF3A2F6B), Color(0xFF241F38)))),
-            contentAlignment = Alignment.TopCenter,
-        ) {
-            // Zoom in on the head/upper body
-            PixelAvatar(friend.outfit, Modifier.height(size * 1.3f).offset(y = size * 0.08f), animateColors = false)
-        }
-        if (friend.online) {
-            Box(
-                Modifier
-                    .align(Alignment.BottomEnd)
-                    .size(size / 4)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.background)
-                    .padding(2.dp)
-                    .clip(CircleShape)
-                    .background(Mint),
-            )
-        }
-    }
-}
-
 // ============================ DM chat ============================
 
 @Composable
 private fun DmChat(vm: TodayViewModel, friend: Friend) {
     val s = LocalStrings.current
+    val st = vm.settings
+    var menu by remember { mutableStateOf(false) }
+    var confirmBlock by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
     val messages = vm.chats[friend.id].orEmpty()
     val isTyping = vm.typing[friend.id] == true
     // TextFieldState handles IME composition (e.g. Hangul syllables in progress) correctly when cleared.
@@ -238,12 +221,27 @@ private fun DmChat(vm: TodayViewModel, friend: Friend) {
             }
             FriendAvatar(friend, 40.dp)
             Spacer(Modifier.width(10.dp))
-            Column {
+            Column(Modifier.weight(1f)) {
                 Text(s.friendName(friend), fontWeight = FontWeight.Bold)
                 Text(
                     if (isTyping) s.typing else if (friend.online) s.activeNow else "@${friend.handle}",
                     fontSize = 12.sp, color = if (friend.online || isTyping) Mint else TextMuted,
                 )
+            }
+            Box {
+                IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = s.friendMenu) }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(
+                        text = { Text(s.block) },
+                        leadingIcon = { Icon(Icons.Filled.Block, null) },
+                        onClick = { menu = false; confirmBlock = true },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(s.deleteFriend, color = Coral) },
+                        leadingIcon = { Icon(Icons.Filled.Delete, null, tint = Coral) },
+                        onClick = { menu = false; confirmDelete = true },
+                    )
+                }
             }
         }
         HorizontalDivider(color = NightSurfaceHigh)
@@ -257,8 +255,13 @@ private fun DmChat(vm: TodayViewModel, friend: Friend) {
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             if (isTyping) item(key = "typing") { TypingBubble(friend) }
+            val lastMine = messages.lastOrNull { it.fromMe }?.id
             items(messages.asReversed(), key = { it.id }) { m ->
-                MessageBubble(m, friend, onDoubleTap = { vm.toggleLike(friend.id, m.id) })
+                MessageBubble(
+                    m, friend, fontSize = st.chatFontSize.sp,
+                    showRead = st.readReceipts && m.id == lastMine && m.read,
+                    onDoubleTap = { vm.toggleLike(friend.id, m.id) },
+                )
             }
             item(key = "profile") { ChatProfileHeader(friend) }
         }
@@ -286,11 +289,11 @@ private fun DmChat(vm: TodayViewModel, friend: Friend) {
             }
             BasicTextField(
                 state = input,
-                textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
+                textStyle = TextStyle(color = Color.White, fontSize = (st.chatFontSize.sp + 1).sp),
                 cursorBrush = SolidColor(Color.White),
-                lineLimits = TextFieldLineLimits.SingleLine,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                onKeyboardAction = { send() },
+                lineLimits = if (st.enterToSend) TextFieldLineLimits.SingleLine else TextFieldLineLimits.MultiLine(maxHeightInLines = 4),
+                keyboardOptions = KeyboardOptions(imeAction = if (st.enterToSend) ImeAction.Send else ImeAction.Default),
+                onKeyboardAction = if (st.enterToSend) KeyboardActionHandler { send() } else null,
                 modifier = Modifier.weight(1f),
                 decorator = { inner ->
                     if (input.text.isEmpty()) Text(s.messagePlaceholder, color = TextMuted)
@@ -303,6 +306,38 @@ private fun DmChat(vm: TodayViewModel, friend: Friend) {
                 }
             }
         }
+    }
+
+    ChatConfirmDialogs(vm, friend, confirmBlock, confirmDelete, onDismiss = { confirmBlock = false; confirmDelete = false })
+}
+
+@Composable
+private fun ChatConfirmDialogs(
+    vm: TodayViewModel,
+    friend: Friend,
+    confirmBlock: Boolean,
+    confirmDelete: Boolean,
+    onDismiss: () -> Unit,
+) {
+    val s = LocalStrings.current
+    val name = s.friendName(friend)
+    if (confirmBlock) {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text(s.blockConfirmTitle(name)) },
+            text = { Text(s.blockConfirmBody) },
+            confirmButton = { TextButton(onClick = { onDismiss(); vm.setBlocked(friend.id, true) }) { Text(s.block, color = Coral) } },
+            dismissButton = { TextButton(onClick = onDismiss) { Text(s.cancel) } },
+        )
+    }
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text(s.deleteFriendTitle(name)) },
+            text = { Text(s.deleteFriendBody) },
+            confirmButton = { TextButton(onClick = { onDismiss(); vm.removeFriend(friend.id) }) { Text(s.delete, color = Coral) } },
+            dismissButton = { TextButton(onClick = onDismiss) { Text(s.cancel) } },
+        )
     }
 }
 
@@ -320,9 +355,10 @@ private fun ChatProfileHeader(friend: Friend) {
 }
 
 @Composable
-private fun MessageBubble(m: ChatMessage, friend: Friend, onDoubleTap: () -> Unit) {
+private fun MessageBubble(m: ChatMessage, friend: Friend, fontSize: Int, showRead: Boolean, onDoubleTap: () -> Unit) {
     val s = LocalStrings.current
     val shape = if (m.fromMe) RoundedCornerShape(20.dp, 20.dp, 4.dp, 20.dp) else RoundedCornerShape(20.dp, 20.dp, 20.dp, 4.dp)
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
     Row(
         Modifier.fillMaxWidth().padding(bottom = if (m.liked) 12.dp else 0.dp),
         horizontalArrangement = if (m.fromMe) Arrangement.End else Arrangement.Start,
@@ -341,7 +377,7 @@ private fun MessageBubble(m: ChatMessage, friend: Friend, onDoubleTap: () -> Uni
                     .pointerInput(m.id) { detectTapGestures(onDoubleTap = { onDoubleTap() }) }
                     .padding(horizontal = 14.dp, vertical = 10.dp),
             ) {
-                Text(s.messageText(m), color = Color.White, fontSize = 15.sp)
+                Text(s.messageText(m), color = Color.White, fontSize = fontSize.sp)
                 Text(
                     s.chatTime(m.time), fontSize = 10.sp, color = Color.White.copy(alpha = 0.6f),
                     modifier = Modifier.align(Alignment.End),
@@ -361,6 +397,10 @@ private fun MessageBubble(m: ChatMessage, friend: Friend, onDoubleTap: () -> Uni
                 }
             }
         }
+    }
+    if (showRead) {
+        Text(s.read, color = TextMuted, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp, end = 4.dp))
+    }
     }
 }
 

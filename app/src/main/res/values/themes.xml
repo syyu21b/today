@@ -6,12 +6,12 @@
         <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
 
-    <!-- System splash (Android 12+ native, older versions via core-splashscreen):
-         the logo on a gold circle, same geometry as the in-app intro that follows. -->
-    <style name="Theme.Today.Starting" parent="Theme.SplashScreen.IconBackground">
+    <!-- System splash (Android 12+ native, older versions via core-splashscreen): just the app
+         background. The logo is drawn by the in-app intro from the user's current outfit, which a
+         static theme drawable can't know. -->
+    <style name="Theme.Today.Starting" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">#FF14121F</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
-        <item name="windowSplashScreenIconBackgroundColor">#FFFFD34E</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_blank</item>
         <item name="postSplashScreenTheme">@style/Theme.Today</item>
     </style>
 </resources>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Status-bar icon: the default avatar's face as a single-color silhouette. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="14" android:viewportHeight="14">
+    <path android:fillColor="#FFFFFFFF" android:pathData="M3,1.5h8v1h-8zM2,2.5h10v1h-10zM1,3.5h12v1h-12zM1,4.5h12v1h-12zM1,5.5h3v1h-3zM10,5.5h3v1h-3zM1,6.5h2v1h-2zM5,6.5h1v1h-1zM8,6.5h1v1h-1zM11,6.5h2v1h-2zM1,7.5h2v1h-2zM11,7.5h2v1h-2zM1,8.5h1v1h-1zM6,8.5h2v1h-2zM12,8.5h1v1h-1zM2,9.5h1v1h-1zM11,9.5h1v1h-1zM5,10.5h1v1h-1zM8,10.5h1v1h-1zM1,11.5h12v1h-12z" />
+</vector>

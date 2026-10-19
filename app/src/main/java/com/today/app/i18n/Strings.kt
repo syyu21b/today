@@ -175,6 +175,147 @@ interface Strings {
     val aboutDesc: String
     val defaultNickname: String
 
+    // ---- settings dashboard ----
+    val on: String
+    val off: String
+    val ok: String
+    val groupGeneral: String
+    fun languageName(lang: AppLanguage): String
+    val groupSocial: String
+    val groupActivity: String
+    val groupMore: String
+    val rowNotifications: String
+    val rowFriends: String
+    fun notifSummary(enabled: Boolean, questReminderTime: String?): String
+    fun friendsSummary(count: Int, blocked: Int): String
+    fun messagesSummary(fontSize: String, autoReplies: Boolean): String
+    fun questsSummary(autoCarry: Boolean, weekStartsMonday: Boolean): String
+    fun dataSummary(days: Int, quests: Int): String
+    fun versionSummary(version: String): String
+
+    // ---- notification settings ----
+    val notifMaster: String
+    val notifMasterDesc: String
+    val notifPermissionDenied: String
+    val openSystemSettings: String
+    val groupReminders: String
+    val questReminder: String
+    val questReminderDesc: String
+    val streakReminder: String
+    val streakReminderDesc: String
+    val reminderTime: String
+    val pickTime: String
+    val groupMessageAlerts: String
+    val messageNotif: String
+    val messageNotifDesc: String
+    val messagePreview: String
+    val messagePreviewDesc: String
+    val testNotification: String
+    val channelReminders: String
+    val channelMessages: String
+    val questReminderTitle: String
+    fun questReminderBody(remaining: Int): String
+    val streakReminderTitle: String
+    fun streakReminderBody(remaining: Int): String
+    val newMessageHidden: String
+    val testNotificationTitle: String
+    val testNotificationBody: String
+
+    // ---- friend settings ----
+    val contactsCardTitle: String
+    val contactsCardBody: String
+    val contactsImport: String
+    val contactsLater: String
+    val groupContacts: String
+    val importFromContacts: String
+    val contactsAllowed: String
+    val contactsNotAllowed: String
+    val contactsDenied: String
+    val contactsEmpty: String
+    val contactsPickerTitle: String
+    val searchName: String
+    fun addSelected(n: Int): String
+    val alreadyFriend: String
+    fun msgContactsImported(n: Int): String
+    fun groupFriendList(n: Int): String
+    val addFriend: String
+    val fieldFriendName: String
+    val fieldFriendHandle: String
+    val errFriendName: String
+    val errFriendDuplicate: String
+    fun errFriendLimit(max: Int): String
+    fun msgFriendAdded(name: String): String
+    fun friendSource(source: com.today.app.data.FriendSource): String
+    val friendMenu: String
+    val sendMessageAction: String
+    val block: String
+    val unblock: String
+    val deleteFriend: String
+    fun blockConfirmTitle(name: String): String
+    val blockConfirmBody: String
+    fun deleteFriendTitle(name: String): String
+    val deleteFriendBody: String
+    fun msgBlocked(name: String): String
+    fun msgUnblocked(name: String): String
+    fun msgFriendDeleted(name: String): String
+    fun groupBlocked(n: Int): String
+    val noBlocked: String
+    val noFriends: String
+
+    // ---- message settings ----
+    val groupChat: String
+    val chatFontSize: String
+    fun fontSizeLabel(size: com.today.app.data.ChatFontSize): String
+    val enterToSend: String
+    val enterToSendDesc: String
+    val readReceipts: String
+    val readReceiptsDesc: String
+    val read: String
+    val autoReplies: String
+    val autoRepliesDesc: String
+    val groupHistory: String
+    val saveHistory: String
+    val saveHistoryDesc: String
+    val clearChats: String
+    val clearChatsBody: String
+    val msgChatsCleared: String
+    val manageBlocked: String
+    val chatPreviewSample: String
+
+    // ---- quest settings ----
+    val weekStart: String
+    val sunday: String
+    val monday: String
+    val celebration: String
+    val celebrationDesc: String
+    val defaultXp: String
+    val defaultXpDesc: String
+    val questReminderLink: String
+
+    // ---- data settings ----
+    val groupStorage: String
+    val statQuestsTotal: String
+    val statFriends: String
+    val statMessages: String
+    val exportData: String
+    val exportDesc: String
+    val exportDone: String
+    val exportFailed: String
+
+    // ---- about ----
+    val version: String
+    val builtWith: String
+    val privacyTitle: String
+    val privacyBody: String
+    val permissionsTitle: String
+    val permNotifications: String
+    val permContacts: String
+    val permCamera: String
+    val permCameraDesc: String
+    val permGranted: String
+    val permDenied: String
+    val licenses: String
+
     // ---- derived helpers (shared by both languages) ----
     fun outfitName(raw: String): String {
         val key = Outfits.normalizeName(raw)
@@ -364,6 +505,150 @@ object KoStrings : Strings {
     override val sectionAbout = "앱 정보"
     override val aboutDesc = "오늘의 루틴을 퀘스트로 바꿔 캐릭터를 키우는 습관 트래커"
     override val defaultNickname = "모험가"
+
+    override val on = "켜짐"
+    override val off = "꺼짐"
+    override val ok = "확인"
+    override val groupGeneral = "일반"
+    override fun languageName(lang: AppLanguage) = if (lang == AppLanguage.KOREAN) "한국어" else "영어"
+    override val groupSocial = "소셜"
+    override val groupActivity = "활동"
+    override val groupMore = "기타"
+    override val rowNotifications = "알림"
+    override val rowFriends = "친구"
+    override fun notifSummary(enabled: Boolean, questReminderTime: String?) =
+        if (!enabled) "꺼짐" else if (questReminderTime != null) "켜짐 · 퀘스트 알림 $questReminderTime" else "켜짐"
+    override fun friendsSummary(count: Int, blocked: Int) = "친구 ${count}명" + if (blocked > 0) " · 차단 ${blocked}명" else ""
+    override fun messagesSummary(fontSize: String, autoReplies: Boolean) = "글자 $fontSize · 자동 답장 ${if (autoReplies) "켜짐" else "꺼짐"}"
+    override fun questsSummary(autoCarry: Boolean, weekStartsMonday: Boolean) =
+        "자동 불러오기 ${if (autoCarry) "켜짐" else "꺼짐"} · ${if (weekStartsMonday) "월요일" else "일요일"} 시작"
+    override fun dataSummary(days: Int, quests: Int) = "기록 ${days}일 · 퀘스트 ${quests}개"
+    override fun versionSummary(version: String) = "버전 $version"
+
+    override val notifMaster = "알림 받기"
+    override val notifMasterDesc = "퀘스트·스트릭·메시지 알림을 한 번에 켜고 꺼요"
+    override val notifPermissionDenied = "알림 권한이 꺼져 있어요. 기기 설정에서 허용해 주세요."
+    override val openSystemSettings = "설정 열기"
+    override val groupReminders = "리마인더"
+    override val questReminder = "퀘스트 알림"
+    override val questReminderDesc = "매일 정한 시간에 남은 퀘스트를 알려줘요"
+    override val streakReminder = "스트릭 경고"
+    override val streakReminderDesc = "퀘스트를 다 못 끝냈으면 저녁에 한 번 더 알려줘요"
+    override val reminderTime = "알림 시간"
+    override val pickTime = "시간 선택"
+    override val groupMessageAlerts = "메시지 알림"
+    override val messageNotif = "새 메시지 알림"
+    override val messageNotifDesc = "친구에게 답장이 오면 알려줘요"
+    override val messagePreview = "메시지 미리보기"
+    override val messagePreviewDesc = "알림에 메시지 내용을 보여줘요"
+    override val testNotification = "테스트 알림 보내기"
+    override val channelReminders = "퀘스트 리마인더"
+    override val channelMessages = "메시지"
+    override val questReminderTitle = "오늘의 퀘스트 ⚔️"
+    override fun questReminderBody(remaining: Int) = "퀘스트 ${remaining}개가 기다리고 있어요. 오늘도 레벨업!"
+    override val streakReminderTitle = "스트릭이 끊길 위기! 🔥"
+    override fun streakReminderBody(remaining: Int) = "남은 퀘스트 ${remaining}개를 끝내고 스트릭을 지켜요"
+    override val newMessageHidden = "새 메시지가 도착했어요"
+    override val testNotificationTitle = "Today 알림 테스트"
+    override val testNotificationBody = "알림이 잘 도착했어요 🎉"
+
+    override val contactsCardTitle = "연락처에서 친구를 불러올까요?"
+    override val contactsCardBody = "연락처의 이름만 기기 안에서 읽고, 어디에도 보내지 않아요. 추가할 사람은 직접 고를 수 있어요."
+    override val contactsImport = "불러오기"
+    override val contactsLater = "나중에"
+    override val groupContacts = "연락처"
+    override val importFromContacts = "연락처에서 친구 불러오기"
+    override val contactsAllowed = "연락처 권한 허용됨"
+    override val contactsNotAllowed = "연락처 권한이 필요해요"
+    override val contactsDenied = "연락처 권한이 거부됐어요. 기기 설정에서 허용할 수 있어요."
+    override val contactsEmpty = "불러올 연락처가 없어요"
+    override val contactsPickerTitle = "친구로 추가할 연락처"
+    override val searchName = "이름 검색"
+    override fun addSelected(n: Int) = "${n}명 추가"
+    override val alreadyFriend = "이미 친구"
+    override fun msgContactsImported(n: Int) = if (n == 0) "새로 추가된 친구가 없어요" else "친구 ${n}명을 추가했어요"
+    override fun groupFriendList(n: Int) = "친구 목록 ($n)"
+    override val addFriend = "친구 추가"
+    override val fieldFriendName = "이름"
+    override val fieldFriendHandle = "아이디 (선택)"
+    override val errFriendName = "이름을 입력해 주세요"
+    override val errFriendDuplicate = "이미 있는 아이디예요"
+    override fun errFriendLimit(max: Int) = "친구는 최대 ${max}명까지 추가할 수 있어요"
+    override fun msgFriendAdded(name: String) = "${name}님을 친구로 추가했어요"
+    override fun friendSource(source: com.today.app.data.FriendSource) = when (source) {
+        com.today.app.data.FriendSource.DEMO -> "추천 친구"
+        com.today.app.data.FriendSource.CONTACT -> "연락처"
+        com.today.app.data.FriendSource.MANUAL -> "직접 추가"
+    }
+    override val friendMenu = "친구 메뉴"
+    override val sendMessageAction = "메시지 보내기"
+    override val block = "차단"
+    override val unblock = "차단 해제"
+    override val deleteFriend = "친구 삭제"
+    override fun blockConfirmTitle(name: String) = "${name}님을 차단할까요?"
+    override val blockConfirmBody = "차단하면 메시지 목록에서 숨겨지고 서로 메시지를 주고받을 수 없어요. 설정 > 친구에서 언제든 해제할 수 있어요."
+    override fun deleteFriendTitle(name: String) = "${name}님을 삭제할까요?"
+    override val deleteFriendBody = "친구 목록과 대화 기록에서 모두 삭제되고 되돌릴 수 없어요."
+    override fun msgBlocked(name: String) = "${name}님을 차단했어요"
+    override fun msgUnblocked(name: String) = "${name}님의 차단을 해제했어요"
+    override fun msgFriendDeleted(name: String) = "${name}님을 친구에서 삭제했어요"
+    override fun groupBlocked(n: Int) = "차단한 친구 ($n)"
+    override val noBlocked = "차단한 친구가 없어요"
+    override val noFriends = "아직 친구가 없어요. 연락처에서 불러오거나 직접 추가해 보세요."
+
+    override val groupChat = "대화"
+    override val chatFontSize = "글자 크기"
+    override fun fontSizeLabel(size: com.today.app.data.ChatFontSize) = when (size) {
+        com.today.app.data.ChatFontSize.SMALL -> "작게"
+        com.today.app.data.ChatFontSize.MEDIUM -> "보통"
+        com.today.app.data.ChatFontSize.LARGE -> "크게"
+    }
+    override val enterToSend = "엔터로 보내기"
+    override val enterToSendDesc = "끄면 엔터는 줄바꿈, 보내기 버튼으로 전송해요"
+    override val readReceipts = "읽음 표시"
+    override val readReceiptsDesc = "친구가 읽은 내 메시지 아래에 '읽음'을 보여줘요"
+    override val read = "읽음"
+    override val autoReplies = "친구 자동 답장"
+    override val autoRepliesDesc = "친구가 내가 입력한 언어로 답장해요 (데모 친구)"
+    override val groupHistory = "기록"
+    override val saveHistory = "대화 기록 저장"
+    override val saveHistoryDesc = "앱을 다시 켜도 대화가 남아 있어요. 끄면 저장된 기록도 지워져요."
+    override val clearChats = "대화 기록 모두 삭제"
+    override val clearChatsBody = "모든 친구와의 대화가 삭제되고 되돌릴 수 없어요."
+    override val msgChatsCleared = "대화 기록을 모두 삭제했어요"
+    override val manageBlocked = "차단한 친구 관리"
+    override val chatPreviewSample = "오늘 퀘스트 다 했어? 🔥"
+
+    override val weekStart = "한 주 시작 요일"
+    override val sunday = "일요일"
+    override val monday = "월요일"
+    override val celebration = "완료 효과"
+    override val celebrationDesc = "퀘스트를 완료하면 축하 애니메이션을 보여줘요"
+    override val defaultXp = "새 퀘스트 기본 XP"
+    override val defaultXpDesc = "퀘스트를 추가할 때 처음 채워지는 XP예요"
+    override val questReminderLink = "퀘스트 알림 설정"
+
+    override val groupStorage = "저장 현황"
+    override val statQuestsTotal = "전체 퀘스트"
+    override val statFriends = "친구"
+    override val statMessages = "메시지"
+    override val exportData = "데이터 내보내기"
+    override val exportDesc = "퀘스트·의상·친구·설정을 JSON 파일로 저장해요"
+    override val exportDone = "데이터를 파일로 저장했어요"
+    override val exportFailed = "내보내기에 실패했어요"
+
+    override val version = "버전"
+    override val builtWith = "만든 기술"
+    override val privacyTitle = "개인정보"
+    override val privacyBody = "모든 기록은 이 기기에만 저장돼요. 연락처는 친구를 추가할 때만 기기 안에서 이름을 읽고, 사진은 의상 인식에만 쓰고 저장하지 않아요."
+    override val permissionsTitle = "권한"
+    override val permNotifications = "알림"
+    override val permContacts = "연락처"
+    override val permCamera = "카메라"
+    override val permCameraDesc = "기기의 카메라 앱을 사용해 권한이 필요 없어요"
+    override val permGranted = "허용됨"
+    override val permDenied = "허용 안 됨"
+    override val licenses = "오픈소스 라이선스"
 }
 
 object EnStrings : Strings {
@@ -535,6 +820,151 @@ object EnStrings : Strings {
     override val sectionAbout = "About"
     override val aboutDesc = "A habit tracker that turns today's routines into quests to level up your character"
     override val defaultNickname = "Adventurer"
+
+    override val on = "On"
+    override val off = "Off"
+    override val ok = "OK"
+    override val groupGeneral = "General"
+    override fun languageName(lang: AppLanguage) = if (lang == AppLanguage.KOREAN) "Korean" else "English"
+    override val groupSocial = "Social"
+    override val groupActivity = "Activity"
+    override val groupMore = "More"
+    override val rowNotifications = "Notifications"
+    override val rowFriends = "Friends"
+    override fun notifSummary(enabled: Boolean, questReminderTime: String?) =
+        if (!enabled) "Off" else if (questReminderTime != null) "On · Quest reminder $questReminderTime" else "On"
+    override fun friendsSummary(count: Int, blocked: Int) =
+        "$count friend${if (count == 1) "" else "s"}" + if (blocked > 0) " · $blocked blocked" else ""
+    override fun messagesSummary(fontSize: String, autoReplies: Boolean) = "Text $fontSize · Auto-replies ${if (autoReplies) "on" else "off"}"
+    override fun questsSummary(autoCarry: Boolean, weekStartsMonday: Boolean) =
+        "Carry-over ${if (autoCarry) "on" else "off"} · Week starts ${if (weekStartsMonday) "Monday" else "Sunday"}"
+    override fun dataSummary(days: Int, quests: Int) = "${days(days)} logged · $quests quest${if (quests == 1) "" else "s"}"
+    override fun versionSummary(version: String) = "Version $version"
+
+    override val notifMaster = "Allow notifications"
+    override val notifMasterDesc = "Turn quest, streak and message alerts on or off at once"
+    override val notifPermissionDenied = "Notifications are blocked. Please allow them in system settings."
+    override val openSystemSettings = "Open settings"
+    override val groupReminders = "Reminders"
+    override val questReminder = "Quest reminder"
+    override val questReminderDesc = "A daily nudge about the quests you have left"
+    override val streakReminder = "Streak alert"
+    override val streakReminderDesc = "One more evening reminder if you haven't finished"
+    override val reminderTime = "Time"
+    override val pickTime = "Choose time"
+    override val groupMessageAlerts = "Message alerts"
+    override val messageNotif = "New message alerts"
+    override val messageNotifDesc = "Get notified when a friend replies"
+    override val messagePreview = "Message preview"
+    override val messagePreviewDesc = "Show the message text in the notification"
+    override val testNotification = "Send test notification"
+    override val channelReminders = "Quest reminders"
+    override val channelMessages = "Messages"
+    override val questReminderTitle = "Today's quests ⚔️"
+    override fun questReminderBody(remaining: Int) = "$remaining quest${if (remaining == 1) " is" else "s are"} waiting. Time to level up!"
+    override val streakReminderTitle = "Your streak is at risk! 🔥"
+    override fun streakReminderBody(remaining: Int) = "Finish the last $remaining quest${if (remaining == 1) "" else "s"} to keep your streak"
+    override val newMessageHidden = "You have a new message"
+    override val testNotificationTitle = "Today test notification"
+    override val testNotificationBody = "Notifications are working 🎉"
+
+    override val contactsCardTitle = "Find friends from your contacts?"
+    override val contactsCardBody = "Only names are read, on this device, and never sent anywhere. You choose who to add."
+    override val contactsImport = "Import"
+    override val contactsLater = "Not now"
+    override val groupContacts = "Contacts"
+    override val importFromContacts = "Import friends from contacts"
+    override val contactsAllowed = "Contacts access allowed"
+    override val contactsNotAllowed = "Contacts access needed"
+    override val contactsDenied = "Contacts access was denied. You can allow it in system settings."
+    override val contactsEmpty = "No contacts to import"
+    override val contactsPickerTitle = "Choose contacts to add"
+    override val searchName = "Search name"
+    override fun addSelected(n: Int) = "Add $n"
+    override val alreadyFriend = "Added"
+    override fun msgContactsImported(n: Int) = if (n == 0) "No new friends added" else "Added $n friend${if (n == 1) "" else "s"}"
+    override fun groupFriendList(n: Int) = "Friends ($n)"
+    override val addFriend = "Add friend"
+    override val fieldFriendName = "Name"
+    override val fieldFriendHandle = "Username (optional)"
+    override val errFriendName = "Please enter a name"
+    override val errFriendDuplicate = "That username is already taken"
+    override fun errFriendLimit(max: Int) = "You can have up to $max friends"
+    override fun msgFriendAdded(name: String) = "Added $name as a friend"
+    override fun friendSource(source: com.today.app.data.FriendSource) = when (source) {
+        com.today.app.data.FriendSource.DEMO -> "Suggested"
+        com.today.app.data.FriendSource.CONTACT -> "Contact"
+        com.today.app.data.FriendSource.MANUAL -> "Added manually"
+    }
+    override val friendMenu = "Friend menu"
+    override val sendMessageAction = "Message"
+    override val block = "Block"
+    override val unblock = "Unblock"
+    override val deleteFriend = "Remove friend"
+    override fun blockConfirmTitle(name: String) = "Block $name?"
+    override val blockConfirmBody = "They'll be hidden from Messages and you won't be able to message each other. You can unblock anytime in Settings > Friends."
+    override fun deleteFriendTitle(name: String) = "Remove $name?"
+    override val deleteFriendBody = "They'll be removed from your friends along with your chat history. This can't be undone."
+    override fun msgBlocked(name: String) = "Blocked $name"
+    override fun msgUnblocked(name: String) = "Unblocked $name"
+    override fun msgFriendDeleted(name: String) = "Removed $name"
+    override fun groupBlocked(n: Int) = "Blocked ($n)"
+    override val noBlocked = "No blocked friends"
+    override val noFriends = "No friends yet. Import from contacts or add someone."
+
+    override val groupChat = "Chat"
+    override val chatFontSize = "Text size"
+    override fun fontSizeLabel(size: com.today.app.data.ChatFontSize) = when (size) {
+        com.today.app.data.ChatFontSize.SMALL -> "Small"
+        com.today.app.data.ChatFontSize.MEDIUM -> "Medium"
+        com.today.app.data.ChatFontSize.LARGE -> "Large"
+    }
+    override val enterToSend = "Press Enter to send"
+    override val enterToSendDesc = "When off, Enter adds a new line and the button sends"
+    override val readReceipts = "Read receipts"
+    override val readReceiptsDesc = "Show \"Read\" under messages your friend has seen"
+    override val read = "Read"
+    override val autoReplies = "Friend auto-replies"
+    override val autoRepliesDesc = "Friends reply in the language you type (demo friends)"
+    override val groupHistory = "History"
+    override val saveHistory = "Save chat history"
+    override val saveHistoryDesc = "Keep chats after restarting the app. Turning this off deletes saved history."
+    override val clearChats = "Delete all chats"
+    override val clearChatsBody = "Every conversation will be deleted. This can't be undone."
+    override val msgChatsCleared = "All chats deleted"
+    override val manageBlocked = "Manage blocked friends"
+    override val chatPreviewSample = "Did you finish today's quests? 🔥"
+
+    override val weekStart = "Week starts on"
+    override val sunday = "Sunday"
+    override val monday = "Monday"
+    override val celebration = "Completion effects"
+    override val celebrationDesc = "Play a celebration when you complete a quest"
+    override val defaultXp = "Default XP for new quests"
+    override val defaultXpDesc = "Pre-filled XP when you add a quest"
+    override val questReminderLink = "Quest reminder settings"
+
+    override val groupStorage = "Storage"
+    override val statQuestsTotal = "Total quests"
+    override val statFriends = "Friends"
+    override val statMessages = "Messages"
+    override val exportData = "Export data"
+    override val exportDesc = "Save quests, outfit, friends and settings as a JSON file"
+    override val exportDone = "Data saved to file"
+    override val exportFailed = "Export failed"
+
+    override val version = "Version"
+    override val builtWith = "Built with"
+    override val privacyTitle = "Privacy"
+    override val privacyBody = "Everything stays on this device. Contacts are read on-device only when you add friends, and photos are used only for outfit detection and never stored."
+    override val permissionsTitle = "Permissions"
+    override val permNotifications = "Notifications"
+    override val permContacts = "Contacts"
+    override val permCamera = "Camera"
+    override val permCameraDesc = "Uses your camera app, so no permission is needed"
+    override val permGranted = "Allowed"
+    override val permDenied = "Not allowed"
+    override val licenses = "Open-source licenses"
 
     private fun quests(n: Int) = if (n == 1) "quest" else "quests"
 }

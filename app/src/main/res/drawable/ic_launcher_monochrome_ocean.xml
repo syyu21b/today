@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Themed icon silhouette: ocean outfit (generated from the avatar sprite). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#FFFFFFFF" android:pathData="M39.60,35.20h28.80v3.6h-28.80zM36.00,38.80h3.60v3.6h-3.60zM39.60,38.80h7.20v3.6h-7.20zM46.80,38.80h7.20v3.6h-7.20zM54.00,38.80h14.40v3.6h-14.40zM68.40,38.80h3.60v3.6h-3.60zM32.40,42.40h3.60v3.6h-3.60zM36.00,42.40h36.00v3.6h-36.00zM72.00,42.40h3.60v3.6h-3.60zM32.40,46.00h3.60v3.6h-3.60zM36.00,46.00h36.00v3.6h-36.00zM72.00,46.00h3.60v3.6h-3.60zM32.40,49.60h3.60v3.6h-3.60zM36.00,49.60h7.20v3.6h-7.20zM64.80,49.60h7.20v3.6h-7.20zM72.00,49.60h3.60v3.6h-3.60zM32.40,53.20h3.60v3.6h-3.60zM36.00,53.20h3.60v3.6h-3.60zM46.80,53.20h3.60v3.6h-3.60zM57.60,53.20h3.60v3.6h-3.60zM68.40,53.20h3.60v3.6h-3.60zM72.00,53.20h3.60v3.6h-3.60zM32.40,56.80h3.60v3.6h-3.60zM36.00,56.80h3.60v3.6h-3.60zM68.40,56.80h3.60v3.6h-3.60zM72.00,56.80h3.60v3.6h-3.60zM32.40,60.40h3.60v3.6h-3.60zM50.40,60.40h7.20v3.6h-7.20zM72.00,60.40h3.60v3.6h-3.60zM36.00,64.00h3.60v3.6h-3.60zM68.40,64.00h3.60v3.6h-3.60zM46.80,67.60h3.60v3.6h-3.60zM57.60,67.60h3.60v3.6h-3.60zM32.40,71.20h3.60v3.6h-3.60zM36.00,71.20h14.40v3.6h-14.40zM50.40,71.20h7.20v3.6h-7.20zM57.60,71.20h14.40v3.6h-14.40zM72.00,71.20h3.60v3.6h-3.60z" />
+</vector>

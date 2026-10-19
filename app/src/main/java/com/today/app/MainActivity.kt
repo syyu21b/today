@@ -1,9 +1,11 @@
 package com.today.app
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.core.tween
@@ -45,37 +47,59 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.today.app.data.AppIconManager
 import com.today.app.data.TodayViewModel
 import com.today.app.i18n.LocalStrings
 import com.today.app.i18n.Strings
+import com.today.app.notify.Notifier
 import com.today.app.ui.components.IntroSplash
 import com.today.app.ui.screens.CommunityScreen
 import com.today.app.ui.screens.HomeScreen
 import com.today.app.ui.screens.OutfitScreen
-import com.today.app.ui.screens.SettingsScreen
+import com.today.app.ui.screens.settings.SettingsScreen
 import com.today.app.ui.theme.NightSurface
 import com.today.app.ui.theme.TodayTheme
 
 class MainActivity : ComponentActivity() {
+    private val vm: TodayViewModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
-        // System splash (logo) -> IntroSplash draws the identical logo in the same spot, so drop the
-        // system one instantly instead of letting its own fade-out dim the logo for a frame.
+        // System splash is a plain background; IntroSplash then shows the user's own character.
         installSplashScreen().setOnExitAnimationListener { it.remove() }
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val freshLaunch = savedInstanceState == null
+        if (freshLaunch) handleNotificationIntent(intent)
         setContent {
             TodayTheme {
                 // Intro only on a real cold start, not after rotation / process recreation.
                 var showIntro by rememberSaveable { mutableStateOf(freshLaunch) }
                 Box(Modifier.fillMaxSize()) {
-                    TodayApp() // composed underneath so it's ready when the intro fades out
+                    TodayApp(vm) // composed underneath so it's ready when the intro fades out
                     AnimatedVisibility(visible = showIntro, enter = EnterTransition.None, exit = fadeOut(tween(400))) {
-                        IntroSplash(onFinished = { showIntro = false })
+                        IntroSplash(vm.character.outfit, onFinished = { showIntro = false })
                     }
                 }
             }
         }
+    }
+
+    /** Leaving the app is the safe moment to swap the launcher icon to the current outfit. */
+    override fun onStop() {
+        super.onStop()
+        AppIconManager.sync(applicationContext, vm.character.outfit)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleNotificationIntent(intent)
+    }
+
+    /** Tapping a message notification opens that chat. */
+    private fun handleNotificationIntent(intent: Intent?) {
+        val friendId = intent?.getStringExtra(Notifier.EXTRA_OPEN_CHAT) ?: return
+        intent.removeExtra(Notifier.EXTRA_OPEN_CHAT)
+        vm.openChatFromNotification(friendId)
     }
 }
 
@@ -111,6 +135,16 @@ private fun TodayScaffold(vm: TodayViewModel) {
 
     // App left open past midnight -> move "today" forward when it comes back.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refreshDay() }
+    LifecycleEventEffect(Lifecycle.Event.ON_START) { vm.appInForeground = true }
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { vm.appInForeground = false }
+
+    // A notification asked for a chat: show the Messages tab (the VM already opened the chat).
+    LaunchedEffect(vm.pendingChatNavigation) {
+        if (vm.pendingChatNavigation != null) {
+            tab = Tab.Messages
+            vm.consumeChatNavigation()
+        }
+    }
 
     vm.message?.let { msg ->
         LaunchedEffect(msg.id) {
@@ -155,7 +189,12 @@ private fun TodayScaffold(vm: TodayViewModel) {
                 Tab.Quests -> HomeScreen(vm, contentModifier)
                 Tab.Outfit -> OutfitScreen(vm, contentModifier)
                 Tab.Messages -> CommunityScreen(vm, contentModifier)
-                Tab.Settings -> SettingsScreen(vm, onOpenOutfit = { tab = Tab.Outfit }, modifier = contentModifier)
+                Tab.Settings -> SettingsScreen(
+                    vm,
+                    onOpenOutfit = { tab = Tab.Outfit },
+                    onOpenChat = { id -> vm.openChat(id); tab = Tab.Messages },
+                    modifier = contentModifier,
+                )
             }
         }
     }

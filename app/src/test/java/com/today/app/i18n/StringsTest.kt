@@ -27,7 +27,13 @@ class StringsTest {
             e.greeting("Sam"), e.clipboardBanner(date, 3), e.msgCopied(date, 1), e.pasteResult(2, 1, 1, 10),
             e.footer(10), e.deleteQuestBody("Run", true, 30), e.levelReached(3), e.msgStreak(2),
             e.weekdayShort(date.dayOfWeek), e.outfitName("ocean"), e.outfitName("포토 스타일 #2"),
-        ) + e.analyzeSteps + StyleNote.entries.map { e.note(it) } + e.presetNames.values
+        ) + e.analyzeSteps + StyleNote.entries.map { e.note(it) } + e.presetNames.values + listOf(
+            e.notifSummary(true, "9:00 AM"), e.friendsSummary(3, 1), e.messagesSummary("Medium", true),
+            e.questsSummary(true, false), e.dataSummary(4, 29), e.questReminderBody(2), e.streakReminderBody(1),
+            e.msgContactsImported(3), e.groupFriendList(9), e.blockConfirmTitle("Sam"), e.deleteFriendTitle("Sam"),
+            e.languageName(AppLanguage.KOREAN), e.notifPermissionDenied, e.contactsCardBody, e.privacyBody,
+        ) + com.today.app.data.FriendSource.entries.map { e.friendSource(it) } +
+            com.today.app.data.ChatFontSize.entries.map { e.fontSizeLabel(it) }
         samples.forEach { assertFalse("Korean in English text: $it", hangul.containsMatchIn(it)) }
     }
 

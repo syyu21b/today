@@ -3,12 +3,11 @@ package com.today.app.ui.components
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
@@ -21,12 +20,11 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.today.app.R
+import com.today.app.data.Outfit
 import com.today.app.ui.theme.Gold
 import com.today.app.ui.theme.Night
 import com.today.app.ui.theme.PixelFont
@@ -34,11 +32,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * Picks up exactly where the system splash leaves off (same 160dp gold circle with the face,
- * centered on the same background), then lifts the logo and fades the app name in below it.
+ * Launch intro: the user's own character (current outfit, drawn live) on a gold circle, which
+ * lifts while the app name fades in below. The system splash before it is a plain background,
+ * so there's no jump from a fixed icon to the personalised logo.
  */
 @Composable
-fun IntroSplash(onFinished: () -> Unit) {
+fun IntroSplash(outfit: Outfit, onFinished: () -> Unit) {
     val logoY = remember { Animatable(0f) }
     val nameAlpha = remember { Animatable(0f) }
     val nameY = remember { Animatable(16f) }
@@ -61,7 +60,6 @@ fun IntroSplash(onFinished: () -> Unit) {
             .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } },
         contentAlignment = Alignment.Center,
     ) {
-        // System splash geometry: 240dp icon drawable, inner 160dp circle visible.
         Box(
             Modifier
                 .offset { IntOffset(0, logoY.value.dp.roundToPx()) }
@@ -70,7 +68,8 @@ fun IntroSplash(onFinished: () -> Unit) {
                 .background(Gold),
             contentAlignment = Alignment.Center,
         ) {
-            Image(painterResource(R.drawable.ic_launcher_foreground), contentDescription = null, modifier = Modifier.requiredSize(240.dp))
+            // Same framing as the launcher icon: 50.4 of the 72 visible units.
+            PixelFace(outfit, Modifier.width(112.dp).offset(y = 2.dp))
         }
         Text(
             "Today",

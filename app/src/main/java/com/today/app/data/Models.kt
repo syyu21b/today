@@ -61,14 +61,39 @@ data class QuestClipboard(val sourceDate: LocalDate, val quests: List<Quest>)
 /** Language of every piece of UI text. Labels are always shown in their own language. */
 enum class AppLanguage(val label: String) { KOREAN("한국어"), ENGLISH("English") }
 
+enum class ChatFontSize(val sp: Int) { SMALL(13), MEDIUM(15), LARGE(18) }
+
+/** Every user preference. Times are minutes since midnight. */
 data class AppSettings(
     val nickname: String = DummyData.DEFAULT_NICKNAME_KO,
     val language: AppLanguage = AppLanguage.KOREAN,
+    // Quests
     val autoCarryOver: Boolean = true,
+    val weekStartsMonday: Boolean = false,
+    val celebrationEffects: Boolean = true,
+    val defaultQuestXp: Int = 20,
+    // Notifications (master switch stays off until the user grants permission)
+    val notificationsEnabled: Boolean = false,
+    val questReminder: Boolean = true,
+    val questReminderTime: Int = 9 * 60,
+    val streakReminder: Boolean = true,
+    val streakReminderTime: Int = 21 * 60,
+    val messageNotifications: Boolean = true,
+    val messagePreview: Boolean = true,
+    // Messages
+    val chatFontSize: ChatFontSize = ChatFontSize.MEDIUM,
+    val enterToSend: Boolean = true,
+    val readReceipts: Boolean = true,
+    val autoReplies: Boolean = true,
+    val saveChatHistory: Boolean = true,
+    // Friends
+    val contactsPromptDone: Boolean = false,
 )
 
 /** One-shot snackbar message; the id makes identical texts re-trigger. */
 data class UiMessage(val id: Long, val text: String)
+
+enum class FriendSource { DEMO, CONTACT, MANUAL }
 
 data class Friend(
     val id: String,
@@ -78,7 +103,12 @@ data class Friend(
     val outfit: Outfit,
     val online: Boolean,
     val level: Int,
+    val source: FriendSource = FriendSource.DEMO,
+    val blocked: Boolean = false,
+    val contactId: Long? = null,
 )
+
+const val MAX_FRIENDS = 50
 
 /** [textEn] is set for scripted messages that exist in both languages. */
 data class ChatMessage(
@@ -88,6 +118,8 @@ data class ChatMessage(
     val time: LocalTime,
     val liked: Boolean = false,
     val textEn: String? = null,
+    /** For my messages: the friend has seen it (drives read receipts). */
+    val read: Boolean = false,
 )
 
 object Outfits {

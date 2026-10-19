@@ -120,6 +120,7 @@ fun HomeScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
                     today = vm.todayDate,
                     statusOf = vm::dayStatus,
                     onSelect = vm::selectDate,
+                    weekStartsMonday = vm.settings.weekStartsMonday,
                 )
             }
             if (clipboard != null) {
@@ -169,13 +170,14 @@ fun HomeScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
             }
         }
 
-        CelebrationOverlay(trigger = vm.celebrationTick)
+        if (vm.settings.celebrationEffects) CelebrationOverlay(trigger = vm.celebrationTick)
     }
 
     editor?.let { e ->
         val existing = (e as? Editor.Existing)?.quest
         QuestEditorDialog(
             initial = existing,
+            defaultXp = vm.settings.defaultQuestXp,
             onDismiss = { editor = null },
             onSave = { title, emoji, xp ->
                 val error = if (existing == null) vm.addQuest(date, title, emoji, xp)
@@ -473,11 +475,11 @@ private fun lastGrapheme(s: String): String {
 }
 
 @Composable
-private fun QuestEditorDialog(initial: Quest?, onDismiss: () -> Unit, onSave: (String, String, Int) -> Unit) {
+private fun QuestEditorDialog(initial: Quest?, defaultXp: Int, onDismiss: () -> Unit, onSave: (String, String, Int) -> Unit) {
     val s = LocalStrings.current
     var title by remember { mutableStateOf(initial?.title ?: "") }
     var emoji by remember { mutableStateOf(initial?.emoji ?: "⭐") }
-    var xpText by remember { mutableStateOf((initial?.xp ?: 20).coerceAtMost(MAX_QUEST_XP).toString()) }
+    var xpText by remember { mutableStateOf((initial?.xp ?: defaultXp).coerceIn(MIN_QUEST_XP, MAX_QUEST_XP).toString()) }
     val xp = xpText.toIntOrNull()
     val xpValid = xp != null && xp in MIN_QUEST_XP..MAX_QUEST_XP
     val titleValid = title.isNotBlank()
@@ -528,7 +530,7 @@ private fun QuestEditorDialog(initial: Quest?, onDismiss: () -> Unit, onSave: (S
             }
         },
         confirmButton = {
-            TextButton(onClick = { onSave(title, emoji, xp ?: 20) }, enabled = titleValid && xpValid) {
+            TextButton(onClick = { onSave(title, emoji, xp ?: defaultXp) }, enabled = titleValid && xpValid) {
                 Text(if (initial == null) s.add else s.save)
             }
         },

@@ -59,10 +59,18 @@ private fun statusColor(s: DayStatus): Color? = when (s) {
     DayStatus.MISSED -> Coral
 }
 
-/** Sunday-first week containing [date]. */
-private fun weekOf(date: LocalDate): List<LocalDate> {
-    val sunday = date.minusDays((date.dayOfWeek.value % 7).toLong())
-    return List(7) { sunday.plusDays(it.toLong()) }
+/** Days before [date] back to the start of its week (Sunday- or Monday-first). */
+private fun offsetInWeek(date: LocalDate, mondayFirst: Boolean) =
+    if (mondayFirst) date.dayOfWeek.value - 1 else date.dayOfWeek.value % 7
+
+private fun weekOf(date: LocalDate, mondayFirst: Boolean): List<LocalDate> {
+    val start = date.minusDays(offsetInWeek(date, mondayFirst).toLong())
+    return List(7) { start.plusDays(it.toLong()) }
+}
+
+private fun weekdayOrder(mondayFirst: Boolean): List<DayOfWeek> {
+    val all = listOf(DayOfWeek.SUNDAY, DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY, DayOfWeek.SATURDAY)
+    return if (mondayFirst) all.drop(1) + all.first() else all
 }
 
 /** Week strip with arrows; tapping the month title opens the full month view. */
@@ -73,6 +81,7 @@ fun WeekCalendar(
     statusOf: (LocalDate) -> DayStatus,
     onSelect: (LocalDate) -> Unit,
     modifier: Modifier = Modifier,
+    weekStartsMonday: Boolean = false,
 ) {
     val s = LocalStrings.current
     var showMonth by remember { mutableStateOf(false) }
@@ -108,7 +117,7 @@ fun WeekCalendar(
             }
         }
         Row(Modifier.fillMaxWidth()) {
-            weekOf(selected).forEach { day ->
+            weekOf(selected, weekStartsMonday).forEach { day ->
                 DayCell(
                     day = day,
                     weekday = s.weekdayShort(day.dayOfWeek),
@@ -128,6 +137,7 @@ fun WeekCalendar(
             selected = selected,
             today = today,
             statusOf = statusOf,
+            weekStartsMonday = weekStartsMonday,
             onSelect = { onSelect(it); showMonth = false },
             onDismiss = { showMonth = false },
         )
@@ -184,6 +194,7 @@ private fun MonthCalendarDialog(
     selected: LocalDate,
     today: LocalDate,
     statusOf: (LocalDate) -> DayStatus,
+    weekStartsMonday: Boolean,
     onSelect: (LocalDate) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -207,14 +218,14 @@ private fun MonthCalendarDialog(
                     }
                 }
                 Row(Modifier.fillMaxWidth()) {
-                    listOf(DayOfWeek.SUNDAY, DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY, DayOfWeek.SATURDAY)
+                    weekdayOrder(weekStartsMonday)
                         .forEach {
                             Text(s.weekdayShort(it), fontSize = 12.sp, color = TextMuted, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
                         }
                 }
                 Spacer(Modifier.height(4.dp))
                 val first = month.atDay(1)
-                val leading = first.dayOfWeek.value % 7
+                val leading = offsetInWeek(first, weekStartsMonday)
                 val cells = leading + month.lengthOfMonth()
                 val rows = (cells + 6) / 7
                 for (r in 0 until rows) {

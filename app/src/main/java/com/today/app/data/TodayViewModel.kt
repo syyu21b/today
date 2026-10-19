@@ -14,6 +14,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.today.app.i18n.Strings
 import com.today.app.i18n.strings
+import com.today.app.notify.Notifier
+import com.today.app.notify.ReminderScheduler
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -62,6 +64,13 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
     /** Text in the currently selected app language. */
     val strings: Strings get() = settings.language.strings()
 
+    /** Set from the activity lifecycle: message alerts are skipped for the chat you're looking at. */
+    var appInForeground = false
+
+    /** A notification asked to open this chat; the UI switches to the Messages tab and consumes it. */
+    var pendingChatNavigation by mutableStateOf<String?>(null)
+        private set
+
     // ---------------- Outfit recognition ----------------
     var isAnalyzingStyle by mutableStateOf(false)
         private set
@@ -75,8 +84,9 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         private set
     private var photoStyleCount = 0
 
-    // ---------------- Community ----------------
-    val friends = DummyData.friends
+    // ---------------- Friends & chats ----------------
+    /** All friends including blocked ones (persisted). */
+    val friends: SnapshotStateList<Friend> = mutableStateListOf()
     val chats = mutableStateMapOf<String, SnapshotStateList<ChatMessage>>()
     val typing = mutableStateMapOf<String, Boolean>()
     val unread = mutableStateMapOf<String, Boolean>()
@@ -85,9 +95,12 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
     private var chatMessageId = 0L
     private var lastChatLang = ReplyEngine.Lang.KO
 
+    /** Friends shown in Messages (blocked ones are hidden everywhere except Settings). */
+    val visibleFriends: List<Friend> get() = friends.filter { !it.blocked }
+    val blockedFriends: List<Friend> get() = friends.filter { it.blocked }
+
     init {
         loadFromStorage()
-        resetChats()
     }
 
     /** @param keepLanguage used by "reset all" so the app doesn't jump back to the default language. */
@@ -96,6 +109,10 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         character = saved.character
         settings = if (keepLanguage == null) saved.settings
         else AppSettings(nickname = keepLanguage.strings().defaultNickname, language = keepLanguage)
+        // The OS can revoke notification permission at any time: reflect that in the switch.
+        if (settings.notificationsEnabled && !Notifier.hasPermission(getApplication())) {
+            settings = settings.copy(notificationsEnabled = false)
+        }
         questsByDate.clear()
         questsByDate.putAll(saved.questsByDate)
         todayDate = LocalDate.now()
@@ -104,7 +121,13 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         lastChatLang = if (settings.language == AppLanguage.KOREAN) ReplyEngine.Lang.KO else ReplyEngine.Lang.EN
         enforceXpCap()
         ensureTodayQuests()
+
+        friends.clear()
+        friends.addAll(saved.friends)
+        loadChats(if (settings.saveChatHistory) saved.chats else null)
+
         persist()
+        ReminderScheduler.reschedule(getApplication(), settings)
     }
 
     /** Quests saved before the 30 XP cap: clamp them, keeping total XP consistent for today's done ones. */
@@ -171,7 +194,9 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         }
 
     val totalCompleted: Int get() = questsByDate.values.sumOf { list -> list.count { it.done } }
+    val totalQuests: Int get() = questsByDate.values.sumOf { it.size }
     val recordedDays: Int get() = questsByDate.count { (_, list) -> list.isNotEmpty() }
+    val totalMessages: Int get() = chats.values.sumOf { it.size }
 
     /** New day without quests: carry over the most recent day's quests (unchecked), or defaults on first run. */
     private fun ensureTodayQuests() {
@@ -207,6 +232,8 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         } else {
             addXp(-quest.xp)
         }
+        // Everything done: no need for tonight's streak alert.
+        if (list.size > 0 && questsFor(date).all { it.done }) Notifier.cancel(getApplication(), Notifier.ID_STREAK)
         persist()
     }
 
@@ -373,11 +400,25 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
 
     // ======================= Settings =======================
 
+    /** Generic setter for simple preferences; side effects (alarms, history) are handled here. */
+    fun updateSettings(transform: (AppSettings) -> AppSettings) {
+        val old = settings
+        val new = transform(old)
+        if (new == old) return
+        settings = new.copy(defaultQuestXp = new.defaultQuestXp.coerceIn(MIN_QUEST_XP, MAX_QUEST_XP))
+        persist()
+        if (notificationFieldsChanged(old, settings)) ReminderScheduler.reschedule(getApplication(), settings)
+    }
+
+    private fun notificationFieldsChanged(a: AppSettings, b: AppSettings) =
+        a.notificationsEnabled != b.notificationsEnabled || a.questReminder != b.questReminder ||
+            a.questReminderTime != b.questReminderTime || a.streakReminder != b.streakReminder ||
+            a.streakReminderTime != b.streakReminderTime || a.language != b.language
+
     fun updateNickname(name: String) {
         val clean = name.trim().take(MAX_NICKNAME)
         if (clean.isEmpty()) return
-        settings = settings.copy(nickname = clean)
-        persist()
+        updateSettings { it.copy(nickname = clean) }
     }
 
     /**
@@ -387,10 +428,6 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
     fun updateLanguage(language: AppLanguage) {
         if (language == settings.language) return
         val oldDefaultNick = settings.language.strings().defaultNickname
-        settings = settings.copy(
-            language = language,
-            nickname = if (settings.nickname == oldDefaultNick) language.strings().defaultNickname else settings.nickname,
-        )
         questsByDate.keys.toList().forEach { date ->
             val list = questsByDate[date] ?: return@forEach
             questsByDate[date] = list.map { q -> DummyData.translateDefaultTitle(q.title, language)?.let { q.copy(title = it) } ?: q }
@@ -399,12 +436,31 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
             c.copy(quests = c.quests.map { q -> DummyData.translateDefaultTitle(q.title, language)?.let { q.copy(title = it) } ?: q })
         }
         lastChatLang = if (language == AppLanguage.KOREAN) ReplyEngine.Lang.KO else ReplyEngine.Lang.EN
-        persist()
+        updateSettings {
+            it.copy(
+                language = language,
+                nickname = if (it.nickname == oldDefaultNick) language.strings().defaultNickname else it.nickname,
+            )
+        }
+        Notifier.ensureChannels(getApplication(), strings) // rename channels in system settings
     }
 
-    fun updateAutoCarryOver(enabled: Boolean) {
-        settings = settings.copy(autoCarryOver = enabled)
-        persist()
+    /** Master switch. Turning on requires permission, which the UI requests first. */
+    fun setNotificationsEnabled(enabled: Boolean) {
+        if (enabled && !Notifier.canPost(getApplication())) {
+            showMessage(strings.notifPermissionDenied)
+            return
+        }
+        if (enabled) Notifier.ensureChannels(getApplication(), strings)
+        updateSettings { it.copy(notificationsEnabled = enabled) }
+    }
+
+    fun sendTestNotification() {
+        if (!Notifier.canPost(getApplication())) {
+            showMessage(strings.notifPermissionDenied)
+            return
+        }
+        Notifier.post(getApplication(), strings, Notifier.ID_TEST, Notifier.CHANNEL_REMINDERS, strings.testNotificationTitle, strings.testNotificationBody)
     }
 
     fun resetAll() {
@@ -413,8 +469,20 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         clearStylePhoto()
         photoStyleCount = 0
         loadFromStorage(keepLanguage = language)
-        resetChats()
         showMessage(strings.msgReset)
+    }
+
+    /** Writes the export JSON to a document the user picked (Storage Access Framework). */
+    fun exportData(uri: Uri) {
+        viewModelScope.launch {
+            val ok = runCatching {
+                val json = storage.exportJson(snapshot())
+                withContext(Dispatchers.IO) {
+                    getApplication<Application>().contentResolver.openOutputStream(uri, "wt")!!.use { it.write(json.toByteArray()) }
+                }
+            }.isSuccess
+            showMessage(if (ok) strings.exportDone else strings.exportFailed)
+        }
     }
 
     fun showMessage(text: String) {
@@ -425,59 +493,206 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         if (message?.id == id) message = null
     }
 
-    // ======================= Community =======================
+    // ======================= Friends =======================
 
-    private fun resetChats() {
+    fun friend(id: String) = friends.firstOrNull { it.id == id }
+
+    fun finishContactsPrompt() = updateSettings { it.copy(contactsPromptDone = true) }
+
+    /** @return null on success, otherwise the (localized) reason it failed. */
+    fun addFriend(name: String, handle: String): String? {
+        val cleanName = name.trim().take(MAX_FRIEND_NAME)
+        if (cleanName.isEmpty()) return strings.errFriendName
+        if (friends.size >= MAX_FRIENDS) return strings.errFriendLimit(MAX_FRIENDS)
+        val cleanHandle = sanitizeHandle(handle).ifEmpty { generateHandle(cleanName) }
+        if (friends.any { it.handle.equals(cleanHandle, ignoreCase = true) }) return strings.errFriendDuplicate
+        val f = newFriend("m" + UUID.randomUUID().toString().take(8), cleanName, cleanHandle, FriendSource.MANUAL, null)
+        friends += f
+        chats[f.id] = mutableStateListOf()
+        persist()
+        showMessage(strings.msgFriendAdded(cleanName))
+        return null
+    }
+
+    /** Adds the picked address-book entries (skipping ones already added). Returns how many were added. */
+    fun importContacts(entries: List<ContactEntry>): Int {
+        var added = 0
+        for (c in entries) {
+            if (friends.size >= MAX_FRIENDS) break
+            if (friends.any { it.contactId == c.id }) continue
+            val f = newFriend("c${c.id}", c.name.take(MAX_FRIEND_NAME), generateHandle(c.name), FriendSource.CONTACT, c.id)
+            friends += f
+            chats[f.id] = mutableStateListOf()
+            added++
+        }
+        updateSettings { it.copy(contactsPromptDone = true) }
+        persist()
+        showMessage(strings.msgContactsImported(added))
+        return added
+    }
+
+    fun removeFriend(id: String) {
+        val f = friend(id) ?: return
+        friends.removeAll { it.id == id }
+        chats.remove(id)
+        typing.remove(id)
+        unread.remove(id)
+        if (openChatId == id) openChatId = null
+        Notifier.cancel(getApplication(), Notifier.messageId(id))
+        persist()
+        showMessage(strings.msgFriendDeleted(strings.friendName(f)))
+    }
+
+    fun setBlocked(id: String, blocked: Boolean) {
+        val i = friends.indexOfFirst { it.id == id }
+        if (i < 0) return
+        friends[i] = friends[i].copy(blocked = blocked)
+        if (blocked) {
+            if (openChatId == id) openChatId = null
+            unread[id] = false
+            typing[id] = false
+            Notifier.cancel(getApplication(), Notifier.messageId(id))
+        }
+        persist()
+        val name = strings.friendName(friends[i])
+        showMessage(if (blocked) strings.msgBlocked(name) else strings.msgUnblocked(name))
+    }
+
+    private fun newFriend(id: String, name: String, handle: String, source: FriendSource, contactId: Long?) = Friend(
+        id = id,
+        name = name,
+        nameEn = name,
+        handle = handle,
+        outfit = Outfits.presets.random(),
+        online = (0..2).random() > 0,
+        level = (1..15).random(),
+        source = source,
+        contactId = contactId,
+    )
+
+    private fun sanitizeHandle(raw: String) = raw.trim().removePrefix("@").lowercase().filter { it.isLetterOrDigit() && it.code < 128 || it == '_' || it == '.' }.take(20)
+
+    /** ASCII handle from the name, or "friend1234" for names without Latin letters (e.g. Korean). */
+    private fun generateHandle(name: String): String {
+        val base = sanitizeHandle(name.replace(' ', '_')).ifEmpty { "friend" }
+        var candidate = base
+        while (friends.any { it.handle.equals(candidate, ignoreCase = true) }) candidate = base + (1000..9999).random()
+        return candidate
+    }
+
+    // ======================= Chats =======================
+
+    private fun loadChats(saved: Map<String, List<ChatMessage>>?) {
         openChatId = null
         chats.clear()
         typing.clear()
         unread.clear()
+        var maxId = -1L
         friends.forEach { f ->
+            val history = saved?.get(f.id)
             chats[f.id] = mutableStateListOf<ChatMessage>().apply {
-                DummyData.openingMessages[f.id].orEmpty().forEachIndexed { i, (ko, en) ->
-                    add(ChatMessage(chatMessageId++, false, ko, LocalTime.of(9, i), textEn = en))
+                if (history != null) {
+                    addAll(history)
+                } else {
+                    // First run (or history off): scripted openers for the demo friends.
+                    DummyData.openingMessages[f.id].orEmpty().forEachIndexed { i, (ko, en) ->
+                        add(ChatMessage(maxId + 1 + i, false, ko, LocalTime.of(9, i), textEn = en))
+                    }
                 }
             }
-            unread[f.id] = true
+            chats[f.id]?.maxOfOrNull { it.id }?.let { if (it > maxId) maxId = it }
+            unread[f.id] = history == null && chats[f.id]?.isNotEmpty() == true
         }
+        chatMessageId = maxId + 1
+    }
+
+    fun clearAllChats() {
+        friends.forEach { f -> chats[f.id] = mutableStateListOf() }
+        typing.clear()
+        unread.clear()
+        persist()
+        showMessage(strings.msgChatsCleared)
     }
 
     fun openChat(friendId: String?) {
+        if (friendId != null && friend(friendId)?.blocked != false) return
         openChatId = friendId
-        if (friendId != null) unread[friendId] = false
+        if (friendId != null) {
+            unread[friendId] = false
+            Notifier.cancel(getApplication(), Notifier.messageId(friendId))
+        }
+    }
+
+    /** Called when a message notification is tapped. */
+    fun openChatFromNotification(friendId: String) {
+        if (friend(friendId)?.blocked != false) return
+        openChat(friendId)
+        pendingChatNavigation = friendId
+    }
+
+    fun consumeChatNavigation() {
+        pendingChatNavigation = null
     }
 
     fun sendMessage(friendId: String, text: String) {
         val clean = text.trim()
         if (clean.isEmpty()) return
-        val list = chats[friendId] ?: return
-        val friend = friends.firstOrNull { it.id == friendId } ?: return
-        list += ChatMessage(chatMessageId++, true, clean, LocalTime.now())
+        val f = friend(friendId) ?: return
+        if (f.blocked) return
+        val list = chats.getOrPut(friendId) { mutableStateListOf() }
+        val myId = chatMessageId++
+        list += ChatMessage(myId, true, clean, LocalTime.now())
+        persist()
+        if (!settings.autoReplies) return
 
         // Friends answer in the language you typed (emoji-only keeps the previous language).
         val lang = ReplyEngine.detect(clean, lastChatLang)
         lastChatLang = lang
-        val reply = ReplyEngine.reply(clean, lang, friend.level, character.level)
+        val reply = ReplyEngine.reply(clean, lang, f.level, character.level)
         viewModelScope.launch {
             delay(600)
+            if (friend(friendId)?.blocked != false) return@launch // blocked/removed meanwhile
+            chats[friendId]?.let { msgs -> msgs.indices.filter { msgs[it].fromMe && !msgs[it].read }.forEach { msgs[it] = msgs[it].copy(read = true) } }
             typing[friendId] = true
             delay(1000L + (0..1200).random())
             typing[friendId] = false
+            if (friend(friendId)?.blocked != false) return@launch
             chats[friendId]?.add(ChatMessage(chatMessageId++, false, reply, LocalTime.now()))
-            if (openChatId != friendId) unread[friendId] = true
+            val viewing = appInForeground && openChatId == friendId
+            if (!viewing) {
+                unread[friendId] = true
+                notifyMessage(friendId, reply)
+            }
+            persist()
         }
+    }
+
+    private fun notifyMessage(friendId: String, text: String) {
+        val s = settings
+        if (!s.notificationsEnabled || !s.messageNotifications) return
+        val f = friend(friendId) ?: return
+        Notifier.post(
+            getApplication(), strings, Notifier.messageId(friendId), Notifier.CHANNEL_MESSAGES,
+            strings.friendName(f), if (s.messagePreview) text else strings.newMessageHidden, openChatFriendId = friendId,
+        )
     }
 
     fun toggleLike(friendId: String, messageId: Long) {
         val list = chats[friendId] ?: return
         val i = list.indexOfFirst { it.id == messageId }
         if (i >= 0) list[i] = list[i].copy(liked = !list[i].liked)
+        persist()
     }
 
     // ======================= Helpers =======================
 
+    private fun snapshot() = SavedState(
+        character, questsByDate.toMap(), settings, friends.toList(),
+        if (settings.saveChatHistory) chats.mapValues { it.value.toList() } else null,
+    )
+
     private fun persist() {
-        storage.save(SavedState(character, questsByDate.toMap(), settings))
+        storage.save(snapshot())
     }
 
     override fun onCleared() {
@@ -488,5 +703,6 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
 
     companion object {
         const val MAX_NICKNAME = 12
+        const val MAX_FRIEND_NAME = 20
     }
 }

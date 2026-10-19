@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.core.content.edit
 import org.json.JSONArray
 import org.json.JSONObject
-import java.time.LocalDate
+import java.time.LocalTime
 
 /** Saved snapshot of everything that should survive an app restart. */
 data class SavedState(
@@ -12,6 +12,9 @@ data class SavedState(
     /** ISO date ("2026-10-19") -> that day's quests. */
     val questsByDate: Map<String, List<Quest>>,
     val settings: AppSettings,
+    val friends: List<Friend>,
+    /** friendId -> messages; null when nothing was saved (history off or first run). */
+    val chats: Map<String, List<ChatMessage>>?,
 )
 
 /** Tiny SharedPreferences + JSON persistence (enough for a 2–3 day project, no Room needed). */
@@ -33,14 +36,22 @@ class TodayStorage(context: Context) {
             // Migrate v1 format (one list + the date it belonged to).
             prefs.getString("quests", null)?.let { json ->
                 runCatching {
-                    val date = prefs.getString("questDate", null) ?: LocalDate.now().toString()
+                    val date = prefs.getString("questDate", null) ?: java.time.LocalDate.now().toString()
                     questsByDate[date] = questsFromJson(JSONArray(json))
                 }
             }
         }
 
-        val language = runCatching { AppLanguage.valueOf(prefs.getString("appLanguage", null) ?: "KOREAN") }
-            .getOrDefault(AppLanguage.KOREAN)
+        val friends = prefs.getString("friends", null)
+            ?.let { json -> runCatching { JSONArray(json).let { arr -> List(arr.length()) { friendFromJson(arr.getJSONObject(it)) } } }.getOrNull() }
+            ?: DummyData.friends
+
+        val chats = prefs.getString("chats", null)?.let { json ->
+            runCatching {
+                val obj = JSONObject(json)
+                obj.keys().asSequence().associateWith { id -> messagesFromJson(obj.getJSONArray(id)) }
+            }.getOrNull()
+        }
 
         return SavedState(
             character = CharacterState(
@@ -49,11 +60,9 @@ class TodayStorage(context: Context) {
                 outfit = outfit,
             ),
             questsByDate = questsByDate,
-            settings = AppSettings(
-                nickname = prefs.getString("nickname", null) ?: AppSettings().nickname,
-                language = language,
-                autoCarryOver = prefs.getBoolean("autoCarry", true),
-            ),
+            settings = loadSettings(),
+            friends = friends,
+            chats = chats,
         )
     }
 
@@ -65,18 +74,99 @@ class TodayStorage(context: Context) {
             putInt("xp", s.character.xp)
             putString("outfit", outfitToJson(s.character.outfit).toString())
             putString("questsByDate", byDate.toString())
-            putString("nickname", s.settings.nickname)
-            putString("appLanguage", s.settings.language.name)
-            putBoolean("autoCarry", s.settings.autoCarryOver)
-            // v1 keys are no longer used
-            listOf("quests", "questDate", "streak", "lastCompleteDate", "prevCompleteDate", "worldX", "worldY", "steps", "replyLanguage")
-                .forEach { remove(it) }
+            putString("settings", settingsToJson(s.settings).toString())
+            putString("friends", JSONArray().apply { s.friends.forEach { put(friendToJson(it)) } }.toString())
+            if (s.chats == null) {
+                remove("chats")
+            } else {
+                val obj = JSONObject()
+                // Keep the most recent 200 messages per friend so prefs stay small.
+                s.chats.forEach { (id, list) -> obj.put(id, messagesToJson(list.takeLast(200))) }
+                putString("chats", obj.toString())
+            }
+            // Keys from older versions that are no longer used
+            listOf(
+                "quests", "questDate", "streak", "lastCompleteDate", "prevCompleteDate", "worldX", "worldY", "steps",
+                "replyLanguage", "nickname", "appLanguage", "autoCarry",
+            ).forEach { remove(it) }
         }
     }
 
     fun clear() {
         prefs.edit { clear() }
     }
+
+    /** Everything the user owns, as one pretty-printed JSON document (Settings > Data > Export). */
+    fun exportJson(s: SavedState): String = JSONObject()
+        .put("app", "Today")
+        .put("exportedAt", java.time.LocalDateTime.now().toString())
+        .put("character", JSONObject().put("level", s.character.level).put("xp", s.character.xp).put("outfit", outfitToJson(s.character.outfit)))
+        .put("questsByDate", JSONObject().apply { s.questsByDate.toSortedMap().forEach { (d, q) -> put(d, questsToJson(q)) } })
+        .put("friends", JSONArray().apply { s.friends.forEach { put(friendToJson(it)) } })
+        .put("settings", settingsToJson(s.settings))
+        .toString(2)
+
+    // ------------------------------------------------------------------ settings
+
+    private fun loadSettings(): AppSettings {
+        val d = AppSettings()
+        val json = prefs.getString("settings", null)?.let { runCatching { JSONObject(it) }.getOrNull() }
+        if (json == null) {
+            // v1.1/v1.2 stored a few separate keys
+            return d.copy(
+                nickname = prefs.getString("nickname", null) ?: d.nickname,
+                language = enumOr(prefs.getString("appLanguage", null), d.language),
+                autoCarryOver = prefs.getBoolean("autoCarry", d.autoCarryOver),
+            )
+        }
+        return AppSettings(
+            nickname = json.optString("nickname", d.nickname).ifBlank { d.nickname },
+            language = enumOr(json.optString("language"), d.language),
+            autoCarryOver = json.optBoolean("autoCarryOver", d.autoCarryOver),
+            weekStartsMonday = json.optBoolean("weekStartsMonday", d.weekStartsMonday),
+            celebrationEffects = json.optBoolean("celebrationEffects", d.celebrationEffects),
+            defaultQuestXp = json.optInt("defaultQuestXp", d.defaultQuestXp).coerceIn(MIN_QUEST_XP, MAX_QUEST_XP),
+            notificationsEnabled = json.optBoolean("notificationsEnabled", d.notificationsEnabled),
+            questReminder = json.optBoolean("questReminder", d.questReminder),
+            questReminderTime = json.optInt("questReminderTime", d.questReminderTime).coerceIn(0, 24 * 60 - 1),
+            streakReminder = json.optBoolean("streakReminder", d.streakReminder),
+            streakReminderTime = json.optInt("streakReminderTime", d.streakReminderTime).coerceIn(0, 24 * 60 - 1),
+            messageNotifications = json.optBoolean("messageNotifications", d.messageNotifications),
+            messagePreview = json.optBoolean("messagePreview", d.messagePreview),
+            chatFontSize = enumOr(json.optString("chatFontSize"), d.chatFontSize),
+            enterToSend = json.optBoolean("enterToSend", d.enterToSend),
+            readReceipts = json.optBoolean("readReceipts", d.readReceipts),
+            autoReplies = json.optBoolean("autoReplies", d.autoReplies),
+            saveChatHistory = json.optBoolean("saveChatHistory", d.saveChatHistory),
+            contactsPromptDone = json.optBoolean("contactsPromptDone", d.contactsPromptDone),
+        )
+    }
+
+    private fun settingsToJson(s: AppSettings) = JSONObject()
+        .put("nickname", s.nickname)
+        .put("language", s.language.name)
+        .put("autoCarryOver", s.autoCarryOver)
+        .put("weekStartsMonday", s.weekStartsMonday)
+        .put("celebrationEffects", s.celebrationEffects)
+        .put("defaultQuestXp", s.defaultQuestXp)
+        .put("notificationsEnabled", s.notificationsEnabled)
+        .put("questReminder", s.questReminder)
+        .put("questReminderTime", s.questReminderTime)
+        .put("streakReminder", s.streakReminder)
+        .put("streakReminderTime", s.streakReminderTime)
+        .put("messageNotifications", s.messageNotifications)
+        .put("messagePreview", s.messagePreview)
+        .put("chatFontSize", s.chatFontSize.name)
+        .put("enterToSend", s.enterToSend)
+        .put("readReceipts", s.readReceipts)
+        .put("autoReplies", s.autoReplies)
+        .put("saveChatHistory", s.saveChatHistory)
+        .put("contactsPromptDone", s.contactsPromptDone)
+
+    private inline fun <reified E : Enum<E>> enumOr(name: String?, default: E): E =
+        runCatching { enumValueOf<E>(name ?: "") }.getOrDefault(default)
+
+    // ------------------------------------------------------------------ quests
 
     private fun questsToJson(quests: List<Quest>) = JSONArray().apply {
         quests.forEach { q ->
@@ -88,6 +178,51 @@ class TodayStorage(context: Context) {
         val o = arr.getJSONObject(i)
         Quest(o.getString("id"), o.getString("title"), o.optString("emoji", "⭐"), o.optInt("xp", 20), o.optBoolean("done", false))
     }
+
+    // ------------------------------------------------------------------ friends & chats
+
+    private fun friendToJson(f: Friend) = JSONObject()
+        .put("id", f.id).put("name", f.name).put("nameEn", f.nameEn).put("handle", f.handle)
+        .put("outfit", outfitToJson(f.outfit)).put("online", f.online).put("level", f.level)
+        .put("source", f.source.name).put("blocked", f.blocked)
+        .apply { f.contactId?.let { put("contactId", it) } }
+
+    private fun friendFromJson(o: JSONObject) = Friend(
+        id = o.getString("id"),
+        name = o.getString("name"),
+        nameEn = o.optString("nameEn", o.getString("name")),
+        handle = o.optString("handle"),
+        outfit = outfitFromJson(o.getJSONObject("outfit")),
+        online = o.optBoolean("online"),
+        level = o.optInt("level", 1),
+        source = enumOr(o.optString("source"), FriendSource.MANUAL),
+        blocked = o.optBoolean("blocked"),
+        contactId = if (o.has("contactId")) o.getLong("contactId") else null,
+    )
+
+    private fun messagesToJson(list: List<ChatMessage>) = JSONArray().apply {
+        list.forEach { m ->
+            put(
+                JSONObject().put("id", m.id).put("fromMe", m.fromMe).put("text", m.text).put("time", m.time.toString())
+                    .put("liked", m.liked).put("read", m.read).apply { m.textEn?.let { put("textEn", it) } }
+            )
+        }
+    }
+
+    private fun messagesFromJson(arr: JSONArray): List<ChatMessage> = List(arr.length()) { i ->
+        val o = arr.getJSONObject(i)
+        ChatMessage(
+            id = o.getLong("id"),
+            fromMe = o.getBoolean("fromMe"),
+            text = o.getString("text"),
+            time = runCatching { LocalTime.parse(o.getString("time")) }.getOrDefault(LocalTime.NOON),
+            liked = o.optBoolean("liked"),
+            textEn = if (o.has("textEn")) o.getString("textEn") else null,
+            read = o.optBoolean("read"),
+        )
+    }
+
+    // ------------------------------------------------------------------ outfit
 
     private fun outfitToJson(o: Outfit) = JSONObject()
         .put("name", o.name).put("hair", o.hair).put("shirt", o.shirt)
