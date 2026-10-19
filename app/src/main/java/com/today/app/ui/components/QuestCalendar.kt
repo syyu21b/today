@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.today.app.data.DayStatus
+import com.today.app.i18n.LocalStrings
 import com.today.app.ui.theme.Coral
 import com.today.app.ui.theme.Gold
 import com.today.app.ui.theme.Mint
@@ -49,8 +50,6 @@ import com.today.app.ui.theme.Violet
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
-import java.time.format.TextStyle
-import java.util.Locale
 
 private fun statusColor(s: DayStatus): Color? = when (s) {
     DayStatus.EMPTY -> null
@@ -66,8 +65,6 @@ private fun weekOf(date: LocalDate): List<LocalDate> {
     return List(7) { sunday.plusDays(it.toLong()) }
 }
 
-private fun dayLabel(d: DayOfWeek) = d.getDisplayName(TextStyle.SHORT, Locale.KOREAN)
-
 /** Week strip with arrows; tapping the month title opens the full month view. */
 @Composable
 fun WeekCalendar(
@@ -77,6 +74,7 @@ fun WeekCalendar(
     onSelect: (LocalDate) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val s = LocalStrings.current
     var showMonth by remember { mutableStateOf(false) }
     Column(
         modifier
@@ -87,7 +85,7 @@ fun WeekCalendar(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { onSelect(selected.minusWeeks(1)) }) {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "이전 주")
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = s.prevWeek)
             }
             Row(
                 Modifier
@@ -100,20 +98,20 @@ fun WeekCalendar(
             ) {
                 Icon(Icons.Filled.CalendarMonth, null, tint = Violet, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("${selected.year}년 ${selected.monthValue}월", fontWeight = FontWeight.Bold)
+                Text(s.monthTitle(YearMonth.from(selected)), fontWeight = FontWeight.Bold)
             }
             if (selected != today) {
-                TextButton(onClick = { onSelect(today) }) { Text("오늘") }
+                TextButton(onClick = { onSelect(today) }) { Text(s.today) }
             }
             IconButton(onClick = { onSelect(selected.plusWeeks(1)) }) {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "다음 주")
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = s.nextWeek)
             }
         }
         Row(Modifier.fillMaxWidth()) {
             weekOf(selected).forEach { day ->
                 DayCell(
                     day = day,
-                    weekday = dayLabel(day.dayOfWeek),
+                    weekday = s.weekdayShort(day.dayOfWeek),
                     isSelected = day == selected,
                     isToday = day == today,
                     status = statusOf(day),
@@ -145,7 +143,6 @@ private fun DayCell(
     status: DayStatus,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    dimmed: Boolean = false,
 ) {
     val weekendColor = when (day.dayOfWeek) {
         DayOfWeek.SUNDAY -> Coral
@@ -168,11 +165,7 @@ private fun DayCell(
         Text(
             "${day.dayOfMonth}",
             fontWeight = if (isToday || isSelected) FontWeight.Bold else FontWeight.Normal,
-            color = when {
-                isSelected -> Color.White
-                dimmed -> TextMuted.copy(alpha = 0.5f)
-                else -> weekendColor
-            },
+            color = if (isSelected) Color.White else weekendColor,
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(3.dp))
@@ -194,28 +187,29 @@ private fun MonthCalendarDialog(
     onSelect: (LocalDate) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val s = LocalStrings.current
     var month by remember { mutableStateOf(initialMonth) }
     Dialog(onDismissRequest = onDismiss) {
         Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surface) {
             Column(Modifier.padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { month = month.minusMonths(1) }) {
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "이전 달")
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = s.prevMonth)
                     }
                     Text(
-                        "${month.year}년 ${month.monthValue}월",
+                        s.monthTitle(month),
                         style = MaterialTheme.typography.titleMedium,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.weight(1f),
                     )
                     IconButton(onClick = { month = month.plusMonths(1) }) {
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "다음 달")
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = s.nextMonth)
                     }
                 }
                 Row(Modifier.fillMaxWidth()) {
                     listOf(DayOfWeek.SUNDAY, DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY, DayOfWeek.SATURDAY)
                         .forEach {
-                            Text(dayLabel(it), fontSize = 12.sp, color = TextMuted, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
+                            Text(s.weekdayShort(it), fontSize = 12.sp, color = TextMuted, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
                         }
                 }
                 Spacer(Modifier.height(4.dp))
@@ -247,8 +241,8 @@ private fun MonthCalendarDialog(
                 Spacer(Modifier.height(8.dp))
                 Legend()
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = { onSelect(today) }) { Text("오늘로 이동") }
-                    TextButton(onClick = onDismiss) { Text("닫기") }
+                    TextButton(onClick = { onSelect(today) }) { Text(s.goToday) }
+                    TextButton(onClick = onDismiss) { Text(s.close) }
                 }
             }
         }
@@ -257,8 +251,9 @@ private fun MonthCalendarDialog(
 
 @Composable
 private fun Legend() {
+    val s = LocalStrings.current
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-        listOf(DayStatus.COMPLETE to "완료", DayStatus.PARTIAL to "진행 중", DayStatus.PLANNED to "예정", DayStatus.MISSED to "미완료").forEach { (s, label) ->
+        listOf(DayStatus.COMPLETE to s.legendComplete, DayStatus.PARTIAL to s.legendPartial, DayStatus.PLANNED to s.legendPlanned, DayStatus.MISSED to s.legendMissed).forEach { (s, label) ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(6.dp).clip(CircleShape).background(statusColor(s)!!))
                 Spacer(Modifier.width(4.dp))

@@ -77,6 +77,7 @@ import androidx.compose.ui.unit.sp
 import com.today.app.data.ChatMessage
 import com.today.app.data.Friend
 import com.today.app.data.TodayViewModel
+import com.today.app.i18n.LocalStrings
 import com.today.app.ui.components.PixelAvatar
 import com.today.app.ui.theme.Coral
 import com.today.app.ui.theme.DmGradient
@@ -108,11 +109,12 @@ fun CommunityScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
 
 @Composable
 private fun FriendList(vm: TodayViewModel) {
+    val s = LocalStrings.current
     LazyColumn(contentPadding = PaddingValues(vertical = 16.dp)) {
         item {
             Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("메시지", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
-                Icon(Icons.Filled.Search, null, tint = TextMuted)
+                Text(s.messagesTitle, style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
+                Icon(Icons.Filled.Search, s.search, tint = TextMuted)
             }
             Spacer(Modifier.height(16.dp))
         }
@@ -129,7 +131,7 @@ private fun FriendList(vm: TodayViewModel) {
                     ) {
                         FriendAvatar(f, 64.dp, storyRing = true)
                         Spacer(Modifier.height(4.dp))
-                        Text(f.name, fontSize = 12.sp)
+                        Text(s.friendName(f), fontSize = 12.sp)
                     }
                 }
             }
@@ -150,13 +152,13 @@ private fun FriendList(vm: TodayViewModel) {
                 FriendAvatar(f, 56.dp)
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(f.name, fontWeight = if (isUnread) FontWeight.Bold else FontWeight.Medium)
+                    Text(s.friendName(f), fontWeight = if (isUnread) FontWeight.Bold else FontWeight.Medium)
                     Text(
                         when {
-                            isTyping -> "입력 중…"
-                            last == null -> "LV ${f.level} · 새 대화를 시작해 보세요"
-                            last.fromMe -> "나: ${last.text}"
-                            else -> last.text
+                            isTyping -> s.typing
+                            last == null -> s.startChat(f.level)
+                            last.fromMe -> s.youPrefix(s.messageText(last))
+                            else -> s.messageText(last)
                         },
                         color = if (isUnread || isTyping) Color.White else TextMuted,
                         fontWeight = if (isUnread) FontWeight.SemiBold else FontWeight.Normal,
@@ -212,9 +214,10 @@ private fun FriendAvatar(friend: Friend, size: Dp, storyRing: Boolean = false) {
 
 @Composable
 private fun DmChat(vm: TodayViewModel, friend: Friend) {
+    val s = LocalStrings.current
     val messages = vm.chats[friend.id].orEmpty()
     val isTyping = vm.typing[friend.id] == true
-    // TextFieldState handles IME composition (Korean 조합 중 글자) correctly when cleared.
+    // TextFieldState handles IME composition (e.g. Hangul syllables in progress) correctly when cleared.
     val input = rememberTextFieldState()
     val listState = rememberLazyListState()
 
@@ -231,14 +234,14 @@ private fun DmChat(vm: TodayViewModel, friend: Friend) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = { vm.openChat(null) }) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로")
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = s.back)
             }
             FriendAvatar(friend, 40.dp)
             Spacer(Modifier.width(10.dp))
             Column {
-                Text(friend.name, fontWeight = FontWeight.Bold)
+                Text(s.friendName(friend), fontWeight = FontWeight.Bold)
                 Text(
-                    if (isTyping) "입력 중…" else if (friend.online) "활동 중" else "@${friend.handle}",
+                    if (isTyping) s.typing else if (friend.online) s.activeNow else "@${friend.handle}",
                     fontSize = 12.sp, color = if (friend.online || isTyping) Mint else TextMuted,
                 )
             }
@@ -290,13 +293,13 @@ private fun DmChat(vm: TodayViewModel, friend: Friend) {
                 onKeyboardAction = { send() },
                 modifier = Modifier.weight(1f),
                 decorator = { inner ->
-                    if (input.text.isEmpty()) Text("메시지 보내기… / Message…", color = TextMuted)
+                    if (input.text.isEmpty()) Text(s.messagePlaceholder, color = TextMuted)
                     inner()
                 },
             )
             AnimatedVisibility(input.text.isNotBlank(), enter = scaleIn() + fadeIn(), exit = scaleOut() + fadeOut()) {
                 IconButton(onClick = send) {
-                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "보내기", tint = Color(0xFF8E7BFF))
+                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = s.send, tint = Color(0xFF8E7BFF))
                 }
             }
         }
@@ -311,13 +314,14 @@ private fun ChatProfileHeader(friend: Friend) {
     ) {
         FriendAvatar(friend, 88.dp)
         Spacer(Modifier.height(8.dp))
-        Text(friend.name, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+        Text(LocalStrings.current.friendName(friend), fontWeight = FontWeight.Bold, fontSize = 18.sp)
         Text("@${friend.handle} · LV ${friend.level}", color = TextMuted, fontFamily = PixelFont, fontSize = 12.sp)
     }
 }
 
 @Composable
 private fun MessageBubble(m: ChatMessage, friend: Friend, onDoubleTap: () -> Unit) {
+    val s = LocalStrings.current
     val shape = if (m.fromMe) RoundedCornerShape(20.dp, 20.dp, 4.dp, 20.dp) else RoundedCornerShape(20.dp, 20.dp, 20.dp, 4.dp)
     Row(
         Modifier.fillMaxWidth().padding(bottom = if (m.liked) 12.dp else 0.dp),
@@ -337,9 +341,9 @@ private fun MessageBubble(m: ChatMessage, friend: Friend, onDoubleTap: () -> Uni
                     .pointerInput(m.id) { detectTapGestures(onDoubleTap = { onDoubleTap() }) }
                     .padding(horizontal = 14.dp, vertical = 10.dp),
             ) {
-                Text(m.text, color = Color.White, fontSize = 15.sp)
+                Text(s.messageText(m), color = Color.White, fontSize = 15.sp)
                 Text(
-                    m.time, fontSize = 10.sp, color = Color.White.copy(alpha = 0.6f),
+                    s.chatTime(m.time), fontSize = 10.sp, color = Color.White.copy(alpha = 0.6f),
                     modifier = Modifier.align(Alignment.End),
                 )
             }
@@ -353,7 +357,7 @@ private fun MessageBubble(m: ChatMessage, friend: Friend, onDoubleTap: () -> Uni
                         .border(1.dp, NightSurfaceHigh, CircleShape)
                         .padding(3.dp),
                 ) {
-                    Icon(Icons.Filled.Favorite, "좋아요", tint = Coral, modifier = Modifier.size(12.dp))
+                    Icon(Icons.Filled.Favorite, s.liked, tint = Coral, modifier = Modifier.size(12.dp))
                 }
             }
         }

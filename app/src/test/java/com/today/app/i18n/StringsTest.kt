@@ -1,0 +1,78 @@
+package com.today.app.i18n
+
+import com.today.app.data.AppLanguage
+import com.today.app.data.DummyData
+import com.today.app.data.MAX_QUEST_XP
+import com.today.app.data.Outfits
+import com.today.app.data.StyleNote
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.YearMonth
+
+class StringsTest {
+
+    private val hangul = Regex("[\\uAC00-\\uD7A3]")
+    private val date = LocalDate.of(2026, 10, 19)
+
+    @Test
+    fun englishTextHasNoKorean() {
+        val e = EnStrings
+        val samples = listOf(
+            e.headerDate(date), e.shortDate(date), e.monthTitle(YearMonth.of(2026, 10)), e.chatTime(LocalTime.of(9, 5)),
+            e.greeting("Sam"), e.clipboardBanner(date, 3), e.msgCopied(date, 1), e.pasteResult(2, 1, 1, 10),
+            e.footer(10), e.deleteQuestBody("Run", true, 30), e.levelReached(3), e.msgStreak(2),
+            e.weekdayShort(date.dayOfWeek), e.outfitName("ocean"), e.outfitName("포토 스타일 #2"),
+        ) + e.analyzeSteps + StyleNote.entries.map { e.note(it) } + e.presetNames.values
+        samples.forEach { assertFalse("Korean in English text: $it", hangul.containsMatchIn(it)) }
+    }
+
+    @Test
+    fun koreanDatesUseKorean() {
+        assertEquals("10월 19일 (월)", KoStrings.shortDate(date))
+        assertEquals("2026년 10월", KoStrings.monthTitle(YearMonth.of(2026, 10)))
+        assertEquals("Mon, Oct 19", EnStrings.shortDate(date))
+        assertEquals("October 2026", EnStrings.monthTitle(YearMonth.of(2026, 10)))
+    }
+
+    @Test
+    fun bothLanguagesHaveSameShape() {
+        assertEquals(KoStrings.analyzeSteps.size, EnStrings.analyzeSteps.size)
+        assertEquals(KoStrings.presetNames.keys, EnStrings.presetNames.keys)
+        assertEquals(Outfits.presets.map { it.name }.toSet(), EnStrings.presetNames.keys)
+    }
+
+    @Test
+    fun legacyOutfitNamesAreLocalized() {
+        assertEquals("ocean", Outfits.normalizeName("오션"))
+        assertEquals("photo:3", Outfits.normalizeName("포토 스타일 #3"))
+        assertEquals("Ocean", EnStrings.outfitName("오션"))
+        assertEquals("Photo Style #3", EnStrings.outfitName("photo:3"))
+        assertEquals("포토 스타일 #3", KoStrings.outfitName("photo:3"))
+    }
+
+    @Test
+    fun pluralsInEnglish() {
+        assertEquals("1 day", EnStrings.days(1))
+        assertEquals("5 days", EnStrings.days(5))
+        assertEquals("Nothing to paste", EnStrings.pasteResult(0, 0, 0, 10))
+        assertEquals("Pasted 9 · skipped 1 over the 10-a-day limit", EnStrings.pasteResult(9, 0, 1, 10))
+    }
+
+    @Test
+    fun defaultQuestsFollowLanguageAndXpCap() {
+        var n = 0
+        val ko = DummyData.defaultQuests(AppLanguage.KOREAN) { "${n++}" }
+        val en = DummyData.defaultQuests(AppLanguage.ENGLISH) { "${n++}" }
+        assertTrue(ko.all { hangul.containsMatchIn(it.title) || it.title.contains("Kotlin") })
+        assertTrue(en.none { hangul.containsMatchIn(it.title) })
+        assertTrue((ko + en).all { it.xp <= MAX_QUEST_XP })
+        assertEquals("Read 20 min", DummyData.translateDefaultTitle("독서 20분", AppLanguage.ENGLISH))
+        assertEquals("독서 20분", DummyData.translateDefaultTitle("Read 20 min", AppLanguage.KOREAN))
+        assertNull(DummyData.translateDefaultTitle("My own quest", AppLanguage.KOREAN))
+    }
+}

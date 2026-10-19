@@ -1,9 +1,6 @@
 package com.today.app.data
 
-/**
- * Simulated friend replies in Korean or English.
- * Language = the setting, or (AUTO) whatever the user just typed in.
- */
+/** Simulated friend replies in Korean or English — friends answer in the language you typed. */
 object ReplyEngine {
 
     enum class Lang { KO, EN }
@@ -18,12 +15,6 @@ object ReplyEngine {
         else -> fallback
     }
 
-    fun resolve(setting: ReplyLanguage, text: String, fallback: Lang): Lang = when (setting) {
-        ReplyLanguage.KOREAN -> Lang.KO
-        ReplyLanguage.ENGLISH -> Lang.EN
-        ReplyLanguage.AUTO -> detect(text, fallback)
-    }
-
     private class Rule(val keywords: List<String>, val replies: List<String>)
 
     private val koRules = listOf(
@@ -32,7 +23,7 @@ object ReplyEngine {
         Rule(listOf("레벨", "렙", "lv"), listOf("나 지금 LV {friendLevel}! 너는 LV {myLevel}이네 👀", "LV {myLevel}? 금방 따라잡겠다 ㅋㅋ")),
         Rule(listOf("스트릭", "연속", "🔥"), listOf("스트릭 끊기면 너무 아까워 🔥", "나도 스트릭 이어가는 중!")),
         Rule(listOf("운동", "조깅", "달리", "헬스", "러닝"), listOf("오 운동 대박 💪 나도 이따 뛰러 갈 거야", "내일 아침에 같이 조깅 ㄱ?")),
-        Rule(listOf("공부", "코틀린", "kotlin", "코딩", "개발"), listOf("Compose 진짜 재밌지 않아? 📘", "공부 퀘스트 +40 XP 꿀이야 ㅋㅋ")),
+        Rule(listOf("공부", "코틀린", "kotlin", "코딩", "개발"), listOf("Compose 진짜 재밌지 않아? 📘", "공부 퀘스트 +30 XP 꿀이야 ㅋㅋ")),
         Rule(listOf("옷", "스타일", "코디", "옷장"), listOf("옷장에서 사진 찍으면 도트 옷 만들어 주는 거 해봤어? 👕", "오 새 스타일 궁금하다!")),
         Rule(listOf("고마", "땡큐", "감사"), listOf("별말씀을 😆", "언제든지!")),
         Rule(listOf("잘자", "굿밤", "자러"), listOf("잘 자! 내일도 퀘스트 화이팅 🌙", "굿밤~ 내일 스트릭 잊지 마!")),
@@ -46,7 +37,7 @@ object ReplyEngine {
         Rule(listOf("level", "lv"), listOf("I'm LV {friendLevel}! You're LV {myLevel} 👀", "LV {myLevel}? You'll catch up in no time.")),
         Rule(listOf("streak", "🔥"), listOf("Don't break the streak! 🔥", "I'm keeping my streak alive too!")),
         Rule(listOf("run", "jog", "gym", "workout", "exercise"), listOf("Nice workout 💪 I'm going for a run later.", "Morning jog together tomorrow?")),
-        Rule(listOf("study", "kotlin", "code", "coding", "compose"), listOf("Compose is so fun, right? 📘", "Study quests are +40 XP, easy win 😎")),
+        Rule(listOf("study", "kotlin", "code", "coding", "compose"), listOf("Compose is so fun, right? 📘", "Study quests are +30 XP, easy win 😎")),
         Rule(listOf("outfit", "style", "clothes", "wardrobe"), listOf("Have you tried the photo-to-pixel outfit thing? 👕", "Ooh, show me your new style!")),
         Rule(listOf("thanks", "thank you", "thx"), listOf("Anytime! 😆", "No problem!")),
         Rule(listOf("good night", "gn", "sleep"), listOf("Good night! Crush your quests tomorrow 🌙", "Sleep well — don't forget your streak!")),

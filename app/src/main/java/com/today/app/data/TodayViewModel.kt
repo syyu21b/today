@@ -12,14 +12,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.today.app.i18n.Strings
+import com.today.app.i18n.strings
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.LocalTime
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 import java.util.UUID
 
 class TodayViewModel(app: Application) : AndroidViewModel(app) {
@@ -57,10 +59,15 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         private set
     private var messageCounter = 0L
 
+    /** Text in the currently selected app language. */
+    val strings: Strings get() = settings.language.strings()
+
     // ---------------- Outfit recognition ----------------
     var isAnalyzingStyle by mutableStateOf(false)
         private set
-    var analyzeStep by mutableStateOf("")
+
+    /** -1 = loading the photo, otherwise an index into Strings.analyzeSteps. */
+    var analyzeStep by mutableIntStateOf(-1)
         private set
     var stylePhoto by mutableStateOf<Bitmap?>(null)
         private set
@@ -83,17 +90,36 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         resetChats()
     }
 
-    private fun loadFromStorage() {
+    /** @param keepLanguage used by "reset all" so the app doesn't jump back to the default language. */
+    private fun loadFromStorage(keepLanguage: AppLanguage? = null) {
         val saved = storage.load()
         character = saved.character
-        settings = saved.settings
+        settings = if (keepLanguage == null) saved.settings
+        else AppSettings(nickname = keepLanguage.strings().defaultNickname, language = keepLanguage)
         questsByDate.clear()
         questsByDate.putAll(saved.questsByDate)
         todayDate = LocalDate.now()
         selectedDate = todayDate
         clipboard = null
+        lastChatLang = if (settings.language == AppLanguage.KOREAN) ReplyEngine.Lang.KO else ReplyEngine.Lang.EN
+        enforceXpCap()
         ensureTodayQuests()
         persist()
+    }
+
+    /** Quests saved before the 30 XP cap: clamp them, keeping total XP consistent for today's done ones. */
+    private fun enforceXpCap() {
+        val today = todayDate.toString()
+        questsByDate.keys.toList().forEach { date ->
+            val list = questsByDate[date] ?: return@forEach
+            if (list.none { it.xp > MAX_QUEST_XP }) return@forEach
+            questsByDate[date] = list.map { q ->
+                if (q.xp <= MAX_QUEST_XP) return@map q
+                // Today's completed quests can still be unchecked, so give back the extra XP now.
+                if (q.done && date == today) addXp(MAX_QUEST_XP - q.xp, announce = false)
+                q.copy(xp = MAX_QUEST_XP)
+            }
+        }
     }
 
     // ======================= Calendar =======================
@@ -152,7 +178,7 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         val key = todayDate.toString()
         if (questsByDate.containsKey(key)) return
         if (questsByDate.isEmpty()) {
-            questsByDate[key] = DummyData.defaultQuests.map { it.copy(id = newId()) }
+            questsByDate[key] = DummyData.defaultQuests(settings.language, ::newId)
             return
         }
         if (!settings.autoCarryOver) return
@@ -166,7 +192,7 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
 
     fun toggleQuest(date: LocalDate, id: String) {
         if (!isCheckable(date)) {
-            showMessage(if (date.isBefore(todayDate)) "지난 날의 기록은 바꿀 수 없어요" else "예정된 퀘스트는 그날 체크할 수 있어요")
+            showMessage(if (date.isBefore(todayDate)) strings.msgPastLocked else strings.msgFutureCheck)
             return
         }
         val list = questsFor(date)
@@ -177,31 +203,31 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         if (nowDone) {
             addXp(quest.xp)
             celebrationTick++
-            if (streak > streakBefore) showMessage("🔥 오늘의 퀘스트 완료! 스트릭 ${streak}일")
+            if (streak > streakBefore) showMessage(strings.msgStreak(streak))
         } else {
             addXp(-quest.xp)
         }
         persist()
     }
 
-    /** @return null on success, otherwise the reason it failed. */
+    /** @return null on success, otherwise the (localized) reason it failed. */
     fun addQuest(date: LocalDate, title: String, emoji: String, xp: Int): String? {
-        if (!isEditable(date)) return "지난 날에는 퀘스트를 추가할 수 없어요"
+        if (!isEditable(date)) return strings.errAddPast
         val list = questsFor(date)
-        if (list.size >= MAX_QUESTS_PER_DAY) return "하루에 최대 ${MAX_QUESTS_PER_DAY}개까지 추가할 수 있어요"
+        if (list.size >= MAX_QUESTS_PER_DAY) return strings.errLimit(MAX_QUESTS_PER_DAY)
         val cleanTitle = title.trim().take(MAX_QUEST_TITLE)
-        if (cleanTitle.isEmpty()) return "할 일을 입력해 주세요"
+        if (cleanTitle.isEmpty()) return strings.errEmptyTitle
         setQuests(date, list + Quest(newId(), cleanTitle, emoji.ifBlank { "⭐" }, xp.coerceIn(MIN_QUEST_XP, MAX_QUEST_XP)))
         persist()
         return null
     }
 
     fun updateQuest(date: LocalDate, id: String, title: String, emoji: String, xp: Int): String? {
-        if (!isEditable(date)) return "지난 날의 퀘스트는 수정할 수 없어요"
+        if (!isEditable(date)) return strings.errEditPast
         val list = questsFor(date)
-        val old = list.firstOrNull { it.id == id } ?: return "퀘스트를 찾을 수 없어요"
+        val old = list.firstOrNull { it.id == id } ?: return strings.errNotFound
         val cleanTitle = title.trim().take(MAX_QUEST_TITLE)
-        if (cleanTitle.isEmpty()) return "할 일을 입력해 주세요"
+        if (cleanTitle.isEmpty()) return strings.errEmptyTitle
         val newXp = xp.coerceIn(MIN_QUEST_XP, MAX_QUEST_XP)
         setQuests(date, list.map { if (it.id == id) it.copy(title = cleanTitle, emoji = emoji.ifBlank { "⭐" }, xp = newXp) else it })
         // Already completed today: keep total XP consistent with the new reward.
@@ -212,7 +238,7 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
 
     fun deleteQuest(date: LocalDate, id: String) {
         if (!isEditable(date)) {
-            showMessage("지난 날의 퀘스트는 삭제할 수 없어요")
+            showMessage(strings.errDeletePast)
             return
         }
         val list = questsFor(date)
@@ -220,7 +246,7 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         setQuests(date, list.filterNot { it.id == id })
         if (quest.done) addXp(-quest.xp) // no XP farming by check -> delete -> re-add
         persist()
-        showMessage("'${quest.title}' 삭제됨")
+        showMessage(strings.msgDeleted(quest.title))
     }
 
     // ======================= Copy / paste =======================
@@ -228,11 +254,11 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
     fun copyDay(date: LocalDate) {
         val quests = questsFor(date)
         if (quests.isEmpty()) {
-            showMessage("복사할 퀘스트가 없어요")
+            showMessage(strings.msgNothingToCopy)
             return
         }
         clipboard = QuestClipboard(date, quests)
-        showMessage("${formatDate(date)} 퀘스트 ${quests.size}개 복사됨 · 붙여넣을 날짜를 고르세요")
+        showMessage(strings.msgCopied(date, quests.size))
     }
 
     fun clearClipboard() {
@@ -242,7 +268,7 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
     fun pasteTo(date: LocalDate) {
         val clip = clipboard ?: return
         if (!isEditable(date)) {
-            showMessage("지난 날에는 붙여넣을 수 없어요")
+            showMessage(strings.errPastePast)
             return
         }
         val existing = questsFor(date)
@@ -257,12 +283,7 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
             setQuests(date, existing + toAdd.map { it.copy(id = newId(), done = false) })
             persist()
         }
-        val parts = buildList {
-            if (toAdd.isNotEmpty()) add("${toAdd.size}개 붙여넣음")
-            if (duplicates > 0) add("중복 ${duplicates}개 제외")
-            if (overLimit > 0) add("하루 최대 ${MAX_QUESTS_PER_DAY}개 제한으로 ${overLimit}개 제외")
-        }
-        showMessage(if (toAdd.isEmpty() && parts.isEmpty()) "붙여넣을 퀘스트가 없어요" else parts.joinToString(" · "))
+        showMessage(strings.pasteResult(toAdd.size, duplicates, overLimit, MAX_QUESTS_PER_DAY))
     }
 
     private fun setQuests(date: LocalDate, quests: List<Quest>) {
@@ -275,13 +296,13 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         levelUpEvent = null
     }
 
-    private fun addXp(delta: Int) {
+    private fun addXp(delta: Int, announce: Boolean = true) {
         var level = character.level
         var xp = character.xp + delta
         while (xp >= CharacterState.xpNeededFor(level)) {
             xp -= CharacterState.xpNeededFor(level)
             level++
-            levelUpEvent = level
+            if (announce) levelUpEvent = level
         }
         while (xp < 0 && level > 1) {
             level--
@@ -306,12 +327,12 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         if (isAnalyzingStyle) return
         viewModelScope.launch {
             isAnalyzingStyle = true
-            analyzeStep = "사진 불러오는 중…"
-            var ticker: kotlinx.coroutines.Job? = null
+            analyzeStep = -1
+            var ticker: Job? = null
             try {
                 val bitmap = withContext(Dispatchers.IO) { PhotoDecoder.decode(getApplication(), uri) }
                 if (bitmap == null) {
-                    showMessage("사진을 불러오지 못했어요")
+                    showMessage(strings.msgPhotoLoadFail)
                     return@launch
                 }
                 stylePhoto = bitmap
@@ -319,15 +340,14 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
 
                 val started = System.currentTimeMillis()
                 ticker = launch {
-                    val steps = listOf("사람 찾는 중…", "머리·상의·하의 영역 나누는 중…", "옷 색감 추출 중…", "도트 의상 생성 중…")
                     var i = 0
                     while (true) {
-                        analyzeStep = steps[i % steps.size]
+                        analyzeStep = i % strings.analyzeSteps.size
                         i++
                         delay(550)
                     }
                 }
-                val result = analyzer.analyze(bitmap, character.outfit, "포토 스타일 #${photoStyleCount + 1}")
+                val result = analyzer.analyze(bitmap, character.outfit, Outfits.PHOTO_PREFIX + (photoStyleCount + 1))
                 // Keep the "AI" animation visible for a moment even on fast devices.
                 val elapsed = System.currentTimeMillis() - started
                 if (elapsed < 1600) delay(1600 - elapsed)
@@ -335,10 +355,10 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
                 photoStyleCount++
                 styleResult = result
                 applyOutfit(result.outfit)
-                showMessage(result.summary)
+                showMessage(strings.styleSummary(result))
             } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-                showMessage("스타일 분석 중 문제가 생겼어요: ${e.message ?: "알 수 없는 오류"}")
+                if (e is CancellationException) throw e
+                showMessage(strings.msgStyleError(e.message))
             } finally {
                 ticker?.cancel()
                 isAnalyzingStyle = false
@@ -354,14 +374,31 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
     // ======================= Settings =======================
 
     fun updateNickname(name: String) {
-        val clean = name.trim().take(12)
+        val clean = name.trim().take(MAX_NICKNAME)
         if (clean.isEmpty()) return
         settings = settings.copy(nickname = clean)
         persist()
     }
 
-    fun updateReplyLanguage(lang: ReplyLanguage) {
-        settings = settings.copy(replyLanguage = lang)
+    /**
+     * Switches every UI string. Built-in content that the user never renamed (default quest titles,
+     * default nickname) follows the language too; anything the user typed stays as written.
+     */
+    fun updateLanguage(language: AppLanguage) {
+        if (language == settings.language) return
+        val oldDefaultNick = settings.language.strings().defaultNickname
+        settings = settings.copy(
+            language = language,
+            nickname = if (settings.nickname == oldDefaultNick) language.strings().defaultNickname else settings.nickname,
+        )
+        questsByDate.keys.toList().forEach { date ->
+            val list = questsByDate[date] ?: return@forEach
+            questsByDate[date] = list.map { q -> DummyData.translateDefaultTitle(q.title, language)?.let { q.copy(title = it) } ?: q }
+        }
+        clipboard = clipboard?.let { c ->
+            c.copy(quests = c.quests.map { q -> DummyData.translateDefaultTitle(q.title, language)?.let { q.copy(title = it) } ?: q })
+        }
+        lastChatLang = if (language == AppLanguage.KOREAN) ReplyEngine.Lang.KO else ReplyEngine.Lang.EN
         persist()
     }
 
@@ -371,12 +408,13 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun resetAll() {
+        val language = settings.language
         storage.clear()
         clearStylePhoto()
         photoStyleCount = 0
-        loadFromStorage()
+        loadFromStorage(keepLanguage = language)
         resetChats()
-        showMessage("모든 데이터가 초기화되었어요")
+        showMessage(strings.msgReset)
     }
 
     fun showMessage(text: String) {
@@ -396,8 +434,8 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         unread.clear()
         friends.forEach { f ->
             chats[f.id] = mutableStateListOf<ChatMessage>().apply {
-                DummyData.openingMessages[f.id].orEmpty().forEachIndexed { i, text ->
-                    add(ChatMessage(chatMessageId++, false, text, "오전 9:0$i"))
+                DummyData.openingMessages[f.id].orEmpty().forEachIndexed { i, (ko, en) ->
+                    add(ChatMessage(chatMessageId++, false, ko, LocalTime.of(9, i), textEn = en))
                 }
             }
             unread[f.id] = true
@@ -414,18 +452,18 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         if (clean.isEmpty()) return
         val list = chats[friendId] ?: return
         val friend = friends.firstOrNull { it.id == friendId } ?: return
-        list += ChatMessage(chatMessageId++, true, clean, nowTime())
+        list += ChatMessage(chatMessageId++, true, clean, LocalTime.now())
 
-        val lang = ReplyEngine.resolve(settings.replyLanguage, clean, lastChatLang)
+        // Friends answer in the language you typed (emoji-only keeps the previous language).
+        val lang = ReplyEngine.detect(clean, lastChatLang)
         lastChatLang = lang
         val reply = ReplyEngine.reply(clean, lang, friend.level, character.level)
-        // Simulated friend reply: typing indicator, then an answer.
         viewModelScope.launch {
             delay(600)
             typing[friendId] = true
             delay(1000L + (0..1200).random())
             typing[friendId] = false
-            chats[friendId]?.add(ChatMessage(chatMessageId++, false, reply, nowTime()))
+            chats[friendId]?.add(ChatMessage(chatMessageId++, false, reply, LocalTime.now()))
             if (openChatId != friendId) unread[friendId] = true
         }
     }
@@ -447,9 +485,8 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun newId() = UUID.randomUUID().toString()
-    private fun nowTime(): String = LocalTime.now().format(DateTimeFormatter.ofPattern("a h:mm", Locale.KOREAN))
 
     companion object {
-        fun formatDate(date: LocalDate): String = date.format(DateTimeFormatter.ofPattern("M월 d일 (E)", Locale.KOREAN))
+        const val MAX_NICKNAME = 12
     }
 }

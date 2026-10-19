@@ -39,8 +39,8 @@ class TodayStorage(context: Context) {
             }
         }
 
-        val language = runCatching { ReplyLanguage.valueOf(prefs.getString("replyLanguage", null) ?: "AUTO") }
-            .getOrDefault(ReplyLanguage.AUTO)
+        val language = runCatching { AppLanguage.valueOf(prefs.getString("appLanguage", null) ?: "KOREAN") }
+            .getOrDefault(AppLanguage.KOREAN)
 
         return SavedState(
             character = CharacterState(
@@ -51,7 +51,7 @@ class TodayStorage(context: Context) {
             questsByDate = questsByDate,
             settings = AppSettings(
                 nickname = prefs.getString("nickname", null) ?: AppSettings().nickname,
-                replyLanguage = language,
+                language = language,
                 autoCarryOver = prefs.getBoolean("autoCarry", true),
             ),
         )
@@ -66,10 +66,10 @@ class TodayStorage(context: Context) {
             putString("outfit", outfitToJson(s.character.outfit).toString())
             putString("questsByDate", byDate.toString())
             putString("nickname", s.settings.nickname)
-            putString("replyLanguage", s.settings.replyLanguage.name)
+            putString("appLanguage", s.settings.language.name)
             putBoolean("autoCarry", s.settings.autoCarryOver)
             // v1 keys are no longer used
-            listOf("quests", "questDate", "streak", "lastCompleteDate", "prevCompleteDate", "worldX", "worldY", "steps")
+            listOf("quests", "questDate", "streak", "lastCompleteDate", "prevCompleteDate", "worldX", "worldY", "steps", "replyLanguage")
                 .forEach { remove(it) }
         }
     }
@@ -98,7 +98,7 @@ class TodayStorage(context: Context) {
     private fun outfitFromJson(j: JSONObject): Outfit {
         val accent = j.getInt("accent")
         return Outfit(
-            name = j.getString("name"),
+            name = Outfits.normalizeName(j.getString("name")),
             hair = j.getInt("hair"),
             shirt = j.getInt("shirt"),
             accent = accent,

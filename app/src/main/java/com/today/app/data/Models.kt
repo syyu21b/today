@@ -1,5 +1,8 @@
 package com.today.app.data
 
+import java.time.LocalDate
+import java.time.LocalTime
+
 /** A single daily routine turned into a quest. */
 data class Quest(
     val id: String,
@@ -12,13 +15,14 @@ data class Quest(
 const val MAX_QUESTS_PER_DAY = 10
 const val MAX_QUEST_TITLE = 30
 const val MIN_QUEST_XP = 5
-const val MAX_QUEST_XP = 100
+const val MAX_QUEST_XP = 30
 
 const val DEFAULT_SKIN = 0xFFF5C9A3.toInt()
 
 /**
  * Everything needed to paint the pixel avatar: colors (ARGB ints) + garment shape flags.
- * The photo analyzer fills all of these from a picture.
+ * [name] is a language-neutral key for presets ("ocean") / photo styles ("photo:3"),
+ * shown through Strings.outfitName().
  */
 data class Outfit(
     val name: String,
@@ -52,13 +56,14 @@ data class CharacterState(
 enum class DayStatus { EMPTY, PLANNED, PARTIAL, COMPLETE, MISSED }
 
 /** Quests copied from one day, waiting to be pasted onto another. */
-data class QuestClipboard(val sourceDate: java.time.LocalDate, val quests: List<Quest>)
+data class QuestClipboard(val sourceDate: LocalDate, val quests: List<Quest>)
 
-enum class ReplyLanguage(val label: String) { AUTO("자동 감지"), KOREAN("한국어"), ENGLISH("English") }
+/** Language of every piece of UI text. Labels are always shown in their own language. */
+enum class AppLanguage(val label: String) { KOREAN("한국어"), ENGLISH("English") }
 
 data class AppSettings(
-    val nickname: String = "모험가",
-    val replyLanguage: ReplyLanguage = ReplyLanguage.AUTO,
+    val nickname: String = DummyData.DEFAULT_NICKNAME_KO,
+    val language: AppLanguage = AppLanguage.KOREAN,
     val autoCarryOver: Boolean = true,
 )
 
@@ -68,41 +73,53 @@ data class UiMessage(val id: Long, val text: String)
 data class Friend(
     val id: String,
     val name: String,
+    val nameEn: String,
     val handle: String,
     val outfit: Outfit,
     val online: Boolean,
     val level: Int,
 )
 
+/** [textEn] is set for scripted messages that exist in both languages. */
 data class ChatMessage(
     val id: Long,
     val fromMe: Boolean,
     val text: String,
-    val time: String,
+    val time: LocalTime,
     val liked: Boolean = false,
+    val textEn: String? = null,
 )
 
 object Outfits {
     val presets = listOf(
-        Outfit("기본", hair = 0xFF3B2A20.toInt(), shirt = 0xFF6C4BF4.toInt(), accent = 0xFFFFD34E.toInt(), pants = 0xFF2D3A5C.toInt(), shoes = 0xFF1E1E28.toInt()),
+        Outfit("default", hair = 0xFF3B2A20.toInt(), shirt = 0xFF6C4BF4.toInt(), accent = 0xFFFFD34E.toInt(), pants = 0xFF2D3A5C.toInt(), shoes = 0xFF1E1E28.toInt()),
         Outfit(
-            "스트릿", hair = 0xFF111111.toInt(), shirt = 0xFFF2F2F2.toInt(), accent = 0xFFE94B5A.toInt(), pants = 0xFF2B2B2B.toInt(), shoes = 0xFFF2F2F2.toInt(),
+            "street", hair = 0xFF111111.toInt(), shirt = 0xFFF2F2F2.toInt(), accent = 0xFFE94B5A.toInt(), pants = 0xFF2B2B2B.toInt(), shoes = 0xFFF2F2F2.toInt(),
             stripe = 0xFF1B1B1B.toInt(), striped = true,
         ),
         Outfit(
-            "오션", hair = 0xFFD9A441.toInt(), shirt = 0xFF2E9BDA.toInt(), accent = 0xFFB6F0FF.toInt(), pants = 0xFFE8DCC2.toInt(), shoes = 0xFF35506B.toInt(),
+            "ocean", hair = 0xFFD9A441.toInt(), shirt = 0xFF2E9BDA.toInt(), accent = 0xFFB6F0FF.toInt(), pants = 0xFFE8DCC2.toInt(), shoes = 0xFF35506B.toInt(),
             shortSleeve = true, shorts = true,
         ),
-        Outfit("포레스트", hair = 0xFF5A3B22.toInt(), shirt = 0xFF3F8F4E.toInt(), accent = 0xFFD8C27A.toInt(), pants = 0xFF6B4F35.toInt(), shoes = 0xFF3A2A1C.toInt()),
+        Outfit("forest", hair = 0xFF5A3B22.toInt(), shirt = 0xFF3F8F4E.toInt(), accent = 0xFFD8C27A.toInt(), pants = 0xFF6B4F35.toInt(), shoes = 0xFF3A2A1C.toInt()),
         Outfit(
-            "선셋", hair = 0xFFB4462E.toInt(), shirt = 0xFFFF8C42.toInt(), accent = 0xFFFFE066.toInt(), pants = 0xFF5B2A4E.toInt(), shoes = 0xFF2A1A26.toInt(),
+            "sunset", hair = 0xFFB4462E.toInt(), shirt = 0xFFFF8C42.toInt(), accent = 0xFFFFE066.toInt(), pants = 0xFF5B2A4E.toInt(), shoes = 0xFF2A1A26.toInt(),
             longHair = true, shortSleeve = true,
         ),
         Outfit(
-            "네온", hair = 0xFFFF4FD8.toInt(), shirt = 0xFF1B1B2F.toInt(), accent = 0xFF3DFFB4.toInt(), pants = 0xFF3D2EFF.toInt(), shoes = 0xFF3DFFB4.toInt(),
+            "neon", hair = 0xFFFF4FD8.toInt(), shirt = 0xFF1B1B2F.toInt(), accent = 0xFF3DFFB4.toInt(), pants = 0xFF3D2EFF.toInt(), shoes = 0xFF3DFFB4.toInt(),
             stripe = 0xFF3DFFB4.toInt(), striped = true, longHair = true,
         ),
     )
+
+    const val PHOTO_PREFIX = "photo:"
+
+    /** Names saved by v1.1 (Korean text) -> language-neutral keys. */
+    private val legacyNames = mapOf("기본" to "default", "스트릿" to "street", "오션" to "ocean", "포레스트" to "forest", "선셋" to "sunset", "네온" to "neon")
+    private val legacyPhoto = Regex("^포토 스타일 #(\\d+)$")
+
+    fun normalizeName(name: String): String =
+        legacyNames[name] ?: legacyPhoto.find(name)?.let { PHOTO_PREFIX + it.groupValues[1] } ?: name
 
     /** Palette offered in the manual fine-tune editor. */
     val swatches = listOf(
@@ -115,29 +132,47 @@ object Outfits {
 }
 
 object DummyData {
-    val defaultQuests = listOf(
-        Quest("q1", "아침 조깅 20분", "🏃", 30),
-        Quest("q2", "Kotlin 공부 1시간", "📘", 40),
-        Quest("q3", "업무 집중 2시간", "💼", 40),
-        Quest("q4", "물 8잔 마시기", "💧", 20),
-        Quest("q5", "독서 20분", "📖", 25),
+    const val DEFAULT_NICKNAME_KO = "모험가"
+    const val DEFAULT_NICKNAME_EN = "Adventurer"
+
+    /** Built-in quests: (emoji, Korean title, English title, xp). */
+    val defaultQuestTemplates = listOf(
+        listOf("🏃", "아침 조깅 20분", "Morning jog 20 min", "30"),
+        listOf("📘", "Kotlin 공부 1시간", "Study Kotlin 1 hour", "30"),
+        listOf("💼", "업무 집중 2시간", "Deep work 2 hours", "30"),
+        listOf("💧", "물 8잔 마시기", "Drink 8 glasses of water", "20"),
+        listOf("📖", "독서 20분", "Read 20 min", "25"),
     )
+
+    fun defaultQuests(language: AppLanguage, newId: () -> String) = defaultQuestTemplates.map { t ->
+        Quest(newId(), if (language == AppLanguage.KOREAN) t[1] else t[2], t[0], t[3].toInt())
+    }
+
+    /** Built-in title in the other language, or null for user-written titles. */
+    fun translateDefaultTitle(title: String, to: AppLanguage): String? = defaultQuestTemplates.firstNotNullOfOrNull { t ->
+        when {
+            to == AppLanguage.ENGLISH && title == t[1] -> t[2]
+            to == AppLanguage.KOREAN && title == t[2] -> t[1]
+            else -> null
+        }
+    }
 
     val friends = listOf(
-        Friend("f1", "민지", "minji.daily", Outfits.presets[2], online = true, level = 12),
-        Friend("f2", "준호", "junho_dev", Outfits.presets[3], online = true, level = 8),
-        Friend("f6", "Alex", "alex.levelup", Outfits.presets[1], online = true, level = 9),
-        Friend("f3", "서연", "seoyeon.run", Outfits.presets[4], online = false, level = 15),
-        Friend("f4", "도윤", "doyoon.gg", Outfits.presets[5], online = true, level = 5),
-        Friend("f5", "하은", "haeun_reads", Outfits.presets[0], online = false, level = 10),
+        Friend("f1", "민지", "Minji", "minji.daily", Outfits.presets[2], online = true, level = 12),
+        Friend("f2", "준호", "Junho", "junho_dev", Outfits.presets[3], online = true, level = 8),
+        Friend("f6", "Alex", "Alex", "alex.levelup", Outfits.presets[1], online = true, level = 9),
+        Friend("f3", "서연", "Seoyeon", "seoyeon.run", Outfits.presets[4], online = false, level = 15),
+        Friend("f4", "도윤", "Doyoon", "doyoon.gg", Outfits.presets[5], online = true, level = 5),
+        Friend("f5", "하은", "Haeun", "haeun_reads", Outfits.presets[0], online = false, level = 10),
     )
 
+    /** Scripted first messages: (Korean, English). */
     val openingMessages = mapOf(
-        "f1" to listOf("오늘 조깅 퀘스트 했어? 🏃‍♀️", "나 벌써 3개 끝냄 ㅎㅎ"),
-        "f2" to listOf("Compose 공부 어디까지 했어?"),
-        "f6" to listOf("Hey! Did you finish your quests today? 💪", "한국어로 말해도 돼요 ㅎㅎ"),
-        "f3" to listOf("스트릭 15일 달성!! 🔥"),
-        "f4" to listOf("새 옷 맞췄어? 👕"),
-        "f5" to listOf("이번 주 책 추천해줄게 📚"),
+        "f1" to listOf("오늘 조깅 퀘스트 했어? 🏃‍♀️" to "Did you do your jogging quest today? 🏃‍♀️", "나 벌써 3개 끝냄 ㅎㅎ" to "I already finished 3 lol"),
+        "f2" to listOf("Compose 공부 어디까지 했어?" to "How far did you get with Compose?"),
+        "f6" to listOf("Hey! Did you finish your quests today? 💪" to "Hey! Did you finish your quests today? 💪", "한국어로 말해도 돼요 ㅎㅎ" to "You can text me in Korean too!"),
+        "f3" to listOf("스트릭 15일 달성!! 🔥" to "Hit a 15-day streak!! 🔥"),
+        "f4" to listOf("새 옷 맞췄어? 👕" to "Got a new outfit? 👕"),
+        "f5" to listOf("이번 주 책 추천해줄게 📚" to "Let me recommend a book this week 📚"),
     )
 }

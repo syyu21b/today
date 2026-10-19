@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generated from the default avatar sprite (rows 1-11): head + collar. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#FFFFFFFF" android:pathData="M38,33h32v4h-32zM34,37h40v4h-40zM30,41h48v4h-48zM30,45h48v4h-48zM30,49h12v4h-12zM66,49h12v4h-12zM30,53h8v4h-8zM46,53h4v4h-4zM58,53h4v4h-4zM70,53h8v4h-8zM30,57h8v4h-8zM70,57h8v4h-8zM30,61h4v4h-4zM50,61h8v4h-8zM74,61h4v4h-4zM34,65h4v4h-4zM70,65h4v4h-4zM46,69h4v4h-4zM58,69h4v4h-4zM30,73h20v4h-20zM58,73h20v4h-20z" />
+</vector>

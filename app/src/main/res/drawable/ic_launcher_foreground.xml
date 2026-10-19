@@ -1,9 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Pixel-style sun / check mark on a 108dp adaptive icon canvas -->
+<!-- Generated from the default avatar sprite (rows 1-11): head + collar. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="108" android:viewportHeight="108">
-    <path android:fillColor="#FFFFD34E" android:pathData="M38,38h32v32h-32z" />
-    <path android:fillColor="#FFFFD34E" android:pathData="M50,28h8v6h-8zM50,74h8v6h-8zM28,50h6v8h-6zM74,50h6v8h-6z" />
-    <path android:fillColor="#FF6C4BF4" android:pathData="M44,54h6v6h-6zM50,58h6v6h-6zM56,52h6v6h-6zM62,46h6v6h-6z" />
+    <path android:fillColor="#FF1B1530" android:pathData="M38,33h32v4h-32zM34,37h4v4h-4zM70,37h4v4h-4zM30,41h4v4h-4zM74,41h4v4h-4zM30,45h4v4h-4zM74,45h4v4h-4zM30,49h4v4h-4zM74,49h4v4h-4zM30,53h4v4h-4zM74,53h4v4h-4zM30,57h4v4h-4zM74,57h4v4h-4zM30,61h4v4h-4zM74,61h4v4h-4zM34,65h4v4h-4zM70,65h4v4h-4zM46,69h4v4h-4zM58,69h4v4h-4zM30,73h4v4h-4zM74,73h4v4h-4z" />
+    <path android:fillColor="#FF3B2A20" android:pathData="M38,37h8v4h-8zM54,37h16v4h-16zM34,41h40v4h-40zM34,45h40v4h-40zM34,49h8v4h-8zM66,49h8v4h-8zM34,53h4v4h-4zM70,53h4v4h-4zM34,57h4v4h-4zM70,57h4v4h-4z" />
+    <path android:fillColor="#FF80756E" android:pathData="M46,37h8v4h-8z" />
+    <path android:fillColor="#FFF5C9A3" android:pathData="M42,49h24v4h-24zM38,53h8v4h-8zM50,53h8v4h-8zM62,53h8v4h-8zM38,57h4v4h-4zM46,57h16v4h-16zM66,57h4v4h-4zM34,61h16v4h-16zM58,61h16v4h-16zM50,69h8v4h-8z" />
+    <path android:fillColor="#FFD8B18F" android:pathData="M38,65h32v4h-32z" />
+    <path android:fillColor="#FF2B2140" android:pathData="M46,53h4v4h-4zM58,53h4v4h-4z" />
+    <path android:fillColor="#FFF59AA0" android:pathData="M42,57h4v4h-4zM62,57h4v4h-4z" />
+    <path android:fillColor="#FFB8505A" android:pathData="M50,61h8v4h-8z" />
+    <path android:fillColor="#FF6C4BF4" android:pathData="M34,73h16v4h-16zM58,73h16v4h-16z" />
+    <path android:fillColor="#FFFFD34E" android:pathData="M50,73h8v4h-8z" />
 </vector>

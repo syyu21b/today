@@ -21,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Checkroom
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
@@ -48,8 +49,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.today.app.data.ReplyLanguage
+import com.today.app.data.AppLanguage
 import com.today.app.data.TodayViewModel
+import com.today.app.i18n.LocalStrings
 import com.today.app.ui.components.PixelAvatar
 import com.today.app.ui.theme.Coral
 import com.today.app.ui.theme.Gold
@@ -59,6 +61,7 @@ import com.today.app.ui.theme.Violet
 
 @Composable
 fun SettingsScreen(vm: TodayViewModel, onOpenOutfit: () -> Unit, modifier: Modifier = Modifier) {
+    val s = LocalStrings.current
     var editingName by remember { mutableStateOf(false) }
     var confirmReset by remember { mutableStateOf(false) }
     val c = vm.character
@@ -71,7 +74,7 @@ fun SettingsScreen(vm: TodayViewModel, onOpenOutfit: () -> Unit, modifier: Modif
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text("설정", style = MaterialTheme.typography.headlineMedium)
+        Text(s.settingsTitle, style = MaterialTheme.typography.headlineMedium)
 
         // ---- Profile (same outfit state as the quest card -> updates instantly) ----
         Column(
@@ -87,10 +90,10 @@ fun SettingsScreen(vm: TodayViewModel, onOpenOutfit: () -> Unit, modifier: Modif
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(vm.settings.nickname, style = MaterialTheme.typography.titleLarge)
                 IconButton(onClick = { editingName = true }) {
-                    Icon(Icons.Filled.Edit, contentDescription = "닉네임 수정", tint = TextMuted, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Filled.Edit, contentDescription = s.editNickname, tint = TextMuted, modifier = Modifier.size(18.dp))
                 }
             }
-            Text(c.outfit.name, color = Violet, fontFamily = PixelFont, fontSize = 12.sp)
+            Text(s.outfitName(c.outfit.name), color = Violet, fontFamily = PixelFont, fontSize = 12.sp)
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("LV ${c.level}", fontFamily = PixelFont, fontWeight = FontWeight.Bold, color = Gold, fontSize = 18.sp)
@@ -101,62 +104,66 @@ fun SettingsScreen(vm: TodayViewModel, onOpenOutfit: () -> Unit, modifier: Modif
             }
             Spacer(Modifier.height(14.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                Stat("🔥", "${vm.streak}일", "스트릭")
-                Stat("✅", "${vm.totalCompleted}", "완료 퀘스트")
-                Stat("🗓️", "${vm.recordedDays}일", "기록한 날")
+                Stat("🔥", s.days(vm.streak), s.statStreak)
+                Stat("✅", "${vm.totalCompleted}", s.statCompleted)
+                Stat("🗓️", s.days(vm.recordedDays), s.statDays)
             }
             Spacer(Modifier.height(14.dp))
             FilledTonalButton(onClick = onOpenOutfit) {
                 Icon(Icons.Filled.Checkroom, null, Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("옷장에서 꾸미기")
+                Text(s.customizeOutfit)
             }
         }
 
-        // ---- Quests ----
-        Section("퀘스트") {
+        // ---- Language (whole app) ----
+        Section(s.sectionLanguage) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("새로운 날 퀘스트 자동 불러오기")
-                    Text("오늘 퀘스트가 비어 있으면 가장 최근 날의 퀘스트를 가져와요", color = TextMuted, fontSize = 12.sp)
-                }
-                Switch(checked = vm.settings.autoCarryOver, onCheckedChange = vm::updateAutoCarryOver)
+                Icon(Icons.Filled.Language, null, tint = TextMuted, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(s.languageHint, color = TextMuted, fontSize = 12.sp)
             }
-        }
-
-        // ---- Messages ----
-        Section("메시지") {
-            Text("친구 답장 언어")
-            Text("자동 감지: 한국어로 보내면 한국어로, 영어로 보내면 영어로 답해요", color = TextMuted, fontSize = 12.sp)
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(10.dp))
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                ReplyLanguage.entries.forEachIndexed { i, lang ->
+                AppLanguage.entries.forEachIndexed { i, lang ->
                     SegmentedButton(
-                        selected = vm.settings.replyLanguage == lang,
-                        onClick = { vm.updateReplyLanguage(lang) },
-                        shape = SegmentedButtonDefaults.itemShape(i, ReplyLanguage.entries.size),
-                        label = { Text(lang.label, fontSize = 13.sp) },
+                        selected = vm.settings.language == lang,
+                        onClick = { vm.updateLanguage(lang) },
+                        shape = SegmentedButtonDefaults.itemShape(i, AppLanguage.entries.size),
+                        // Always shown in its own language so it's findable from either side.
+                        label = { Text(lang.label) },
                     )
                 }
             }
         }
 
-        // ---- Data ----
-        Section("데이터") {
-            Text("모든 퀘스트 기록, 레벨, 의상, 설정이 기기에만 저장돼요.", color = TextMuted, fontSize = 12.sp)
-            Spacer(Modifier.height(8.dp))
-            OutlinedButton(onClick = { confirmReset = true }, modifier = Modifier.fillMaxWidth()) {
-                Text("모든 데이터 초기화", color = Coral)
+        // ---- Quests ----
+        Section(s.sectionQuests) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(s.autoCarryTitle)
+                    Text(s.autoCarryDesc, color = TextMuted, fontSize = 12.sp)
+                }
+                Switch(checked = vm.settings.autoCarryOver, onCheckedChange = vm::updateAutoCarryOver)
             }
         }
 
-        Section("앱 정보") {
+        // ---- Data ----
+        Section(s.sectionData) {
+            Text(s.dataDesc, color = TextMuted, fontSize = 12.sp)
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(onClick = { confirmReset = true }, modifier = Modifier.fillMaxWidth()) {
+                Text(s.resetButton, color = Coral)
+            }
+        }
+
+        Section(s.sectionAbout) {
             Row {
                 Text("Today", modifier = Modifier.weight(1f))
-                Text("v1.1", color = TextMuted, fontFamily = PixelFont)
+                Text("v1.2", color = TextMuted, fontFamily = PixelFont)
             }
             HorizontalDivider(Modifier.padding(vertical = 8.dp), color = Color.White.copy(alpha = 0.06f))
-            Text("오늘의 루틴을 퀘스트로 바꿔 캐릭터를 키우는 습관 트래커", color = TextMuted, fontSize = 12.sp)
+            Text(s.aboutDesc, color = TextMuted, fontSize = 12.sp)
         }
         Spacer(Modifier.height(16.dp))
     }
@@ -165,29 +172,29 @@ fun SettingsScreen(vm: TodayViewModel, onOpenOutfit: () -> Unit, modifier: Modif
         var name by remember { mutableStateOf(vm.settings.nickname) }
         AlertDialog(
             onDismissRequest = { editingName = false },
-            title = { Text("닉네임 수정") },
+            title = { Text(s.editNickname) },
             text = {
                 OutlinedTextField(
                     value = name,
-                    onValueChange = { name = it.take(12) },
+                    onValueChange = { name = it.take(TodayViewModel.MAX_NICKNAME) },
                     singleLine = true,
-                    label = { Text("닉네임 (최대 12자)") },
+                    label = { Text(s.nicknameLabel(TodayViewModel.MAX_NICKNAME)) },
                 )
             },
             confirmButton = {
-                TextButton(onClick = { vm.updateNickname(name); editingName = false }, enabled = name.isNotBlank()) { Text("저장") }
+                TextButton(onClick = { vm.updateNickname(name); editingName = false }, enabled = name.isNotBlank()) { Text(s.save) }
             },
-            dismissButton = { TextButton(onClick = { editingName = false }) { Text("취소") } },
+            dismissButton = { TextButton(onClick = { editingName = false }) { Text(s.cancel) } },
         )
     }
 
     if (confirmReset) {
         AlertDialog(
             onDismissRequest = { confirmReset = false },
-            title = { Text("모든 데이터 초기화") },
-            text = { Text("퀘스트 기록, 레벨, 의상, 설정이 모두 지워지고 되돌릴 수 없어요. 계속할까요?") },
-            confirmButton = { TextButton(onClick = { vm.resetAll(); confirmReset = false }) { Text("초기화", color = Coral) } },
-            dismissButton = { TextButton(onClick = { confirmReset = false }) { Text("취소") } },
+            title = { Text(s.resetTitle) },
+            text = { Text(s.resetBody) },
+            confirmButton = { TextButton(onClick = { vm.resetAll(); confirmReset = false }) { Text(s.resetConfirm, color = Coral) } },
+            dismissButton = { TextButton(onClick = { confirmReset = false }) { Text(s.cancel) } },
         )
     }
 }

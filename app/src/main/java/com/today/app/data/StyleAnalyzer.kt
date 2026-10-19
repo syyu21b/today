@@ -25,14 +25,20 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sqrt
 
+/** Body part a region was sampled from (labels are localized in the UI). */
+enum class BodyPart { HAIR, SKIN, TOP, BOTTOM, SHOES, OUTFIT }
+
+/** What the analyzer concluded (rendered as a localized summary). */
+enum class StyleNote { BACK_VIEW, FACE_HIDDEN, LONG_HAIR, STRIPED, SHORT_SLEEVE, LONG_SLEEVE, SHORTS, LONG_PANTS, UPPER_BODY_ONLY }
+
 /** A part of the photo the analyzer looked at (for the overlay on the preview). */
-data class StyleRegion(val label: String, val rect: RectF, val color: Int)
+data class StyleRegion(val part: BodyPart, val rect: RectF, val color: Int)
 
 data class StyleResult(
     val outfit: Outfit,
     val regions: List<StyleRegion>,
     val personDetected: Boolean,
-    val summary: String,
+    val notes: List<StyleNote>,
 )
 
 /**
@@ -104,7 +110,7 @@ class StyleAnalyzer : Closeable {
         val sxMax = max(ls.x, rs.x)
 
         val regions = mutableListOf<StyleRegion>()
-        val notes = mutableListOf<String>()
+        val notes = mutableListOf<StyleNote>()
 
         // Facing away from the camera, the person's LEFT shoulder shows on the image's left.
         val backView = ls.x < rs.x
@@ -150,14 +156,14 @@ class StyleAnalyzer : Closeable {
                 skin = faceColor
                 skinKnown = true
                 faceSeen = true
-                regions += StyleRegion("피부", faceRect, skin)
+                regions += StyleRegion(BodyPart.SKIN, faceRect, skin)
             }
 
             if (faceSeen) {
                 // Forehead leaks into the box (more so with a tilted head): take the biggest
                 // cluster that is NOT this person's skin; if it's all skin, they're bald/shaved.
                 hair = hairClusters.firstOrNull { it.share > 0.1f && colorDist(it.color, skin) > 70 }?.color ?: topOfHead ?: hair
-                if (hairClusters.isNotEmpty()) regions += StyleRegion("머리", hairRect, hair)
+                if (hairClusters.isNotEmpty()) regions += StyleRegion(BodyPart.HAIR, hairRect, hair)
 
                 // Long hair: hair-colored person pixels beside the neck, between chin and shoulders.
                 val sideTop = eyeY + e * 1.5f
@@ -177,10 +183,10 @@ class StyleAnalyzer : Closeable {
                 else headClusters.firstOrNull { it.share > 0.2f && !isSkinTone(it.color) } ?: headClusters.firstOrNull()
                 headPick?.let {
                     hair = it.color
-                    regions += StyleRegion("머리", headRect, hair)
+                    regions += StyleRegion(BodyPart.HAIR, headRect, hair)
                 }
                 hairTones = headClusters.filter { it.share > 0.15f }.map { it.color }.ifEmpty { listOf(hair) }
-                notes += if (backView) "뒷모습" else "얼굴 미인식"
+                notes += if (backView) StyleNote.BACK_VIEW else StyleNote.FACE_HIDDEN
                 // Long hair from behind: hair covers the upper back, so the upper back either matches
                 // a head tone or looks different from the lower back (a plain top is one color).
                 val span = torsoH ?: shoulderW
@@ -193,7 +199,7 @@ class StyleAnalyzer : Closeable {
                 longHair = matchesHead || differsFromLower
                 if (differsFromLower) hairTones = hairTones + upperColor
             }
-            if (longHair) notes += "긴 머리"
+            if (longHair) notes += StyleNote.LONG_HAIR
         }
 
         // No usable face: take skin from bare forearms / shins instead.
@@ -234,7 +240,7 @@ class StyleAnalyzer : Closeable {
             .filterNot { cl -> hairOnBack && hairTones.any { colorDist(cl.color, it) < 60 } && cl.share < 0.85f }
             .let { list -> list.filterNot { isSkin(it.color) && it.share < 0.6f }.ifEmpty { list } }
         val shirt = topClusters.firstOrNull()?.color ?: base.shirt
-        regions += StyleRegion("상의", topRect, shirt)
+        regions += StyleRegion(BodyPart.TOP, topRect, shirt)
 
         // Stripes: two strong, distinct colors that alternate down the torso.
         var striped = false
@@ -245,7 +251,7 @@ class StyleAnalyzer : Closeable {
         ) {
             striped = true
             stripe = second.color
-            notes += "줄무늬 상의"
+            notes += StyleNote.STRIPED
         }
 
         val accent = topClusters.drop(if (striped) 2 else 1)
@@ -274,7 +280,7 @@ class StyleAnalyzer : Closeable {
             }
         }
         if (armVotes.isNotEmpty()) shortSleeve = armVotes.count { it } * 2 >= armVotes.size
-        notes += if (shortSleeve) "반팔·민소매" else "긴팔"
+        notes += if (shortSleeve) StyleNote.SHORT_SLEEVE else StyleNote.LONG_SLEEVE
 
         // ---- bottom ----
         var pants = base.pants
@@ -314,10 +320,10 @@ class StyleAnalyzer : Closeable {
             bottomRect?.let { r ->
                 img.clusters(r).firstOrNull { !isSkin(it.color) || it.share > 0.6f }?.let {
                     pants = it.color
-                    regions += StyleRegion("하의", r, pants)
+                    regions += StyleRegion(BodyPart.BOTTOM, r, pants)
                 }
             }
-            notes += if (shorts) "반바지" else "긴바지"
+            notes += if (shorts) StyleNote.SHORTS else StyleNote.LONG_PANTS
 
             // ---- shoes ----
             val footRects = listOf(
@@ -336,14 +342,14 @@ class StyleAnalyzer : Closeable {
             val shoeSamples = footRects.flatMap { img.collect(it).asList() }.toIntArray()
             val shoes = kmeans(shoeSamples, 3).firstOrNull { !isSkin(it.color) }?.color
             return buildResult(
-                base, name, regions + footRects.map { StyleRegion("신발", it, shoes ?: base.shoes) }.takeIf { shoes != null }.orEmpty(),
+                base, name, regions + footRects.map { StyleRegion(BodyPart.SHOES, it, shoes ?: base.shoes) }.takeIf { shoes != null }.orEmpty(),
                 notes, hair, skin, shirt, stripe, striped, accent, pants,
                 shoes ?: ColorUtils.blendARGB(pants, Color.BLACK, 0.55f), shortSleeve, shorts, longHair,
             )
         }
 
         // Upper body only (selfie): keep a darker version of the top as bottom if we know nothing better.
-        notes += "상반신만 인식"
+        notes += StyleNote.UPPER_BODY_ONLY
         return buildResult(
             base, name, regions, notes, hair, skin, shirt, stripe, striped, accent,
             pants, base.shoes, shortSleeve, shorts, longHair,
@@ -351,7 +357,7 @@ class StyleAnalyzer : Closeable {
     }
 
     private fun buildResult(
-        base: Outfit, name: String, regions: List<StyleRegion>, notes: List<String>,
+        base: Outfit, name: String, regions: List<StyleRegion>, notes: List<StyleNote>,
         hair: Int, skin: Int, shirt: Int, stripe: Int, striped: Boolean, accent: Int,
         pants: Int, shoes: Int, shortSleeve: Boolean, shorts: Boolean, longHair: Boolean,
     ) = StyleResult(
@@ -362,7 +368,7 @@ class StyleAnalyzer : Closeable {
         ),
         regions = regions,
         personDetected = true,
-        summary = "인식 결과: " + notes.distinct().joinToString(" · "),
+        notes = notes.distinct(),
     )
 
     // ------------------------------------------------------------------ fallback path
@@ -385,9 +391,9 @@ class StyleAnalyzer : Closeable {
                 stripe = if (striped) second.color else base.stripe, striped = striped,
                 shoes = ColorUtils.blendARGB(pants, Color.BLACK, 0.5f),
             ),
-            regions = listOf(StyleRegion("의상", center, shirt)),
+            regions = listOf(StyleRegion(BodyPart.OUTFIT, center, shirt)),
             personDetected = false,
-            summary = "사람을 찾지 못해 사진 중앙의 옷 색감으로 만들었어요" + if (striped) " · 줄무늬 감지" else "",
+            notes = if (striped) listOf(StyleNote.STRIPED) else emptyList(),
         )
     }
 

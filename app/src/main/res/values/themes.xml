@@ -5,4 +5,13 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
+
+    <!-- System splash (Android 12+ native, older versions via core-splashscreen):
+         the logo on a gold circle, same geometry as the in-app intro that follows. -->
+    <style name="Theme.Today.Starting" parent="Theme.SplashScreen.IconBackground">
+        <item name="windowSplashScreenBackground">#FF14121F</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="windowSplashScreenIconBackgroundColor">#FFFFD34E</item>
+        <item name="postSplashScreenTheme">@style/Theme.Today</item>
+    </style>
 </resources>

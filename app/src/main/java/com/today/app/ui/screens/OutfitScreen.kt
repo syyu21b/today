@@ -80,6 +80,8 @@ import com.today.app.data.Outfit
 import com.today.app.data.Outfits
 import com.today.app.data.StyleResult
 import com.today.app.data.TodayViewModel
+import com.today.app.i18n.LocalStrings
+import com.today.app.i18n.Strings
 import com.today.app.ui.components.PixelAvatar
 import com.today.app.ui.theme.Gold
 import com.today.app.ui.theme.NightSurfaceHigh
@@ -89,7 +91,17 @@ import com.today.app.ui.theme.Violet
 import java.io.File
 
 /** Outfit color slots the user can fine-tune. */
-private enum class Slot(val label: String) { HAIR("머리"), SKIN("피부"), SHIRT("상의"), STRIPE("줄무늬"), ACCENT("포인트"), PANTS("하의"), SHOES("신발") }
+private enum class Slot { HAIR, SKIN, SHIRT, STRIPE, ACCENT, PANTS, SHOES }
+
+private fun Slot.label(s: Strings) = when (this) {
+    Slot.HAIR -> s.slotHair
+    Slot.SKIN -> s.slotSkin
+    Slot.SHIRT -> s.slotTop
+    Slot.STRIPE -> s.slotStripe
+    Slot.ACCENT -> s.slotAccent
+    Slot.PANTS -> s.slotBottom
+    Slot.SHOES -> s.slotShoes
+}
 
 private fun Outfit.colorOf(slot: Slot) = when (slot) {
     Slot.HAIR -> hair
@@ -113,6 +125,7 @@ private fun Outfit.withColor(slot: Slot, c: Int) = when (slot) {
 
 @Composable
 fun OutfitScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
+    val s = LocalStrings.current
     val context = LocalContext.current
     var pendingCameraUri by rememberSaveable { mutableStateOf<String?>(null) }
 
@@ -135,9 +148,9 @@ fun OutfitScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
             pendingCameraUri = uri.toString()
             cameraLauncher.launch(uri)
         } catch (e: ActivityNotFoundException) {
-            vm.showMessage("사용할 수 있는 카메라 앱이 없어요")
+            vm.showMessage(s.cameraNotFound)
         } catch (e: Exception) {
-            vm.showMessage("카메라를 열 수 없어요: ${e.message}")
+            vm.showMessage(s.cameraError(e.message))
         }
     }
 
@@ -150,11 +163,8 @@ fun OutfitScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text("옷장", style = MaterialTheme.typography.headlineMedium)
-        Text(
-            "전신 사진을 찍거나 고르면 머리·상의·하의·신발을 인식해서 도트 의상으로 만들어요. 바꾼 스타일은 퀘스트와 프로필 캐릭터에도 바로 적용돼요.",
-            color = TextMuted, fontSize = 14.sp,
-        )
+        Text(s.outfitTitle, style = MaterialTheme.typography.headlineMedium)
+        Text(s.outfitIntro, color = TextMuted, fontSize = 14.sp)
 
         // ---- Avatar stage ----
         Box(
@@ -175,12 +185,12 @@ fun OutfitScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
             )
             FloatingAvatar(outfit)
             Text(
-                outfit.name,
+                s.outfitName(outfit.name),
                 fontFamily = PixelFont, color = Gold,
                 modifier = Modifier.align(Alignment.TopStart).padding(16.dp),
             )
             androidx.compose.animation.AnimatedVisibility(vm.isAnalyzingStyle, enter = fadeIn(), exit = fadeOut()) {
-                ScanOverlay(vm.analyzeStep)
+                ScanOverlay(if (vm.analyzeStep < 0) s.analyzeLoading else s.analyzeSteps[vm.analyzeStep])
             }
         }
 
@@ -193,7 +203,7 @@ fun OutfitScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
             ) {
                 Icon(Icons.Filled.CameraAlt, null)
                 Spacer(Modifier.width(8.dp))
-                Text("사진 찍기")
+                Text(s.takePhoto)
             }
             OutlinedButton(
                 onClick = { galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
@@ -202,10 +212,10 @@ fun OutfitScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
             ) {
                 Icon(Icons.Filled.PhotoLibrary, null)
                 Spacer(Modifier.width(8.dp))
-                Text("앨범에서")
+                Text(s.fromGallery)
             }
         }
-        Text("💡 정면 전신 사진 · 밝은 곳 · 단순한 배경일수록 정확해요", color = TextMuted, fontSize = 12.sp)
+        Text(s.photoTip, color = TextMuted, fontSize = 12.sp)
 
         // ---- Source photo with recognized regions ----
         vm.stylePhoto?.let { photo ->
@@ -216,7 +226,7 @@ fun OutfitScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
         FineTuneCard(outfit = outfit, extracted = vm.styleResult?.regions?.map { it.color }.orEmpty(), onChange = vm::editOutfit)
 
         // ---- Presets ----
-        Text("프리셋 의상", style = MaterialTheme.typography.titleLarge)
+        Text(s.presetsTitle, style = MaterialTheme.typography.titleLarge)
         Outfits.presets.chunked(3).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 row.forEach { preset ->
@@ -235,6 +245,7 @@ fun OutfitScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
 
 @Composable
 private fun AnalyzedPhoto(photo: Bitmap, result: StyleResult?, analyzing: Boolean, onClose: () -> Unit) {
+    val s = LocalStrings.current
     val textMeasurer = rememberTextMeasurer()
     Column(
         Modifier
@@ -246,8 +257,8 @@ private fun AnalyzedPhoto(photo: Bitmap, result: StyleResult?, analyzing: Boolea
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Filled.AutoAwesome, null, tint = Violet, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(6.dp))
-            Text(if (analyzing) "인식 중…" else "인식 결과", fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-            IconButton(onClick = onClose, enabled = !analyzing) { Icon(Icons.Filled.Close, contentDescription = "사진 닫기", tint = TextMuted) }
+            Text(if (analyzing) s.analyzing else s.analysisResult, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            IconButton(onClick = onClose, enabled = !analyzing) { Icon(Icons.Filled.Close, contentDescription = s.closePhoto, tint = TextMuted) }
         }
         val image = remember(photo) { photo.asImageBitmap() }
         Box(
@@ -257,7 +268,7 @@ private fun AnalyzedPhoto(photo: Bitmap, result: StyleResult?, analyzing: Boolea
                 .aspectRatio(photo.width.toFloat() / photo.height, matchHeightConstraintsFirst = true)
                 .clip(RoundedCornerShape(12.dp)),
         ) {
-            Image(image, contentDescription = "분석한 사진", contentScale = ContentScale.FillBounds, modifier = Modifier.fillMaxSize())
+            Image(image, contentDescription = s.analyzedPhoto, contentScale = ContentScale.FillBounds, modifier = Modifier.fillMaxSize())
             result?.let { r ->
                 Canvas(Modifier.fillMaxSize()) {
                     val sx = size.width / photo.width
@@ -267,7 +278,7 @@ private fun AnalyzedPhoto(photo: Bitmap, result: StyleResult?, analyzing: Boolea
                         val sz = Size(region.rect.width() * sx, region.rect.height() * sy)
                         drawRect(Color.Black.copy(alpha = 0.6f), tl, sz, style = Stroke(5f))
                         drawRect(Color.White, tl, sz, style = Stroke(2.5f))
-                        val label = textMeasurer.measure(region.label, TextStyle(color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold))
+                        val label = textMeasurer.measure(s.bodyPart(region.part), TextStyle(color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold))
                         val labelTl = Offset(tl.x.coerceAtLeast(0f), (tl.y - label.size.height - 2).coerceAtLeast(0f))
                         // colored chip = extracted color, then the label text
                         drawRect(Color(region.color), labelTl, Size(14f, label.size.height.toFloat()))
@@ -279,10 +290,10 @@ private fun AnalyzedPhoto(photo: Bitmap, result: StyleResult?, analyzing: Boolea
         }
         result?.let { r ->
             Spacer(Modifier.height(10.dp))
-            Text(r.summary, fontSize = 13.sp)
+            Text(s.styleSummary(r), fontSize = 13.sp)
             Spacer(Modifier.height(6.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                r.regions.distinctBy { it.label }.forEach { region ->
+                r.regions.distinctBy { it.part }.forEach { region ->
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Box(
                             Modifier
@@ -291,7 +302,7 @@ private fun AnalyzedPhoto(photo: Bitmap, result: StyleResult?, analyzing: Boolea
                                 .background(Color(region.color))
                                 .border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(6.dp)),
                         )
-                        Text(region.label, fontSize = 10.sp, color = TextMuted)
+                        Text(s.bodyPart(region.part), fontSize = 10.sp, color = TextMuted)
                     }
                 }
             }
@@ -301,6 +312,7 @@ private fun AnalyzedPhoto(photo: Bitmap, result: StyleResult?, analyzing: Boolea
 
 @Composable
 private fun FineTuneCard(outfit: Outfit, extracted: List<Int>, onChange: ((Outfit) -> Outfit) -> Unit) {
+    val s = LocalStrings.current
     var slot by remember { mutableStateOf(Slot.SHIRT) }
     // If stripes get turned off while editing the stripe color, fall back to the shirt.
     val activeSlot = if (slot == Slot.STRIPE && !outfit.striped) Slot.SHIRT else slot
@@ -312,35 +324,35 @@ private fun FineTuneCard(outfit: Outfit, extracted: List<Int>, onChange: ((Outfi
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text("세부 조정", style = MaterialTheme.typography.titleMedium)
-        Text("인식 결과가 조금 다르면 여기서 바로 고칠 수 있어요", color = TextMuted, fontSize = 12.sp)
+        Text(s.fineTuneTitle, style = MaterialTheme.typography.titleMedium)
+        Text(s.fineTuneHint, color = TextMuted, fontSize = 12.sp)
 
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = outfit.shortSleeve, onClick = { onChange { it.copy(shortSleeve = !it.shortSleeve) } }, label = { Text("반팔") })
-            FilterChip(selected = outfit.striped, onClick = { onChange { it.copy(striped = !it.striped) } }, label = { Text("줄무늬") })
-            FilterChip(selected = outfit.shorts, onClick = { onChange { it.copy(shorts = !it.shorts) } }, label = { Text("반바지") })
-            FilterChip(selected = outfit.longHair, onClick = { onChange { it.copy(longHair = !it.longHair) } }, label = { Text("긴 머리") })
+            FilterChip(selected = outfit.shortSleeve, onClick = { onChange { it.copy(shortSleeve = !it.shortSleeve) } }, label = { Text(s.chipShortSleeve) })
+            FilterChip(selected = outfit.striped, onClick = { onChange { it.copy(striped = !it.striped) } }, label = { Text(s.chipStriped) })
+            FilterChip(selected = outfit.shorts, onClick = { onChange { it.copy(shorts = !it.shorts) } }, label = { Text(s.chipShorts) })
+            FilterChip(selected = outfit.longHair, onClick = { onChange { it.copy(longHair = !it.longHair) } }, label = { Text(s.chipLongHair) })
         }
 
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Slot.entries.filter { it != Slot.STRIPE || outfit.striped }.forEach { s ->
-                val isActive = activeSlot == s
+            Slot.entries.filter { it != Slot.STRIPE || outfit.striped }.forEach { slotItem ->
+                val isActive = activeSlot == slotItem
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
                         .clip(RoundedCornerShape(10.dp))
                         .background(if (isActive) NightSurfaceHigh else Color.Transparent)
-                        .clickable { slot = s }
+                        .clickable { slot = slotItem }
                         .padding(6.dp),
                 ) {
                     Box(
                         Modifier
                             .size(30.dp)
                             .clip(CircleShape)
-                            .background(Color(outfit.colorOf(s)))
+                            .background(Color(outfit.colorOf(slotItem)))
                             .border(2.dp, if (isActive) Gold else Color.White.copy(alpha = 0.2f), CircleShape),
                     )
-                    Text(s.label, fontSize = 11.sp, color = if (isActive) Color.White else TextMuted)
+                    Text(slotItem.label(s), fontSize = 11.sp, color = if (isActive) Color.White else TextMuted)
                 }
             }
         }
@@ -403,6 +415,6 @@ private fun PresetCard(outfit: Outfit, selected: Boolean, onClick: () -> Unit, m
         Box(Modifier.fillMaxWidth().aspectRatio(1f), contentAlignment = Alignment.Center) {
             PixelAvatar(outfit, Modifier.fillMaxHeight().padding(4.dp), animateColors = false)
         }
-        Text(outfit.name, style = MaterialTheme.typography.bodyMedium, fontWeight = if (selected) FontWeight.Bold else null)
+        Text(LocalStrings.current.outfitName(outfit.name), style = MaterialTheme.typography.bodyMedium, fontWeight = if (selected) FontWeight.Bold else null)
     }
 }

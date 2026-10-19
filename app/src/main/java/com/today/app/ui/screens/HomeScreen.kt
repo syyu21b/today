@@ -10,7 +10,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,6 +24,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -62,6 +62,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -73,6 +74,7 @@ import com.today.app.data.MAX_QUEST_XP
 import com.today.app.data.MIN_QUEST_XP
 import com.today.app.data.Quest
 import com.today.app.data.TodayViewModel
+import com.today.app.i18n.LocalStrings
 import com.today.app.ui.components.CelebrationOverlay
 import com.today.app.ui.components.PixelAvatar
 import com.today.app.ui.components.WeekCalendar
@@ -84,8 +86,6 @@ import com.today.app.ui.theme.PixelFont
 import com.today.app.ui.theme.TextMuted
 import com.today.app.ui.theme.Violet
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 /** Which quest editor is open: a new quest, or an existing one. */
 private sealed interface Editor {
@@ -95,6 +95,7 @@ private sealed interface Editor {
 
 @Composable
 fun HomeScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
+    val s = LocalStrings.current
     var editor by remember { mutableStateOf<Editor?>(null) }
     var pendingDelete by remember { mutableStateOf<Quest?>(null) }
 
@@ -109,7 +110,7 @@ fun HomeScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item(key = "header") { Header(vm.settings.nickname) }
+            item(key = "header") { Header(vm.todayDate, vm.settings.nickname) }
             item(key = "character") {
                 CharacterCard(vm.character, vm.streak, todayQuests.count { it.done }, todayQuests.size)
             }
@@ -124,7 +125,7 @@ fun HomeScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
             if (clipboard != null) {
                 item(key = "clipboard") {
                     ClipboardBanner(
-                        text = "${TodayViewModel.formatDate(clipboard.sourceDate)} 퀘스트 ${clipboard.quests.size}개 복사됨",
+                        text = s.clipboardBanner(clipboard.sourceDate, clipboard.quests.size),
                         canPaste = editable,
                         onPaste = { vm.pasteTo(date) },
                         onCancel = vm::clearClipboard,
@@ -138,7 +139,7 @@ fun HomeScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
                     count = quests.size,
                     editable = editable,
                     onAdd = {
-                        if (quests.size >= MAX_QUESTS_PER_DAY) vm.showMessage("하루에 최대 ${MAX_QUESTS_PER_DAY}개까지 추가할 수 있어요")
+                        if (quests.size >= MAX_QUESTS_PER_DAY) vm.showMessage(s.errLimit(MAX_QUESTS_PER_DAY))
                         else editor = Editor.New
                     },
                     onCopy = { vm.copyDay(date) },
@@ -160,7 +161,7 @@ fun HomeScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
             }
             item(key = "footer") {
                 Text(
-                    "⋮ 메뉴로 수정·삭제 · 하루 최대 ${MAX_QUESTS_PER_DAY}개 · 모든 퀘스트 완료 시 스트릭 +1",
+                    s.footer(MAX_QUESTS_PER_DAY),
                     style = MaterialTheme.typography.bodyMedium,
                     color = TextMuted,
                     modifier = Modifier.padding(top = 4.dp, bottom = 24.dp),
@@ -187,15 +188,10 @@ fun HomeScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
     pendingDelete?.let { q ->
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
-            title = { Text("퀘스트 삭제") },
-            text = {
-                Text(
-                    "'${q.title}' 퀘스트를 삭제할까요?" +
-                        if (q.done) "\n이미 완료한 퀘스트라 받은 ${q.xp} XP도 회수돼요." else ""
-                )
-            },
-            confirmButton = { TextButton(onClick = { vm.deleteQuest(date, q.id); pendingDelete = null }) { Text("삭제", color = Coral) } },
-            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("취소") } },
+            title = { Text(s.deleteQuestTitle) },
+            text = { Text(s.deleteQuestBody(q.title, q.done, q.xp)) },
+            confirmButton = { TextButton(onClick = { vm.deleteQuest(date, q.id); pendingDelete = null }) { Text(s.delete, color = Coral) } },
+            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text(s.cancel) } },
         )
     }
 
@@ -207,26 +203,27 @@ fun HomeScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                     PixelAvatar(vm.character.outfit, Modifier.height(120.dp))
                     Spacer(Modifier.height(12.dp))
-                    Text("LV $level 달성!", fontFamily = PixelFont, fontSize = 22.sp, color = Gold)
-                    Text("오늘의 내가 어제의 나보다 강해졌어요.", color = TextMuted)
+                    Text(s.levelReached(level), fontFamily = PixelFont, fontSize = 22.sp, color = Gold)
+                    Text(s.levelUpBody, color = TextMuted, textAlign = TextAlign.Center)
                 }
             },
-            confirmButton = { TextButton(onClick = vm::consumeLevelUp) { Text("좋아!") } },
+            confirmButton = { TextButton(onClick = vm::consumeLevelUp) { Text(s.levelUpOk) } },
         )
     }
 }
 
 @Composable
-private fun Header(nickname: String) {
-    val date = LocalDate.now().format(DateTimeFormatter.ofPattern("M월 d일 EEEE", Locale.KOREAN))
+private fun Header(today: LocalDate, nickname: String) {
+    val s = LocalStrings.current
     Column {
         Text("Today", style = MaterialTheme.typography.headlineMedium)
-        Text("$date · ${nickname}님, 오늘도 레벨업!", color = TextMuted)
+        Text("${s.headerDate(today)} · ${s.greeting(nickname)}", color = TextMuted)
     }
 }
 
 @Composable
 private fun CharacterCard(c: CharacterState, streak: Int, done: Int, total: Int) {
+    val s = LocalStrings.current
     val xpProgress by animateFloatAsState(c.progress, tween(600), label = "xp")
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -247,7 +244,7 @@ private fun CharacterCard(c: CharacterState, streak: Int, done: Int, total: Int)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("LV ${c.level}", fontFamily = PixelFont, fontWeight = FontWeight.Bold, fontSize = 22.sp, color = Gold)
                     Spacer(Modifier.weight(1f))
-                    Text("🔥 ${streak}일", fontFamily = PixelFont, fontWeight = FontWeight.Bold)
+                    Text("🔥 ${s.days(streak)}", fontFamily = PixelFont, fontWeight = FontWeight.Bold)
                 }
                 Spacer(Modifier.height(8.dp))
                 PixelProgressBar(xpProgress)
@@ -257,8 +254,11 @@ private fun CharacterCard(c: CharacterState, streak: Int, done: Int, total: Int)
                     modifier = Modifier.padding(top = 4.dp),
                 )
                 Spacer(Modifier.height(8.dp))
-                Text("오늘 진행: $done / $total", style = MaterialTheme.typography.bodyMedium)
-                Text(c.outfit.name, style = MaterialTheme.typography.labelSmall, color = Violet, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(s.todayProgress(done, total), style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    s.outfitName(c.outfit.name),
+                    style = MaterialTheme.typography.labelSmall, color = Violet, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
             }
         }
     }
@@ -289,14 +289,15 @@ fun PixelProgressBar(progress: Float, segments: Int = 20) {
 
 @Composable
 private fun DayHeader(date: LocalDate, today: LocalDate, count: Int, editable: Boolean, onAdd: () -> Unit, onCopy: () -> Unit) {
+    val s = LocalStrings.current
     val tag = when {
-        date == today -> "오늘"
-        date.isBefore(today) -> "지난 기록"
-        else -> "예정"
+        date == today -> s.tagToday
+        date.isBefore(today) -> s.tagPast
+        else -> s.tagPlanned
     }
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(TodayViewModel.formatDate(date), style = MaterialTheme.typography.titleLarge)
+            Text(s.shortDate(date), style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.width(8.dp))
             Text(
                 tag, fontSize = 12.sp, color = Color.White,
@@ -313,21 +314,21 @@ private fun DayHeader(date: LocalDate, today: LocalDate, count: Int, editable: B
             AssistChip(
                 onClick = onCopy,
                 enabled = count > 0,
-                label = { Text("이 날 복사") },
+                label = { Text(s.copyDay) },
                 leadingIcon = { Icon(Icons.Filled.ContentCopy, null, Modifier.size(16.dp)) },
             )
             if (editable) {
                 AssistChip(
                     onClick = onAdd,
-                    label = { Text("퀘스트 추가") },
+                    label = { Text(s.addQuest) },
                     leadingIcon = { Icon(Icons.Filled.Add, null, Modifier.size(16.dp)) },
                     colors = AssistChipDefaults.assistChipColors(containerColor = Violet.copy(alpha = 0.2f)),
                 )
             }
         }
         when {
-            date.isBefore(today) -> Hint("지난 기록은 볼 수만 있어요. 복사해서 오늘이나 다른 날에 붙여넣을 수 있어요.")
-            date.isAfter(today) -> Hint("미리 계획한 퀘스트예요. 완료 체크는 당일에 할 수 있어요.")
+            date.isBefore(today) -> Hint(s.hintPast)
+            date.isAfter(today) -> Hint(s.hintFuture)
         }
     }
 }
@@ -339,6 +340,7 @@ private fun Hint(text: String) {
 
 @Composable
 private fun ClipboardBanner(text: String, canPaste: Boolean, onPaste: () -> Unit, onCancel: () -> Unit) {
+    val s = LocalStrings.current
     Row(
         Modifier
             .fillMaxWidth()
@@ -355,15 +357,16 @@ private fun ClipboardBanner(text: String, canPaste: Boolean, onPaste: () -> Unit
             TextButton(onClick = onPaste) {
                 Icon(Icons.Filled.ContentPaste, null, Modifier.size(16.dp), tint = Gold)
                 Spacer(Modifier.width(4.dp))
-                Text("여기에 붙여넣기", color = Gold)
+                Text(s.pasteHere, color = Gold)
             }
         }
-        IconButton(onClick = onCancel) { Icon(Icons.Filled.Close, contentDescription = "복사 취소", tint = TextMuted) }
+        IconButton(onClick = onCancel) { Icon(Icons.Filled.Close, contentDescription = s.cancelCopy, tint = TextMuted) }
     }
 }
 
 @Composable
 private fun EmptyDay(editable: Boolean) {
+    val s = LocalStrings.current
     Column(
         Modifier
             .fillMaxWidth()
@@ -374,11 +377,7 @@ private fun EmptyDay(editable: Boolean) {
     ) {
         Text("🗓️", fontSize = 32.sp)
         Spacer(Modifier.height(8.dp))
-        Text(
-            if (editable) "아직 퀘스트가 없어요.\n추가하거나 다른 날을 복사해서 붙여넣어 보세요." else "이 날은 기록이 없어요.",
-            color = TextMuted,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-        )
+        Text(if (editable) s.emptyEditable else s.emptyPast, color = TextMuted, textAlign = TextAlign.Center)
     }
 }
 
@@ -392,6 +391,7 @@ private fun QuestRow(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val s = LocalStrings.current
     var menuOpen by remember { mutableStateOf(false) }
     val bg by animateColorAsState(if (quest.done) Mint.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surface, label = "bg")
     val checkScale by animateFloatAsState(
@@ -432,16 +432,16 @@ private fun QuestRow(
         if (editable) {
             Box {
                 IconButton(onClick = { menuOpen = true }) {
-                    Icon(Icons.Filled.MoreVert, contentDescription = "퀘스트 메뉴", tint = TextMuted)
+                    Icon(Icons.Filled.MoreVert, contentDescription = s.questMenu, tint = TextMuted)
                 }
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                     DropdownMenuItem(
-                        text = { Text("수정") },
+                        text = { Text(s.edit) },
                         leadingIcon = { Icon(Icons.Filled.Edit, null) },
                         onClick = { menuOpen = false; onEdit() },
                     )
                     DropdownMenuItem(
-                        text = { Text("삭제", color = Coral) },
+                        text = { Text(s.delete, color = Coral) },
                         leadingIcon = { Icon(Icons.Filled.Delete, null, tint = Coral) },
                         onClick = { menuOpen = false; onDelete() },
                     )
@@ -474,22 +474,23 @@ private fun lastGrapheme(s: String): String {
 
 @Composable
 private fun QuestEditorDialog(initial: Quest?, onDismiss: () -> Unit, onSave: (String, String, Int) -> Unit) {
+    val s = LocalStrings.current
     var title by remember { mutableStateOf(initial?.title ?: "") }
     var emoji by remember { mutableStateOf(initial?.emoji ?: "⭐") }
-    var xpText by remember { mutableStateOf((initial?.xp ?: 20).toString()) }
+    var xpText by remember { mutableStateOf((initial?.xp ?: 20).coerceAtMost(MAX_QUEST_XP).toString()) }
     val xp = xpText.toIntOrNull()
     val xpValid = xp != null && xp in MIN_QUEST_XP..MAX_QUEST_XP
     val titleValid = title.isNotBlank()
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (initial == null) "새 퀘스트" else "퀘스트 수정") },
+        title = { Text(if (initial == null) s.newQuest else s.editQuest) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it.take(MAX_QUEST_TITLE) },
-                    label = { Text("할 일") },
+                    label = { Text(s.fieldTask) },
                     singleLine = true,
                     supportingText = { Text("${title.length} / $MAX_QUEST_TITLE") },
                 )
@@ -497,14 +498,14 @@ private fun QuestEditorDialog(initial: Quest?, onDismiss: () -> Unit, onSave: (S
                     OutlinedTextField(
                         value = emoji,
                         onValueChange = { v -> emoji = if (v.length > emoji.length) lastGrapheme(v) else firstGrapheme(v) },
-                        label = { Text("이모지") },
+                        label = { Text(s.fieldEmoji) },
                         singleLine = true,
                         modifier = Modifier.weight(1f),
                     )
                     OutlinedTextField(
                         value = xpText,
-                        onValueChange = { xpText = it.filter(Char::isDigit).take(3) },
-                        label = { Text("XP") },
+                        onValueChange = { xpText = it.filter(Char::isDigit).take(2) },
+                        label = { Text(s.fieldXp) },
                         singleLine = true,
                         isError = !xpValid,
                         supportingText = { Text("$MIN_QUEST_XP~$MAX_QUEST_XP") },
@@ -528,9 +529,9 @@ private fun QuestEditorDialog(initial: Quest?, onDismiss: () -> Unit, onSave: (S
         },
         confirmButton = {
             TextButton(onClick = { onSave(title, emoji, xp ?: 20) }, enabled = titleValid && xpValid) {
-                Text(if (initial == null) "추가" else "저장")
+                Text(if (initial == null) s.add else s.save)
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(s.cancel) } },
     )
 }

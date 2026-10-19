@@ -30,13 +30,6 @@ class ReplyEngineTest {
     }
 
     @Test
-    fun settingOverridesDetection() {
-        assertEquals(Lang.KO, ReplyEngine.resolve(ReplyLanguage.KOREAN, "hello", Lang.EN))
-        assertEquals(Lang.EN, ReplyEngine.resolve(ReplyLanguage.ENGLISH, "안녕", Lang.KO))
-        assertEquals(Lang.EN, ReplyEngine.resolve(ReplyLanguage.AUTO, "hey", Lang.KO))
-    }
-
-    @Test
     fun koreanRepliesAreKorean() {
         repeat(50) {
             val r = ReplyEngine.reply("안녕! 오늘 퀘스트 했어?", Lang.KO, friendLevel = 9, myLevel = 3)
