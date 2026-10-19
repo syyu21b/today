@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pixel-style sun / check mark on a 108dp adaptive icon canvas -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#FFFFD34E" android:pathData="M38,38h32v32h-32z" />
+    <path android:fillColor="#FFFFD34E" android:pathData="M50,28h8v6h-8zM50,74h8v6h-8zM28,50h6v8h-6zM74,50h6v8h-6z" />
+    <path android:fillColor="#FF6C4BF4" android:pathData="M44,54h6v6h-6zM50,58h6v6h-6zM56,52h6v6h-6zM62,46h6v6h-6z" />
+</vector>
