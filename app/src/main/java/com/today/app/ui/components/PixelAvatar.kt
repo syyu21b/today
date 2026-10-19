@@ -50,78 +50,105 @@ private val SPRITE = listOf(
     "..kooookkooook..",
     "..kkkkkkkkkkkk..",
 )
+
+/** Long-hair overlay for rows 4..11 (' ' = keep the base pixel). */
+private val LONG_HAIR = mapOf(
+    4 to ".kh          hk.",
+    5 to ".kh          hk.",
+    6 to ".kh          hk.",
+    7 to ".kh          hk.",
+    8 to ".kh          hk.",
+    9 to ".khh        hhk.",
+    10 to "..khhh    hhhk..",
+    11 to "..kh        hk..",
+)
+
 const val SPRITE_W = 16
 const val SPRITE_H = 24
 
 private val Outline = Color(0xFF1B1530)
-private val Skin = Color(0xFFF5C9A3)
-private val SkinShadow = Color(0xFFE0A985)
 private val Eye = Color(0xFF2B2140)
 private val Blush = Color(0xFFF59AA0)
 private val Mouth = Color(0xFFB8505A)
 
-/** Resolved colors for one draw call (lets us animate outfit changes). */
-data class SpriteColors(val hair: Color, val shirt: Color, val accent: Color, val pants: Color, val shoes: Color)
+/** Resolved colors + shape flags for one draw call (colors can be animated). */
+data class SpriteStyle(
+    val hair: Color,
+    val skin: Color,
+    val shirt: Color,
+    val stripe: Color,
+    val accent: Color,
+    val pants: Color,
+    val shoes: Color,
+    val striped: Boolean,
+    val shortSleeve: Boolean,
+    val shorts: Boolean,
+    val longHair: Boolean,
+)
 
-fun Outfit.toSpriteColors() = SpriteColors(Color(hair), Color(shirt), Color(accent), Color(pants), Color(shoes))
+fun Outfit.toSpriteStyle() = SpriteStyle(
+    Color(hair), Color(skin), Color(shirt), Color(stripe), Color(accent), Color(pants), Color(shoes),
+    striped, shortSleeve, shorts, longHair,
+)
 
-/**
- * Draws the sprite with its top-left at [topLeft], each sprite pixel being [px] canvas pixels.
- * [step] alternates leg frames for a walking animation; [back] shows the back of the head.
- */
-fun DrawScope.drawPixelSprite(
-    topLeft: Offset,
-    px: Float,
-    colors: SpriteColors,
-    blink: Boolean = false,
-    step: Int = 0,
-    back: Boolean = false,
-) {
-    val hairShine = lerp(colors.hair, Color.White, 0.35f)
-    val shirtShade = lerp(colors.shirt, Color.Black, 0.25f)
-    val pantsShade = lerp(colors.pants, Color.Black, 0.3f)
+/** Which sprite code ends up at (x, y) once the garment options are applied. */
+private fun spriteCode(x: Int, y: Int, style: SpriteStyle, blink: Boolean): Char {
+    var ch = SPRITE[y][x]
+    if (style.longHair) LONG_HAIR[y]?.get(x)?.takeIf { it != ' ' }?.let { ch = it }
+    if (blink && ch == 'e') ch = 's'
+    // Stripes on every other torso row
+    if (style.striped && (y == 12 || y == 14)) {
+        if (ch == 't') ch = 'r' else if (ch == 'T') ch = 'R'
+    }
+    // Short sleeves: forearms show skin
+    if (style.shortSleeve && (y == 13 || y == 14) && (x == 2 || x == 13)) ch = 's'
+    // Shorts: lower legs show skin
+    if (style.shorts && (y == 20 || y == 21) && (ch == 'p' || ch == 'P')) ch = if (ch == 'p') 's' else 'S'
+    return ch
+}
+
+/** Draws the sprite with its top-left at [topLeft], each sprite pixel being [px] canvas pixels. */
+fun DrawScope.drawPixelSprite(topLeft: Offset, px: Float, style: SpriteStyle, blink: Boolean = false) {
+    val hairShine = lerp(style.hair, Color.White, 0.35f)
+    val skinShadow = lerp(style.skin, Color.Black, 0.12f)
+    val shirtShade = lerp(style.shirt, Color.Black, 0.25f)
+    val stripeShade = lerp(style.stripe, Color.Black, 0.25f)
+    val pantsShade = lerp(style.pants, Color.Black, 0.3f)
     // overdraw a hair of a pixel to avoid seams between blocks
     val cell = Size(px + 0.6f, px + 0.6f)
-    SPRITE.forEachIndexed { y, row ->
-        row.forEachIndexed { x, c ->
-            var ch = c
-            if (blink && ch == 'e') ch = 's'
-            if (back && y in 5..8 && ch in "sSebm") ch = 'h'
-            // walking: lift one leg (rows 19-23) by shifting it up a pixel
-            var dy = 0f
-            if (step != 0 && y >= 19) {
-                val leftLeg = x < SPRITE_W / 2
-                if ((step == 1 && leftLeg) || (step == 2 && !leftLeg)) dy = -px
-            }
-            val color = when (ch) {
-                'k' -> Outline
-                'h' -> colors.hair
-                'H' -> hairShine
-                's' -> Skin
-                'S' -> SkinShadow
-                'e' -> Eye
-                'b' -> Blush
-                'm' -> Mouth
-                't' -> colors.shirt
-                'T' -> shirtShade
-                'a' -> colors.accent
-                'p' -> colors.pants
-                'P' -> pantsShade
-                'o' -> colors.shoes
-                else -> null
-            } ?: return@forEachIndexed
-            drawRect(color, Offset(topLeft.x + x * px, topLeft.y + y * px + dy), cell)
-        }
+    for (y in 0 until SPRITE_H) for (x in 0 until SPRITE_W) {
+        val color = when (spriteCode(x, y, style, blink)) {
+            'k' -> Outline
+            'h' -> style.hair
+            'H' -> hairShine
+            's' -> style.skin
+            'S' -> skinShadow
+            'e' -> Eye
+            'b' -> Blush
+            'm' -> Mouth
+            't' -> style.shirt
+            'T' -> shirtShade
+            'r' -> style.stripe
+            'R' -> stripeShade
+            'a' -> style.accent
+            'p' -> style.pants
+            'P' -> pantsShade
+            'o' -> style.shoes
+            else -> null
+        } ?: continue
+        drawRect(color, Offset(topLeft.x + x * px, topLeft.y + y * px), cell)
     }
 }
 
 /** Stand-alone avatar with smooth color transitions and idle blinking. */
 @Composable
 fun PixelAvatar(outfit: Outfit, modifier: Modifier = Modifier, animateColors: Boolean = true) {
-    val target = outfit.toSpriteColors()
+    val target = outfit.toSpriteStyle()
     val spec = tween<Color>(durationMillis = if (animateColors) 700 else 0)
     val hair by animateColorAsState(target.hair, spec, label = "hair")
+    val skin by animateColorAsState(target.skin, spec, label = "skin")
     val shirt by animateColorAsState(target.shirt, spec, label = "shirt")
+    val stripe by animateColorAsState(target.stripe, spec, label = "stripe")
     val accent by animateColorAsState(target.accent, spec, label = "accent")
     val pants by animateColorAsState(target.pants, spec, label = "pants")
     val shoes by animateColorAsState(target.shoes, spec, label = "shoes")
@@ -138,6 +165,10 @@ fun PixelAvatar(outfit: Outfit, modifier: Modifier = Modifier, animateColors: Bo
 
     Canvas(modifier.aspectRatio(SPRITE_W / SPRITE_H.toFloat())) {
         val px = size.width / SPRITE_W
-        drawPixelSprite(Offset.Zero, px, SpriteColors(hair, shirt, accent, pants, shoes), blink)
+        drawPixelSprite(
+            Offset.Zero, px,
+            target.copy(hair = hair, skin = skin, shirt = shirt, stripe = stripe, accent = accent, pants = pants, shoes = shoes),
+            blink,
+        )
     }
 }

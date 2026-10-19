@@ -1,15 +1,16 @@
 package com.today.app.ui.screens
 
+import android.icu.text.BreakIterator
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,11 +30,21 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -52,13 +63,20 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.today.app.data.CharacterState
+import com.today.app.data.MAX_QUESTS_PER_DAY
+import com.today.app.data.MAX_QUEST_TITLE
+import com.today.app.data.MAX_QUEST_XP
+import com.today.app.data.MIN_QUEST_XP
 import com.today.app.data.Quest
 import com.today.app.data.TodayViewModel
 import com.today.app.ui.components.CelebrationOverlay
 import com.today.app.ui.components.PixelAvatar
+import com.today.app.ui.components.WeekCalendar
+import com.today.app.ui.theme.Coral
 import com.today.app.ui.theme.Gold
 import com.today.app.ui.theme.Mint
 import com.today.app.ui.theme.NightSurfaceHigh
@@ -69,40 +87,80 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
+/** Which quest editor is open: a new quest, or an existing one. */
+private sealed interface Editor {
+    data object New : Editor
+    data class Existing(val quest: Quest) : Editor
+}
+
 @Composable
 fun HomeScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
-    var showAdd by remember { mutableStateOf(false) }
+    var editor by remember { mutableStateOf<Editor?>(null) }
     var pendingDelete by remember { mutableStateOf<Quest?>(null) }
-    val doneCount = vm.quests.count { it.done }
+
+    val date = vm.selectedDate
+    val quests = vm.questsFor(date)
+    val editable = vm.isEditable(date)
+    val todayQuests = vm.questsFor(vm.todayDate)
+    val clipboard = vm.clipboard
 
     Box(modifier.fillMaxSize()) {
         LazyColumn(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item { Header() }
-            item { CharacterCard(vm.character, doneCount, vm.quests.size) }
-            item {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("오늘의 퀘스트", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-                    FilledTonalButton(onClick = { showAdd = true }) {
-                        Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("추가")
-                    }
+            item(key = "header") { Header(vm.settings.nickname) }
+            item(key = "character") {
+                CharacterCard(vm.character, vm.streak, todayQuests.count { it.done }, todayQuests.size)
+            }
+            item(key = "calendar") {
+                WeekCalendar(
+                    selected = date,
+                    today = vm.todayDate,
+                    statusOf = vm::dayStatus,
+                    onSelect = vm::selectDate,
+                )
+            }
+            if (clipboard != null) {
+                item(key = "clipboard") {
+                    ClipboardBanner(
+                        text = "${TodayViewModel.formatDate(clipboard.sourceDate)} 퀘스트 ${clipboard.quests.size}개 복사됨",
+                        canPaste = editable,
+                        onPaste = { vm.pasteTo(date) },
+                        onCancel = vm::clearClipboard,
+                    )
                 }
             }
-            items(vm.quests, key = { it.id }) { quest ->
+            item(key = "dayHeader") {
+                DayHeader(
+                    date = date,
+                    today = vm.todayDate,
+                    count = quests.size,
+                    editable = editable,
+                    onAdd = {
+                        if (quests.size >= MAX_QUESTS_PER_DAY) vm.showMessage("하루에 최대 ${MAX_QUESTS_PER_DAY}개까지 추가할 수 있어요")
+                        else editor = Editor.New
+                    },
+                    onCopy = { vm.copyDay(date) },
+                )
+            }
+            if (quests.isEmpty()) {
+                item(key = "empty") { EmptyDay(editable) }
+            }
+            items(quests, key = { it.id }) { quest ->
                 QuestRow(
                     quest = quest,
-                    onToggle = { vm.toggleQuest(quest.id) },
-                    onLongPress = { pendingDelete = quest },
+                    editable = editable,
+                    checkable = vm.isCheckable(date),
+                    onToggle = { vm.toggleQuest(date, quest.id) },
+                    onEdit = { editor = Editor.Existing(quest) },
+                    onDelete = { pendingDelete = quest },
                     modifier = Modifier.animateItem(),
                 )
             }
-            item {
+            item(key = "footer") {
                 Text(
-                    "길게 누르면 퀘스트를 삭제할 수 있어요 · 모든 퀘스트 완료 시 스트릭 +1",
+                    "⋮ 메뉴로 수정·삭제 · 하루 최대 ${MAX_QUESTS_PER_DAY}개 · 모든 퀘스트 완료 시 스트릭 +1",
                     style = MaterialTheme.typography.bodyMedium,
                     color = TextMuted,
                     modifier = Modifier.padding(top = 4.dp, bottom = 24.dp),
@@ -113,10 +171,16 @@ fun HomeScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
         CelebrationOverlay(trigger = vm.celebrationTick)
     }
 
-    if (showAdd) {
-        AddQuestDialog(
-            onDismiss = { showAdd = false },
-            onAdd = { title, emoji, xp -> vm.addQuest(title, emoji, xp); showAdd = false },
+    editor?.let { e ->
+        val existing = (e as? Editor.Existing)?.quest
+        QuestEditorDialog(
+            initial = existing,
+            onDismiss = { editor = null },
+            onSave = { title, emoji, xp ->
+                val error = if (existing == null) vm.addQuest(date, title, emoji, xp)
+                else vm.updateQuest(date, existing.id, title, emoji, xp)
+                if (error == null) editor = null else vm.showMessage(error)
+            },
         )
     }
 
@@ -124,8 +188,13 @@ fun HomeScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
             title = { Text("퀘스트 삭제") },
-            text = { Text("'${q.title}' 퀘스트를 삭제할까요?") },
-            confirmButton = { TextButton(onClick = { vm.removeQuest(q.id); pendingDelete = null }) { Text("삭제") } },
+            text = {
+                Text(
+                    "'${q.title}' 퀘스트를 삭제할까요?" +
+                        if (q.done) "\n이미 완료한 퀘스트라 받은 ${q.xp} XP도 회수돼요." else ""
+                )
+            },
+            confirmButton = { TextButton(onClick = { vm.deleteQuest(date, q.id); pendingDelete = null }) { Text("삭제", color = Coral) } },
             dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("취소") } },
         )
     }
@@ -148,16 +217,16 @@ fun HomeScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun Header() {
+private fun Header(nickname: String) {
     val date = LocalDate.now().format(DateTimeFormatter.ofPattern("M월 d일 EEEE", Locale.KOREAN))
     Column {
         Text("Today", style = MaterialTheme.typography.headlineMedium)
-        Text(date, color = TextMuted)
+        Text("$date · ${nickname}님, 오늘도 레벨업!", color = TextMuted)
     }
 }
 
 @Composable
-private fun CharacterCard(c: CharacterState, done: Int, total: Int) {
+private fun CharacterCard(c: CharacterState, streak: Int, done: Int, total: Int) {
     val xpProgress by animateFloatAsState(c.progress, tween(600), label = "xp")
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -176,12 +245,9 @@ private fun CharacterCard(c: CharacterState, done: Int, total: Int) {
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "LV ${c.level}",
-                        fontFamily = PixelFont, fontWeight = FontWeight.Bold, fontSize = 22.sp, color = Gold,
-                    )
+                    Text("LV ${c.level}", fontFamily = PixelFont, fontWeight = FontWeight.Bold, fontSize = 22.sp, color = Gold)
                     Spacer(Modifier.weight(1f))
-                    Text("🔥 ${c.streak}일", fontFamily = PixelFont, fontWeight = FontWeight.Bold)
+                    Text("🔥 ${streak}일", fontFamily = PixelFont, fontWeight = FontWeight.Bold)
                 }
                 Spacer(Modifier.height(8.dp))
                 PixelProgressBar(xpProgress)
@@ -192,7 +258,7 @@ private fun CharacterCard(c: CharacterState, done: Int, total: Int) {
                 )
                 Spacer(Modifier.height(8.dp))
                 Text("오늘 진행: $done / $total", style = MaterialTheme.typography.bodyMedium)
-                Text(c.outfit.name, style = MaterialTheme.typography.labelSmall, color = Violet)
+                Text(c.outfit.name, style = MaterialTheme.typography.labelSmall, color = Violet, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }
@@ -209,25 +275,125 @@ fun PixelProgressBar(progress: Float, segments: Int = 20) {
             .padding(2.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        val filled = (progress.coerceIn(0f, 1f) * segments)
+        val filled = progress.coerceIn(0f, 1f) * segments
         repeat(segments) { i ->
-            val on = i < filled
             Box(
                 Modifier
                     .weight(1f)
                     .fillMaxSize()
-                    .background(if (on) (if (i % 2 == 0) Mint else Mint.copy(alpha = 0.85f)) else NightSurfaceHigh),
+                    .background(if (i < filled) Mint else NightSurfaceHigh),
             )
         }
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun QuestRow(quest: Quest, onToggle: () -> Unit, onLongPress: () -> Unit, modifier: Modifier = Modifier) {
-    val bg by animateColorAsState(
-        if (quest.done) Mint.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surface, label = "bg",
-    )
+private fun DayHeader(date: LocalDate, today: LocalDate, count: Int, editable: Boolean, onAdd: () -> Unit, onCopy: () -> Unit) {
+    val tag = when {
+        date == today -> "오늘"
+        date.isBefore(today) -> "지난 기록"
+        else -> "예정"
+    }
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(TodayViewModel.formatDate(date), style = MaterialTheme.typography.titleLarge)
+            Spacer(Modifier.width(8.dp))
+            Text(
+                tag, fontSize = 12.sp, color = Color.White,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(if (date == today) Violet else NightSurfaceHigh)
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
+            )
+            Spacer(Modifier.weight(1f))
+            Text("$count / $MAX_QUESTS_PER_DAY", fontFamily = PixelFont, color = if (count >= MAX_QUESTS_PER_DAY) Coral else TextMuted)
+        }
+        Spacer(Modifier.height(6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            AssistChip(
+                onClick = onCopy,
+                enabled = count > 0,
+                label = { Text("이 날 복사") },
+                leadingIcon = { Icon(Icons.Filled.ContentCopy, null, Modifier.size(16.dp)) },
+            )
+            if (editable) {
+                AssistChip(
+                    onClick = onAdd,
+                    label = { Text("퀘스트 추가") },
+                    leadingIcon = { Icon(Icons.Filled.Add, null, Modifier.size(16.dp)) },
+                    colors = AssistChipDefaults.assistChipColors(containerColor = Violet.copy(alpha = 0.2f)),
+                )
+            }
+        }
+        when {
+            date.isBefore(today) -> Hint("지난 기록은 볼 수만 있어요. 복사해서 오늘이나 다른 날에 붙여넣을 수 있어요.")
+            date.isAfter(today) -> Hint("미리 계획한 퀘스트예요. 완료 체크는 당일에 할 수 있어요.")
+        }
+    }
+}
+
+@Composable
+private fun Hint(text: String) {
+    Text(text, color = TextMuted, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+}
+
+@Composable
+private fun ClipboardBanner(text: String, canPaste: Boolean, onPaste: () -> Unit, onCancel: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(Gold.copy(alpha = 0.15f))
+            .border(1.dp, Gold.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
+            .padding(start = 14.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("📋", fontSize = 18.sp)
+        Spacer(Modifier.width(8.dp))
+        Text(text, fontSize = 13.sp, modifier = Modifier.weight(1f))
+        if (canPaste) {
+            TextButton(onClick = onPaste) {
+                Icon(Icons.Filled.ContentPaste, null, Modifier.size(16.dp), tint = Gold)
+                Spacer(Modifier.width(4.dp))
+                Text("여기에 붙여넣기", color = Gold)
+            }
+        }
+        IconButton(onClick = onCancel) { Icon(Icons.Filled.Close, contentDescription = "복사 취소", tint = TextMuted) }
+    }
+}
+
+@Composable
+private fun EmptyDay(editable: Boolean) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text("🗓️", fontSize = 32.sp)
+        Spacer(Modifier.height(8.dp))
+        Text(
+            if (editable) "아직 퀘스트가 없어요.\n추가하거나 다른 날을 복사해서 붙여넣어 보세요." else "이 날은 기록이 없어요.",
+            color = TextMuted,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        )
+    }
+}
+
+@Composable
+private fun QuestRow(
+    quest: Quest,
+    editable: Boolean,
+    checkable: Boolean,
+    onToggle: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+    val bg by animateColorAsState(if (quest.done) Mint.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surface, label = "bg")
     val checkScale by animateFloatAsState(
         if (quest.done) 1f else 0f,
         spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
@@ -238,21 +404,18 @@ private fun QuestRow(quest: Quest, onToggle: () -> Unit, onLongPress: () -> Unit
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .background(bg)
-            .combinedClickable(onClick = onToggle, onLongClick = onLongPress)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .clickable(onClick = onToggle)
+            .padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             Modifier
                 .size(28.dp)
                 .clip(RoundedCornerShape(6.dp))
-                .border(2.dp, if (quest.done) Mint else TextMuted, RoundedCornerShape(6.dp)),
+                .border(2.dp, if (quest.done) Mint else if (checkable) TextMuted else TextMuted.copy(alpha = 0.35f), RoundedCornerShape(6.dp)),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(
-                Icons.Filled.Check, contentDescription = null, tint = Mint,
-                modifier = Modifier.size(20.dp).scale(checkScale),
-            )
+            Icon(Icons.Filled.Check, contentDescription = null, tint = Mint, modifier = Modifier.size(20.dp).scale(checkScale))
         }
         Spacer(Modifier.width(14.dp))
         Text(quest.emoji, fontSize = 22.sp)
@@ -262,40 +425,100 @@ private fun QuestRow(quest: Quest, onToggle: () -> Unit, onLongPress: () -> Unit
             style = MaterialTheme.typography.titleMedium,
             textDecoration = if (quest.done) TextDecoration.LineThrough else null,
             color = if (quest.done) TextMuted else Color.White,
-            modifier = Modifier.weight(1f),
+            maxLines = 2, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f).padding(vertical = 8.dp),
         )
-        Text(
-            "+${quest.xp} XP",
-            fontFamily = PixelFont, fontWeight = FontWeight.Bold,
-            color = if (quest.done) Mint else Gold,
-        )
+        Text("+${quest.xp} XP", fontFamily = PixelFont, fontWeight = FontWeight.Bold, color = if (quest.done) Mint else Gold)
+        if (editable) {
+            Box {
+                IconButton(onClick = { menuOpen = true }) {
+                    Icon(Icons.Filled.MoreVert, contentDescription = "퀘스트 메뉴", tint = TextMuted)
+                }
+                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    DropdownMenuItem(
+                        text = { Text("수정") },
+                        leadingIcon = { Icon(Icons.Filled.Edit, null) },
+                        onClick = { menuOpen = false; onEdit() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("삭제", color = Coral) },
+                        leadingIcon = { Icon(Icons.Filled.Delete, null, tint = Coral) },
+                        onClick = { menuOpen = false; onDelete() },
+                    )
+                }
+            }
+        } else {
+            Spacer(Modifier.width(12.dp))
+        }
     }
 }
 
+/** First user-perceived character (keeps multi-codepoint emoji like 🏃‍♀️ intact). */
+private fun firstGrapheme(s: String): String {
+    if (s.isEmpty()) return s
+    val it = BreakIterator.getCharacterInstance()
+    it.setText(s)
+    val end = it.next()
+    return if (end == BreakIterator.DONE) s else s.substring(0, end)
+}
+
+/** Last grapheme typed — so typing into a filled emoji box replaces it. */
+private fun lastGrapheme(s: String): String {
+    if (s.isEmpty()) return s
+    val it = BreakIterator.getCharacterInstance()
+    it.setText(s)
+    val end = it.last()
+    val start = it.previous()
+    return if (start == BreakIterator.DONE) s else s.substring(start, end)
+}
+
 @Composable
-private fun AddQuestDialog(onDismiss: () -> Unit, onAdd: (String, String, Int) -> Unit) {
-    var title by remember { mutableStateOf("") }
-    var emoji by remember { mutableStateOf("⭐") }
-    var xp by remember { mutableStateOf("20") }
+private fun QuestEditorDialog(initial: Quest?, onDismiss: () -> Unit, onSave: (String, String, Int) -> Unit) {
+    var title by remember { mutableStateOf(initial?.title ?: "") }
+    var emoji by remember { mutableStateOf(initial?.emoji ?: "⭐") }
+    var xpText by remember { mutableStateOf((initial?.xp ?: 20).toString()) }
+    val xp = xpText.toIntOrNull()
+    val xpValid = xp != null && xp in MIN_QUEST_XP..MAX_QUEST_XP
+    val titleValid = title.isNotBlank()
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("새 퀘스트") },
+        title = { Text(if (initial == null) "새 퀘스트" else "퀘스트 수정") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(title, { title = it }, label = { Text("할 일") }, singleLine = true)
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it.take(MAX_QUEST_TITLE) },
+                    label = { Text("할 일") },
+                    singleLine = true,
+                    supportingText = { Text("${title.length} / $MAX_QUEST_TITLE") },
+                )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(emoji, { emoji = it.take(2) }, label = { Text("이모지") }, singleLine = true, modifier = Modifier.weight(1f))
                     OutlinedTextField(
-                        xp, { xp = it.filter(Char::isDigit).take(3) }, label = { Text("XP (5~100)") }, singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f),
+                        value = emoji,
+                        onValueChange = { v -> emoji = if (v.length > emoji.length) lastGrapheme(v) else firstGrapheme(v) },
+                        label = { Text("이모지") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    OutlinedTextField(
+                        value = xpText,
+                        onValueChange = { xpText = it.filter(Char::isDigit).take(3) },
+                        label = { Text("XP") },
+                        singleLine = true,
+                        isError = !xpValid,
+                        supportingText = { Text("$MIN_QUEST_XP~$MAX_QUEST_XP") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.weight(1f),
                     )
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf("🏃", "📘", "💼", "💧", "🧘", "🛏️", "🥗").forEach { e ->
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    listOf("🏃", "📘", "💼", "💧", "🧘", "🛏️", "🥗", "🎧").forEach { e ->
                         Text(
                             e, fontSize = 22.sp,
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
+                                .background(if (emoji == e) Violet.copy(alpha = 0.3f) else Color.Transparent)
                                 .clickable { emoji = e }
                                 .padding(4.dp),
                         )
@@ -304,7 +527,9 @@ private fun AddQuestDialog(onDismiss: () -> Unit, onAdd: (String, String, Int) -
             }
         },
         confirmButton = {
-            TextButton(onClick = { onAdd(title, emoji, xp.toIntOrNull() ?: 20) }, enabled = title.isNotBlank()) { Text("추가") }
+            TextButton(onClick = { onSave(title, emoji, xp ?: 20) }, enabled = titleValid && xpValid) {
+                Text(if (initial == null) "추가" else "저장")
+            }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } },
     )

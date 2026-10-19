@@ -42,7 +42,9 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.clearText
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -58,9 +60,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -215,7 +214,8 @@ private fun FriendAvatar(friend: Friend, size: Dp, storyRing: Boolean = false) {
 private fun DmChat(vm: TodayViewModel, friend: Friend) {
     val messages = vm.chats[friend.id].orEmpty()
     val isTyping = vm.typing[friend.id] == true
-    var input by remember { mutableStateOf("") }
+    // TextFieldState handles IME composition (Korean 조합 중 글자) correctly when cleared.
+    val input = rememberTextFieldState()
     val listState = rememberLazyListState()
 
     // Keep the newest message in view (list is reversed, so index 0 = bottom).
@@ -278,24 +278,23 @@ private fun DmChat(vm: TodayViewModel, friend: Friend) {
             }
             Spacer(Modifier.width(10.dp))
             val send = {
-                vm.sendMessage(friend.id, input)
-                input = ""
+                vm.sendMessage(friend.id, input.text.toString())
+                input.clearText()
             }
             BasicTextField(
-                value = input,
-                onValueChange = { input = it },
+                state = input,
                 textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
                 cursorBrush = SolidColor(Color.White),
-                singleLine = true,
+                lineLimits = TextFieldLineLimits.SingleLine,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                keyboardActions = KeyboardActions(onSend = { send() }),
+                onKeyboardAction = { send() },
                 modifier = Modifier.weight(1f),
-                decorationBox = { inner ->
-                    if (input.isEmpty()) Text("메시지 보내기…", color = TextMuted)
+                decorator = { inner ->
+                    if (input.text.isEmpty()) Text("메시지 보내기… / Message…", color = TextMuted)
                     inner()
                 },
             )
-            AnimatedVisibility(input.isNotBlank(), enter = scaleIn() + fadeIn(), exit = scaleOut() + fadeOut()) {
+            AnimatedVisibility(input.text.isNotBlank(), enter = scaleIn() + fadeIn(), exit = scaleOut() + fadeOut()) {
                 IconButton(onClick = send) {
                     Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "보내기", tint = Color(0xFF8E7BFF))
                 }

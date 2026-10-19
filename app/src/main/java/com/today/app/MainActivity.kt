@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Checkroom
 import androidx.compose.material.icons.filled.Forum
-import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.TaskAlt
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -24,20 +24,26 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.today.app.data.TodayViewModel
 import com.today.app.ui.screens.CommunityScreen
 import com.today.app.ui.screens.HomeScreen
 import com.today.app.ui.screens.OutfitScreen
-import com.today.app.ui.screens.WorldScreen
+import com.today.app.ui.screens.SettingsScreen
 import com.today.app.ui.theme.NightSurface
 import com.today.app.ui.theme.TodayTheme
 
@@ -56,18 +62,31 @@ class MainActivity : ComponentActivity() {
 private enum class Tab(val label: String, val icon: ImageVector) {
     Quests("퀘스트", Icons.Filled.TaskAlt),
     Outfit("옷장", Icons.Filled.Checkroom),
-    World("월드", Icons.Filled.Map),
-    Community("DM", Icons.Filled.Forum),
+    Messages("메시지", Icons.Filled.Forum),
+    Settings("설정", Icons.Filled.Settings),
 }
 
 @Composable
 fun TodayApp(vm: TodayViewModel = viewModel()) {
     var tab by rememberSaveable { mutableStateOf(Tab.Quests) }
-    val inChat = tab == Tab.Community && vm.openChatId != null
+    val inChat = tab == Tab.Messages && vm.openChatId != null
     val unreadCount = vm.unread.count { it.value }
+    val snackbar = remember { SnackbarHostState() }
+
+    // App left open past midnight -> move "today" forward when it comes back.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refreshDay() }
+
+    vm.message?.let { msg ->
+        LaunchedEffect(msg.id) {
+            snackbar.currentSnackbarData?.dismiss()
+            snackbar.showSnackbar(msg.text)
+            vm.consumeMessage(msg.id)
+        }
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
+        snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
             AnimatedVisibility(!inChat, enter = slideInVertically { it }, exit = slideOutVertically { it }) {
                 NavigationBar(containerColor = NightSurface) {
@@ -76,7 +95,7 @@ fun TodayApp(vm: TodayViewModel = viewModel()) {
                             selected = tab == t,
                             onClick = { tab = t },
                             icon = {
-                                if (t == Tab.Community && unreadCount > 0) {
+                                if (t == Tab.Messages && unreadCount > 0) {
                                     BadgedBox(badge = { Badge { Text("$unreadCount") } }) { Icon(t.icon, t.label) }
                                 } else {
                                     Icon(t.icon, t.label)
@@ -98,8 +117,8 @@ fun TodayApp(vm: TodayViewModel = viewModel()) {
             when (current) {
                 Tab.Quests -> HomeScreen(vm, contentModifier)
                 Tab.Outfit -> OutfitScreen(vm, contentModifier)
-                Tab.World -> WorldScreen(vm, contentModifier)
-                Tab.Community -> CommunityScreen(vm, contentModifier)
+                Tab.Messages -> CommunityScreen(vm, contentModifier)
+                Tab.Settings -> SettingsScreen(vm, onOpenOutfit = { tab = Tab.Outfit }, modifier = contentModifier)
             }
         }
     }

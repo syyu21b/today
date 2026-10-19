@@ -49,12 +49,16 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     debugImplementation("androidx.compose.ui:ui-tooling")
 
+    testImplementation("junit:junit:4.13.2")
+
     // Lottie (celebration animation)
     implementation("com.airbnb.android:lottie-compose:6.7.1")
 
-    // Coil (photo preview)
-    implementation("io.coil-kt:coil-compose:2.7.0")
+    // On-device outfit recognition (bundled models, works offline)
+    implementation("com.google.mlkit:pose-detection-accurate:18.0.0-beta5")
+    implementation("com.google.mlkit:segmentation-selfie:16.0.0-beta6")
+    implementation("com.google.android.gms:play-services-tasks:18.4.1")
 
-    // Palette (extract colors from photo -> "style transfer" mock)
-    implementation("androidx.palette:palette-ktx:1.0.0")
+    // Correct rotation for camera / gallery photos
+    implementation("androidx.exifinterface:exifinterface:1.4.2")
 }

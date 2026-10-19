@@ -2,7 +2,6 @@ package com.today.app.data
 
 import android.app.Application
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -11,10 +10,8 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
-import androidx.core.graphics.ColorUtils
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.palette.graphics.Palette
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -22,16 +19,17 @@ import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 import java.util.UUID
 
 class TodayViewModel(app: Application) : AndroidViewModel(app) {
 
     private val storage = TodayStorage(app)
+    private val analyzer = StyleAnalyzer()
 
-    // ---------------- Character & quests ----------------
+    // ---------------- Character ----------------
     var character by mutableStateOf(CharacterState())
         private set
-    val quests: SnapshotStateList<Quest> = mutableStateListOf()
 
     /** Incremented every time a quest is completed -> triggers the Lottie confetti. */
     var celebrationTick by mutableIntStateOf(0)
@@ -41,30 +39,34 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
     var levelUpEvent by mutableStateOf<Int?>(null)
         private set
 
-    private var questDate: String? = null
-    private var lastCompleteDate: String? = null
-    private var prevCompleteDate: String? = null
+    // ---------------- Quests & calendar ----------------
+    /** ISO date -> quests. Lists are immutable; every change replaces the list. */
+    private val questsByDate = mutableStateMapOf<String, List<Quest>>()
 
-    // ---------------- Outfit / style transfer mock ----------------
+    var todayDate by mutableStateOf(LocalDate.now())
+        private set
+    var selectedDate by mutableStateOf(LocalDate.now())
+        private set
+    var clipboard by mutableStateOf<QuestClipboard?>(null)
+        private set
+
+    // ---------------- Settings / messages ----------------
+    var settings by mutableStateOf(AppSettings())
+        private set
+    var message by mutableStateOf<UiMessage?>(null)
+        private set
+    private var messageCounter = 0L
+
+    // ---------------- Outfit recognition ----------------
     var isAnalyzingStyle by mutableStateOf(false)
         private set
     var analyzeStep by mutableStateOf("")
         private set
-    var extractedSwatches by mutableStateOf<List<Int>>(emptyList())
+    var stylePhoto by mutableStateOf<Bitmap?>(null)
+        private set
+    var styleResult by mutableStateOf<StyleResult?>(null)
         private set
     private var photoStyleCount = 0
-
-    // ---------------- World ----------------
-    var playerX by mutableIntStateOf(WorldMap.START_X)
-        private set
-    var playerY by mutableIntStateOf(WorldMap.START_Y)
-        private set
-    var facing by mutableStateOf(Facing.DOWN)
-        private set
-    var worldDialog by mutableStateOf<String?>(null)
-        private set
-    var steps by mutableIntStateOf(0)
-        private set
 
     // ---------------- Community ----------------
     val friends = DummyData.friends
@@ -73,64 +75,201 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
     val unread = mutableStateMapOf<String, Boolean>()
     var openChatId by mutableStateOf<String?>(null)
         private set
-    private var messageId = 0L
+    private var chatMessageId = 0L
+    private var lastChatLang = ReplyEngine.Lang.KO
 
     init {
-        val saved = storage.load()
-        val today = today()
-        character = saved.character
-        lastCompleteDate = saved.lastCompleteDate
-        prevCompleteDate = saved.prevCompleteDate
-        // New day -> quests reset; missed a day -> streak breaks.
-        quests += if (saved.questDate == today) saved.quests else saved.quests.map { it.copy(done = false) }
-        questDate = today
-        if (lastCompleteDate != today && lastCompleteDate != yesterday()) {
-            character = character.copy(streak = 0)
-        }
-        playerX = saved.worldX
-        playerY = saved.worldY
-        steps = saved.steps
+        loadFromStorage()
+        resetChats()
+    }
 
-        friends.forEach { f ->
-            chats[f.id] = mutableStateListOf<ChatMessage>().apply {
-                DummyData.openingMessages[f.id].orEmpty().forEach { add(ChatMessage(messageId++, false, it, "오전 9:0${size}")) }
-            }
-            unread[f.id] = true
-        }
+    private fun loadFromStorage() {
+        val saved = storage.load()
+        character = saved.character
+        settings = saved.settings
+        questsByDate.clear()
+        questsByDate.putAll(saved.questsByDate)
+        todayDate = LocalDate.now()
+        selectedDate = todayDate
+        clipboard = null
+        ensureTodayQuests()
         persist()
     }
 
-    // ======================= Quests =======================
+    // ======================= Calendar =======================
 
-    fun toggleQuest(id: String) {
-        val index = quests.indexOfFirst { it.id == id }
-        if (index < 0) return
-        val quest = quests[index]
+    /** Call on resume: handles the app being left open across midnight. */
+    fun refreshDay() {
+        val now = LocalDate.now()
+        if (now == todayDate) return
+        val followToday = selectedDate == todayDate
+        todayDate = now
+        if (followToday) selectedDate = now
+        ensureTodayQuests()
+        persist()
+    }
+
+    fun selectDate(date: LocalDate) {
+        selectedDate = date
+    }
+
+    fun questsFor(date: LocalDate): List<Quest> = questsByDate[date.toString()].orEmpty()
+
+    fun isEditable(date: LocalDate) = !date.isBefore(todayDate)
+    fun isCheckable(date: LocalDate) = date == todayDate
+
+    fun dayStatus(date: LocalDate): DayStatus {
+        val quests = questsFor(date)
+        val done = quests.count { it.done }
+        return when {
+            quests.isEmpty() -> DayStatus.EMPTY
+            done == quests.size -> DayStatus.COMPLETE
+            date.isAfter(todayDate) -> DayStatus.PLANNED
+            date.isBefore(todayDate) -> DayStatus.MISSED
+            done > 0 -> DayStatus.PARTIAL
+            else -> DayStatus.PLANNED
+        }
+    }
+
+    /** Consecutive fully-completed days ending today (or yesterday if today isn't finished yet). */
+    val streak: Int
+        get() {
+            fun complete(d: LocalDate) = questsFor(d).let { it.isNotEmpty() && it.all { q -> q.done } }
+            var day = if (complete(todayDate)) todayDate else todayDate.minusDays(1)
+            var count = 0
+            while (complete(day)) {
+                count++
+                day = day.minusDays(1)
+            }
+            return count
+        }
+
+    val totalCompleted: Int get() = questsByDate.values.sumOf { list -> list.count { it.done } }
+    val recordedDays: Int get() = questsByDate.count { (_, list) -> list.isNotEmpty() }
+
+    /** New day without quests: carry over the most recent day's quests (unchecked), or defaults on first run. */
+    private fun ensureTodayQuests() {
+        val key = todayDate.toString()
+        if (questsByDate.containsKey(key)) return
+        if (questsByDate.isEmpty()) {
+            questsByDate[key] = DummyData.defaultQuests.map { it.copy(id = newId()) }
+            return
+        }
+        if (!settings.autoCarryOver) return
+        val previous = questsByDate.keys.filter { it < key }.sortedDescending()
+            .firstNotNullOfOrNull { k -> questsByDate[k]?.takeIf { it.isNotEmpty() } }
+            ?: return
+        questsByDate[key] = previous.take(MAX_QUESTS_PER_DAY).map { it.copy(id = newId(), done = false) }
+    }
+
+    // ======================= Quest CRUD =======================
+
+    fun toggleQuest(date: LocalDate, id: String) {
+        if (!isCheckable(date)) {
+            showMessage(if (date.isBefore(todayDate)) "지난 날의 기록은 바꿀 수 없어요" else "예정된 퀘스트는 그날 체크할 수 있어요")
+            return
+        }
+        val list = questsFor(date)
+        val quest = list.firstOrNull { it.id == id } ?: return
         val nowDone = !quest.done
-        quests[index] = quest.copy(done = nowDone)
-
+        val streakBefore = streak
+        setQuests(date, list.map { if (it.id == id) it.copy(done = nowDone) else it })
         if (nowDone) {
             addXp(quest.xp)
             celebrationTick++
+            if (streak > streakBefore) showMessage("🔥 오늘의 퀘스트 완료! 스트릭 ${streak}일")
         } else {
             addXp(-quest.xp)
         }
-        updateStreak()
         persist()
     }
 
-    fun addQuest(title: String, emoji: String, xp: Int) {
-        if (title.isBlank()) return
-        quests += Quest(UUID.randomUUID().toString(), title.trim(), emoji.ifBlank { "⭐" }, xp.coerceIn(5, 100))
-        updateStreak()
+    /** @return null on success, otherwise the reason it failed. */
+    fun addQuest(date: LocalDate, title: String, emoji: String, xp: Int): String? {
+        if (!isEditable(date)) return "지난 날에는 퀘스트를 추가할 수 없어요"
+        val list = questsFor(date)
+        if (list.size >= MAX_QUESTS_PER_DAY) return "하루에 최대 ${MAX_QUESTS_PER_DAY}개까지 추가할 수 있어요"
+        val cleanTitle = title.trim().take(MAX_QUEST_TITLE)
+        if (cleanTitle.isEmpty()) return "할 일을 입력해 주세요"
+        setQuests(date, list + Quest(newId(), cleanTitle, emoji.ifBlank { "⭐" }, xp.coerceIn(MIN_QUEST_XP, MAX_QUEST_XP)))
         persist()
+        return null
     }
 
-    fun removeQuest(id: String) {
-        quests.removeAll { it.id == id }
-        updateStreak()
+    fun updateQuest(date: LocalDate, id: String, title: String, emoji: String, xp: Int): String? {
+        if (!isEditable(date)) return "지난 날의 퀘스트는 수정할 수 없어요"
+        val list = questsFor(date)
+        val old = list.firstOrNull { it.id == id } ?: return "퀘스트를 찾을 수 없어요"
+        val cleanTitle = title.trim().take(MAX_QUEST_TITLE)
+        if (cleanTitle.isEmpty()) return "할 일을 입력해 주세요"
+        val newXp = xp.coerceIn(MIN_QUEST_XP, MAX_QUEST_XP)
+        setQuests(date, list.map { if (it.id == id) it.copy(title = cleanTitle, emoji = emoji.ifBlank { "⭐" }, xp = newXp) else it })
+        // Already completed today: keep total XP consistent with the new reward.
+        if (old.done && newXp != old.xp) addXp(newXp - old.xp)
         persist()
+        return null
     }
+
+    fun deleteQuest(date: LocalDate, id: String) {
+        if (!isEditable(date)) {
+            showMessage("지난 날의 퀘스트는 삭제할 수 없어요")
+            return
+        }
+        val list = questsFor(date)
+        val quest = list.firstOrNull { it.id == id } ?: return
+        setQuests(date, list.filterNot { it.id == id })
+        if (quest.done) addXp(-quest.xp) // no XP farming by check -> delete -> re-add
+        persist()
+        showMessage("'${quest.title}' 삭제됨")
+    }
+
+    // ======================= Copy / paste =======================
+
+    fun copyDay(date: LocalDate) {
+        val quests = questsFor(date)
+        if (quests.isEmpty()) {
+            showMessage("복사할 퀘스트가 없어요")
+            return
+        }
+        clipboard = QuestClipboard(date, quests)
+        showMessage("${formatDate(date)} 퀘스트 ${quests.size}개 복사됨 · 붙여넣을 날짜를 고르세요")
+    }
+
+    fun clearClipboard() {
+        clipboard = null
+    }
+
+    fun pasteTo(date: LocalDate) {
+        val clip = clipboard ?: return
+        if (!isEditable(date)) {
+            showMessage("지난 날에는 붙여넣을 수 없어요")
+            return
+        }
+        val existing = questsFor(date)
+        val existingTitles = existing.map { it.title }.toSet()
+        val candidates = clip.quests.filter { it.title !in existingTitles }
+        val duplicates = clip.quests.size - candidates.size
+        val slots = MAX_QUESTS_PER_DAY - existing.size
+        val toAdd = candidates.take(slots.coerceAtLeast(0))
+        val overLimit = candidates.size - toAdd.size
+
+        if (toAdd.isNotEmpty()) {
+            setQuests(date, existing + toAdd.map { it.copy(id = newId(), done = false) })
+            persist()
+        }
+        val parts = buildList {
+            if (toAdd.isNotEmpty()) add("${toAdd.size}개 붙여넣음")
+            if (duplicates > 0) add("중복 ${duplicates}개 제외")
+            if (overLimit > 0) add("하루 최대 ${MAX_QUESTS_PER_DAY}개 제한으로 ${overLimit}개 제외")
+        }
+        showMessage(if (toAdd.isEmpty() && parts.isEmpty()) "붙여넣을 퀘스트가 없어요" else parts.joinToString(" · "))
+    }
+
+    private fun setQuests(date: LocalDate, quests: List<Quest>) {
+        questsByDate[date.toString()] = quests
+    }
+
+    // ======================= XP =======================
 
     fun consumeLevelUp() {
         levelUpEvent = null
@@ -151,21 +290,6 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         character = character.copy(level = level, xp = xp.coerceAtLeast(0))
     }
 
-    /** Streak +1 the first time all quests are done today; undone if a quest is unchecked again. */
-    private fun updateStreak() {
-        val today = today()
-        val allDone = quests.isNotEmpty() && quests.all { it.done }
-        if (allDone && lastCompleteDate != today) {
-            val newStreak = if (lastCompleteDate == yesterday()) character.streak + 1 else 1
-            prevCompleteDate = lastCompleteDate
-            lastCompleteDate = today
-            character = character.copy(streak = newStreak)
-        } else if (!allDone && lastCompleteDate == today) {
-            lastCompleteDate = prevCompleteDate
-            character = character.copy(streak = (character.streak - 1).coerceAtLeast(0))
-        }
-    }
-
     // ======================= Outfit =======================
 
     fun applyOutfit(outfit: Outfit) {
@@ -173,104 +297,112 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         persist()
     }
 
-    fun applyStyleFromUri(uri: Uri) {
-        viewModelScope.launch {
-            val bitmap = withContext(Dispatchers.IO) { decodeSampled(uri) } ?: return@launch
-            applyStyleFromBitmap(bitmap)
-        }
+    /** Manual fine-tuning from the wardrobe editor. */
+    fun editOutfit(transform: (Outfit) -> Outfit) {
+        applyOutfit(transform(character.outfit))
     }
 
-    /**
-     * "AI style transfer" mock: extracts the photo's dominant palette and maps it onto outfit slots.
-     * The fake delay + step labels make it feel like a model is running.
-     */
-    fun applyStyleFromBitmap(bitmap: Bitmap) {
+    fun analyzePhoto(uri: Uri) {
         if (isAnalyzingStyle) return
         viewModelScope.launch {
             isAnalyzingStyle = true
-            extractedSwatches = emptyList()
-            val steps = listOf("사진 분석 중…", "색감 추출 중…", "스타일 매칭 중…", "의상 생성 중…")
-            for (s in steps) {
-                analyzeStep = s
-                delay(450)
+            analyzeStep = "사진 불러오는 중…"
+            var ticker: kotlinx.coroutines.Job? = null
+            try {
+                val bitmap = withContext(Dispatchers.IO) { PhotoDecoder.decode(getApplication(), uri) }
+                if (bitmap == null) {
+                    showMessage("사진을 불러오지 못했어요")
+                    return@launch
+                }
+                stylePhoto = bitmap
+                styleResult = null
+
+                val started = System.currentTimeMillis()
+                ticker = launch {
+                    val steps = listOf("사람 찾는 중…", "머리·상의·하의 영역 나누는 중…", "옷 색감 추출 중…", "도트 의상 생성 중…")
+                    var i = 0
+                    while (true) {
+                        analyzeStep = steps[i % steps.size]
+                        i++
+                        delay(550)
+                    }
+                }
+                val result = analyzer.analyze(bitmap, character.outfit, "포토 스타일 #${photoStyleCount + 1}")
+                // Keep the "AI" animation visible for a moment even on fast devices.
+                val elapsed = System.currentTimeMillis() - started
+                if (elapsed < 1600) delay(1600 - elapsed)
+
+                photoStyleCount++
+                styleResult = result
+                applyOutfit(result.outfit)
+                showMessage(result.summary)
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                showMessage("스타일 분석 중 문제가 생겼어요: ${e.message ?: "알 수 없는 오류"}")
+            } finally {
+                ticker?.cancel()
+                isAnalyzingStyle = false
             }
-            val outfit = withContext(Dispatchers.Default) { outfitFromPalette(bitmap) }
-            extractedSwatches = listOf(outfit.hair, outfit.shirt, outfit.accent, outfit.pants, outfit.shoes)
-            applyOutfit(outfit)
-            isAnalyzingStyle = false
         }
     }
 
-    private fun outfitFromPalette(bitmap: Bitmap): Outfit {
-        val p = Palette.from(bitmap).maximumColorCount(16).generate()
-        val fallback = Outfits.presets.first()
-        val dominant = p.getDominantColor(fallback.shirt)
-        val shirt = p.getVibrantColor(dominant)
-        val accent = p.getLightVibrantColor(p.getLightMutedColor(ColorUtils.blendARGB(shirt, 0xFFFFFFFF.toInt(), 0.5f)))
-        val pants = p.getDarkMutedColor(p.getDarkVibrantColor(ColorUtils.blendARGB(dominant, 0xFF000000.toInt(), 0.5f)))
-        val hair = p.getDarkVibrantColor(ColorUtils.blendARGB(pants, 0xFF000000.toInt(), 0.3f))
-        val shoes = ColorUtils.blendARGB(pants, 0xFF000000.toInt(), 0.55f)
-        photoStyleCount++
-        return Outfit("포토 스타일 #$photoStyleCount", hair, shirt, accent, pants, shoes)
+    fun clearStylePhoto() {
+        stylePhoto = null
+        styleResult = null
     }
 
-    private fun decodeSampled(uri: Uri, target: Int = 256): Bitmap? = runCatching {
-        val resolver = getApplication<Application>().contentResolver
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
-        var sample = 1
-        while (bounds.outWidth / (sample * 2) >= target && bounds.outHeight / (sample * 2) >= target) sample *= 2
-        val opts = BitmapFactory.Options().apply { inSampleSize = sample }
-        resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opts) }
-    }.getOrNull()
+    // ======================= Settings =======================
 
-    // ======================= World =======================
-
-    fun move(dir: Facing) {
-        facing = dir
-        worldDialog = null
-        val (nx, ny) = when (dir) {
-            Facing.UP -> playerX to playerY - 1
-            Facing.DOWN -> playerX to playerY + 1
-            Facing.LEFT -> playerX - 1 to playerY
-            Facing.RIGHT -> playerX + 1 to playerY
-        }
-        if (!WorldMap.isWalkable(nx, ny)) return
-        playerX = nx
-        playerY = ny
-        steps++
-        // Walking bonus: every 50 steps in town = +5 XP
-        if (steps % 50 == 0) {
-            addXp(5)
-            worldDialog = "🚶 산책 보너스! 50걸음 달성 +5 XP"
-        }
+    fun updateNickname(name: String) {
+        val clean = name.trim().take(12)
+        if (clean.isEmpty()) return
+        settings = settings.copy(nickname = clean)
         persist()
     }
 
-    /** "A" button: talk to whatever is in front of the avatar. */
-    fun interact() {
-        val (fx, fy) = when (facing) {
-            Facing.UP -> playerX to playerY - 1
-            Facing.DOWN -> playerX to playerY + 1
-            Facing.LEFT -> playerX - 1 to playerY
-            Facing.RIGHT -> playerX + 1 to playerY
-        }
-        val npc = WorldMap.npcs.firstOrNull { it.x == fx && it.y == fy }
-        worldDialog = when {
-            npc != null -> "${npc.name}: ${npc.line}"
-            WorldMap.tileAt(fx, fy) == 'D' -> WorldMap.doorMessages["$fx,$fy"]
-            WorldMap.tileAt(fx, fy) == 'S' -> WorldMap.SIGN_MESSAGE
-            WorldMap.tileAt(fx, fy) == 'W' -> "💧 맑은 연못이다. 물 마시기 퀘스트가 생각난다…"
-            WorldMap.tileAt(fx, fy) == 'T' -> "🌳 커다란 나무다."
-            else -> "아무것도 없다."
-        }
+    fun updateReplyLanguage(lang: ReplyLanguage) {
+        settings = settings.copy(replyLanguage = lang)
+        persist()
     }
 
-    fun dismissWorldDialog() {
-        worldDialog = null
+    fun updateAutoCarryOver(enabled: Boolean) {
+        settings = settings.copy(autoCarryOver = enabled)
+        persist()
+    }
+
+    fun resetAll() {
+        storage.clear()
+        clearStylePhoto()
+        photoStyleCount = 0
+        loadFromStorage()
+        resetChats()
+        showMessage("모든 데이터가 초기화되었어요")
+    }
+
+    fun showMessage(text: String) {
+        message = UiMessage(++messageCounter, text)
+    }
+
+    fun consumeMessage(id: Long) {
+        if (message?.id == id) message = null
     }
 
     // ======================= Community =======================
+
+    private fun resetChats() {
+        openChatId = null
+        chats.clear()
+        typing.clear()
+        unread.clear()
+        friends.forEach { f ->
+            chats[f.id] = mutableStateListOf<ChatMessage>().apply {
+                DummyData.openingMessages[f.id].orEmpty().forEachIndexed { i, text ->
+                    add(ChatMessage(chatMessageId++, false, text, "오전 9:0$i"))
+                }
+            }
+            unread[f.id] = true
+        }
+    }
 
     fun openChat(friendId: String?) {
         openChatId = friendId
@@ -278,16 +410,22 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun sendMessage(friendId: String, text: String) {
-        if (text.isBlank()) return
+        val clean = text.trim()
+        if (clean.isEmpty()) return
         val list = chats[friendId] ?: return
-        list += ChatMessage(messageId++, true, text.trim(), nowTime())
+        val friend = friends.firstOrNull { it.id == friendId } ?: return
+        list += ChatMessage(chatMessageId++, true, clean, nowTime())
+
+        val lang = ReplyEngine.resolve(settings.replyLanguage, clean, lastChatLang)
+        lastChatLang = lang
+        val reply = ReplyEngine.reply(clean, lang, friend.level, character.level)
         // Simulated friend reply: typing indicator, then an answer.
         viewModelScope.launch {
             delay(600)
             typing[friendId] = true
-            delay(1200L + (0..1200).random())
+            delay(1000L + (0..1200).random())
             typing[friendId] = false
-            list += ChatMessage(messageId++, false, DummyData.autoReplies.random(), nowTime())
+            chats[friendId]?.add(ChatMessage(chatMessageId++, false, reply, nowTime()))
             if (openChatId != friendId) unread[friendId] = true
         }
     }
@@ -301,12 +439,17 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
     // ======================= Helpers =======================
 
     private fun persist() {
-        storage.save(
-            SavedState(character, quests.toList(), questDate, lastCompleteDate, prevCompleteDate, playerX, playerY, steps)
-        )
+        storage.save(SavedState(character, questsByDate.toMap(), settings))
     }
 
-    private fun today() = LocalDate.now().toString()
-    private fun yesterday() = LocalDate.now().minusDays(1).toString()
-    private fun nowTime(): String = LocalTime.now().format(DateTimeFormatter.ofPattern("a h:mm"))
+    override fun onCleared() {
+        analyzer.close()
+    }
+
+    private fun newId() = UUID.randomUUID().toString()
+    private fun nowTime(): String = LocalTime.now().format(DateTimeFormatter.ofPattern("a h:mm", Locale.KOREAN))
+
+    companion object {
+        fun formatDate(date: LocalDate): String = date.format(DateTimeFormatter.ofPattern("M월 d일 (E)", Locale.KOREAN))
+    }
 }
