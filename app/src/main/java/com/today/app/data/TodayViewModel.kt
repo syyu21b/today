@@ -1,6 +1,10 @@
 package com.today.app.data
 
 import android.app.Application
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.net.Uri
 import androidx.compose.runtime.getValue
@@ -10,6 +14,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.today.app.i18n.Strings
@@ -99,8 +104,30 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
     val visibleFriends: List<Friend> get() = friends.filter { !it.blocked }
     val blockedFriends: List<Friend> get() = friends.filter { it.blocked }
 
+    /** Date/time/timezone changed in system settings -> re-check "today" right away. */
+    private val clockReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) = refreshDay()
+    }
+
     init {
         loadFromStorage()
+        ContextCompat.registerReceiver(
+            app,
+            clockReceiver,
+            IntentFilter().apply {
+                addAction(Intent.ACTION_DATE_CHANGED)
+                addAction(Intent.ACTION_TIME_CHANGED)
+                addAction(Intent.ACTION_TIMEZONE_CHANGED)
+            },
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+        // App kept open across midnight: roll the day over without needing a resume.
+        viewModelScope.launch {
+            while (true) {
+                delay(DAY_CHECK_INTERVAL_MS)
+                refreshDay()
+            }
+        }
     }
 
     /** @param keepLanguage used by "reset all" so the app doesn't jump back to the default language. */
@@ -697,6 +724,7 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
 
     override fun onCleared() {
         analyzer.close()
+        getApplication<Application>().unregisterReceiver(clockReceiver)
     }
 
     private fun newId() = UUID.randomUUID().toString()
@@ -704,5 +732,6 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
     companion object {
         const val MAX_NICKNAME = 12
         const val MAX_FRIEND_NAME = 20
+        private const val DAY_CHECK_INTERVAL_MS = 30_000L
     }
 }
