@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import com.today.app.data.AppSettings
 import com.today.app.data.TodayStorage
 import com.today.app.i18n.strings
@@ -46,6 +47,8 @@ object ReminderScheduler {
     }
 }
 
+private const val TAG = "TodayReminder"
+
 /** Fires the reminder (if there is still something to do today) and re-arms tomorrow's alarm. */
 class ReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -60,6 +63,11 @@ class ReminderReceiver : BroadcastReceiver() {
                 ?.map { it.copy(done = false) }
                 .orEmpty()
         val remaining = todays.count { !it.done }
+        Log.i(
+            TAG,
+            "fired ${intent.action} enabled=${settings.notificationsEnabled} quest=${settings.questReminder} " +
+                "streak=${settings.streakReminder} remaining=$remaining canPost=${Notifier.canPost(context)}",
+        )
 
         if (settings.notificationsEnabled && remaining > 0) {
             when (intent.action) {
