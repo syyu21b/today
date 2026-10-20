@@ -114,10 +114,11 @@ class MainActivity : ComponentActivity() {
 }
 
 private enum class Tab(val icon: ImageVector) {
+    // Declaration order = bottom bar order.
     Quests(Icons.Filled.TaskAlt),
-    Stats(Icons.Filled.BarChart),
     Outfit(Icons.Filled.Checkroom),
     Messages(Icons.Filled.Forum),
+    Stats(Icons.Filled.BarChart),
     Settings(Icons.Filled.Settings);
 
     fun label(s: Strings) = when (this) {
