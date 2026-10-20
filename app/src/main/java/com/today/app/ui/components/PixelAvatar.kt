@@ -63,6 +63,66 @@ private val LONG_HAIR = mapOf(
     11 to "..kh        hk..",
 )
 
+/**
+ * Accessory pixel art per row (' ' and '.' keep the pixel underneath).
+ *  c/C cap  w logo  y crown  g gem  l halo  n ear  d headphones  z/Z dark lens  v/V cape
+ */
+private class AccessoryArt(val rows: Map<Int, String>, val behind: Boolean = false)
+
+private val ACCESSORY_ART = mapOf(
+    "cap" to AccessoryArt(
+        mapOf(
+            2 to "...kcccwcccck...",
+            3 to "..kcccccccccck..",
+            4 to "..kCCCCCCCCCCCCk",
+        ),
+    ),
+    "crown" to AccessoryArt(
+        mapOf(
+            0 to "....y..yy..y....",
+            1 to "...kyykyykyyk...",
+            2 to "...kyygyygyyk...",
+        ),
+    ),
+    "halo" to AccessoryArt(mapOf(0 to "....llllllll....")),
+    "catears" to AccessoryArt(
+        mapOf(
+            0 to "...kk......kk...",
+            1 to "...knkkkkkknk...",
+        ),
+    ),
+    "headphones" to AccessoryArt(
+        mapOf(
+            0 to "....kkkkkkkk....",
+            1 to "...kddddddddk...",
+            2 to "...d        d...",
+            3 to "..d          d..",
+            4 to "..d          d..",
+            5 to ".kd          dk.",
+            6 to ".kd          dk.",
+            7 to ".kd          dk.",
+        ),
+    ),
+    "glasses" to AccessoryArt(mapOf(6 to "     kekkek     ")),
+    "sunglasses" to AccessoryArt(mapOf(6 to "    zzZzzZzz    ")),
+    // Behind the body: only fills empty pixels, so it peeks out at the sides.
+    "cape" to AccessoryArt(
+        mapOf(11 to " v            v ") + (12..15).associateWith { "v              v" } + (16..22).associateWith { "vV            Vv" },
+        behind = true,
+    ),
+)
+
+private val CapColor = Color(0xFFE94B5A)
+private val CapShade = Color(0xFFB8323F)
+private val CrownGold = Color(0xFFFFD34E)
+private val CrownGem = Color(0xFF3DDCFF)
+private val HaloColor = Color(0xFFFFF3A0)
+private val PhonesColor = Color(0xFF3A3A4A)
+private val LensColor = Color(0xFF151520)
+private val LensShine = Color(0xFF7A7AA8)
+private val CapeColor = Color(0xFFB0283A)
+private val CapeShade = Color(0xFF7A1A28)
+
 const val SPRITE_W = 16
 const val SPRITE_H = 24
 
@@ -84,17 +144,26 @@ data class SpriteStyle(
     val shortSleeve: Boolean,
     val shorts: Boolean,
     val longHair: Boolean,
+    /** Accessory ids, drawn in this order (back first). */
+    val accessories: List<String> = emptyList(),
 )
 
 fun Outfit.toSpriteStyle() = SpriteStyle(
     Color(hair), Color(skin), Color(shirt), Color(stripe), Color(accent), Color(pants), Color(shoes),
     striped, shortSleeve, shorts, longHair,
+    listOf(back, head, face).filter { it.isNotEmpty() },
 )
 
 /** Which sprite code ends up at (x, y) once the garment options are applied. */
 private fun spriteCode(x: Int, y: Int, style: SpriteStyle, blink: Boolean): Char {
     var ch = SPRITE[y][x]
     if (style.longHair) LONG_HAIR[y]?.get(x)?.takeIf { it != ' ' }?.let { ch = it }
+    for (id in style.accessories) {
+        val art = ACCESSORY_ART[id] ?: continue
+        val c = art.rows[y]?.getOrNull(x)?.takeIf { it != ' ' && it != '.' } ?: continue
+        if (art.behind && ch != '.') continue
+        ch = c
+    }
     if (blink && ch == 'e') ch = 's'
     // Stripes on every other torso row
     if (style.striped && (y == 12 || y == 14)) {
@@ -134,6 +203,18 @@ fun DrawScope.drawPixelSprite(topLeft: Offset, px: Float, style: SpriteStyle, bl
             'p' -> style.pants
             'P' -> pantsShade
             'o' -> style.shoes
+            'c' -> CapColor
+            'C' -> CapShade
+            'w' -> Color.White
+            'y' -> CrownGold
+            'g' -> CrownGem
+            'l' -> HaloColor
+            'n' -> Blush
+            'd' -> PhonesColor
+            'z' -> LensColor
+            'Z' -> LensShine
+            'v' -> CapeColor
+            'V' -> CapeShade
             else -> null
         } ?: continue
         drawRect(color, Offset(topLeft.x + x * px, topLeft.y + y * px), cell)

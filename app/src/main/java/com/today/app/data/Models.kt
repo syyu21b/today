@@ -37,7 +37,28 @@ data class Outfit(
     val shortSleeve: Boolean = false,
     val shorts: Boolean = false,
     val longHair: Boolean = false,
-)
+    /** Equipped accessory ids per slot ("" = none), see [Accessories]. */
+    val head: String = "",
+    val face: String = "",
+    val back: String = "",
+) {
+    fun accessoryIn(slot: AccessorySlot) = when (slot) {
+        AccessorySlot.HEAD -> head
+        AccessorySlot.FACE -> face
+        AccessorySlot.BACK -> back
+    }
+
+    fun withAccessory(slot: AccessorySlot, id: String) = when (slot) {
+        AccessorySlot.HEAD -> copy(head = id)
+        AccessorySlot.FACE -> copy(face = id)
+        AccessorySlot.BACK -> copy(back = id)
+    }
+
+    fun withoutAccessories() = copy(head = "", face = "", back = "")
+
+    /** Presets and photo styles keep whatever the character is already wearing. */
+    fun withAccessoriesOf(other: Outfit) = copy(head = other.head, face = other.face, back = other.back)
+}
 
 data class CharacterState(
     val level: Int = 1,
@@ -53,7 +74,7 @@ data class CharacterState(
 }
 
 /** How a calendar day looks: drives the dots in the week strip / month view. */
-enum class DayStatus { EMPTY, PLANNED, PARTIAL, COMPLETE, MISSED }
+enum class DayStatus { EMPTY, PLANNED, PARTIAL, COMPLETE, MISSED, SHIELDED }
 
 /** Quests copied from one day, waiting to be pasted onto another. */
 data class QuestClipboard(val sourceDate: LocalDate, val quests: List<Quest>)

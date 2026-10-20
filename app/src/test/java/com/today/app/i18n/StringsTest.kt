@@ -6,7 +6,11 @@ import com.today.app.data.MAX_QUEST_XP
 import com.today.app.data.Outfits
 import com.today.app.data.StyleNote
 import org.junit.Assert.assertEquals
+import com.today.app.data.Accessories
+import com.today.app.data.BoxReward
+import com.today.app.data.Titles
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -35,6 +39,31 @@ class StringsTest {
         ) + com.today.app.data.FriendSource.entries.map { e.friendSource(it) } +
             com.today.app.data.ChatFontSize.entries.map { e.fontSizeLabel(it) }
         samples.forEach { assertFalse("Korean in English text: $it", hangul.containsMatchIn(it)) }
+    }
+
+    @Test
+    fun rewardTextExistsInBothLanguages() {
+        val rewards = listOf(
+            BoxReward.Shield, BoxReward.Stardust(2),
+            BoxReward.Item("halo", duplicate = false), BoxReward.Item("halo", duplicate = true),
+            BoxReward.Title("lucky", duplicate = false), BoxReward.Title("lucky", duplicate = true),
+        )
+        val e = EnStrings
+        val english = rewards.map { e.boxRewardText(it) } + Titles.all.flatMap { listOf(e.titleLabel(it.id), e.titleHow(it.id), e.msgNewTitle(it)) } +
+            Accessories.all.flatMap { listOf(e.accessoryLabel(it.id), e.accessoryLock(it), e.msgAccessoryLocked(it), e.newUnlock(it)) } +
+            listOf(
+                e.shieldDialogBody, e.msgNoStreakToProtect, e.shieldCount(2), e.rewardsTitle, e.statShields, e.statBoxes,
+                e.statStardust, e.statTitles, e.statItems, e.boxesLeft(0), e.boxesLeft(1), e.boxesLeft(3), e.titleCollection(2, 11), e.stardustProgress(3, 5),
+                e.shieldedDaysTitle, e.noShieldedDays, e.msgShieldUsed(3), e.rescueBanner(4), e.useShieldAction(1),
+                e.stardustLine(2, 5), e.msgNotEnoughStardust(5), e.boxBanner(1), e.boxBanner(2), e.openAnother(2), e.levelRewards,
+            )
+        english.forEach { assertFalse("Korean in English text: $it", hangul.containsMatchIn(it)) }
+        // Every id has a real name (the `else -> id` fallback is never hit).
+        listOf(KoStrings, EnStrings).forEach { s ->
+            Titles.all.forEach { assertNotEquals(it.id, s.titleName(it.id)) }
+            Accessories.all.forEach { assertNotEquals(it.id, s.accessoryName(it.id)) }
+        }
+        assertEquals("🧢 캡모자", KoStrings.accessoryLabel("cap"))
     }
 
     @Test

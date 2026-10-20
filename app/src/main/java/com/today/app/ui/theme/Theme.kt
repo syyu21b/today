@@ -18,6 +18,7 @@ val Violet = Color(0xFF8B6CFF)
 val Gold = Color(0xFFFFD34E)
 val Mint = Color(0xFF3DDC97)
 val Coral = Color(0xFFFF5C77)
+val Sky = Color(0xFF6EC8FF)
 val TextMuted = Color(0xFFA8A3C2)
 
 /** Instagram-style DM gradient for "my" bubbles and story rings. */

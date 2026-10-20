@@ -45,7 +45,15 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         private set
 
     /** Non-null while a "LEVEL UP" dialog should be shown. */
-    var levelUpEvent by mutableStateOf<Int?>(null)
+    var levelUpEvent by mutableStateOf<LevelUpEvent?>(null)
+        private set
+
+    // ---------------- Rewards ----------------
+    var rewards by mutableStateOf(RewardState())
+        private set
+
+    /** Non-null while the reward box dialog shows what came out. */
+    var boxResult by mutableStateOf<BoxReward?>(null)
         private set
 
     // ---------------- Quests & calendar ----------------
@@ -134,6 +142,9 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
     private fun loadFromStorage(keepLanguage: AppLanguage? = null) {
         val saved = storage.load()
         character = saved.character
+        rewards = saved.rewards
+        boxResult = null
+        levelUpEvent = null
         settings = if (keepLanguage == null) saved.settings
         else AppSettings(nickname = keepLanguage.strings().defaultNickname, language = keepLanguage)
         // The OS can revoke notification permission at any time: reflect that in the switch.
@@ -148,6 +159,10 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         lastChatLang = if (settings.language == AppLanguage.KOREAN) ReplyEngine.Lang.KO else ReplyEngine.Lang.EN
         enforceXpCap()
         ensureTodayQuests()
+        // Levels reached before rewards existed still get their rewards.
+        rewards = RewardEngine.grantLevels(rewards, character.level)
+        character = character.copy(outfit = sanitizeAccessories(character.outfit))
+        refreshTitles(announce = false)
 
         friends.clear()
         friends.addAll(saved.friends)
@@ -198,8 +213,9 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         val quests = questsFor(date)
         val done = quests.count { it.done }
         return when {
+            quests.isNotEmpty() && done == quests.size -> DayStatus.COMPLETE
+            isShielded(date) -> DayStatus.SHIELDED
             quests.isEmpty() -> DayStatus.EMPTY
-            done == quests.size -> DayStatus.COMPLETE
             date.isAfter(todayDate) -> DayStatus.PLANNED
             date.isBefore(todayDate) -> DayStatus.MISSED
             done > 0 -> DayStatus.PARTIAL
@@ -207,18 +223,11 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Consecutive fully-completed days ending today (or yesterday if today isn't finished yet). */
-    val streak: Int
-        get() {
-            fun complete(d: LocalDate) = questsFor(d).let { it.isNotEmpty() && it.all { q -> q.done } }
-            var day = if (complete(todayDate)) todayDate else todayDate.minusDays(1)
-            var count = 0
-            while (complete(day)) {
-                count++
-                day = day.minusDays(1)
-            }
-            return count
-        }
+    private fun isComplete(d: LocalDate) = questsFor(d).let { it.isNotEmpty() && it.all { q -> q.done } }
+    fun isShielded(d: LocalDate) = d.toString() in rewards.shieldedDates
+
+    /** Consecutive fully-completed days ending today (or yesterday if today isn't finished yet); shielded days bridge gaps. */
+    val streak: Int get() = Streaks.current(todayDate, ::isComplete, ::isShielded)
 
     val totalCompleted: Int get() = questsByDate.values.sumOf { list -> list.count { it.done } }
     val totalQuests: Int get() = questsByDate.values.sumOf { it.size }
@@ -259,6 +268,7 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         } else {
             addXp(-quest.xp)
         }
+        refreshTitles()
         // Everything done: no need for tonight's streak alert.
         if (list.size > 0 && questsFor(date).all { it.done }) Notifier.cancel(getApplication(), Notifier.ID_STREAK)
         persist()
@@ -351,30 +361,142 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun addXp(delta: Int, announce: Boolean = true) {
-        var level = character.level
+        val before = character.level
+        var level = before
         var xp = character.xp + delta
         while (xp >= CharacterState.xpNeededFor(level)) {
             xp -= CharacterState.xpNeededFor(level)
             level++
-            if (announce) levelUpEvent = level
         }
         while (xp < 0 && level > 1) {
             level--
             xp += CharacterState.xpNeededFor(level)
         }
         character = character.copy(level = level, xp = xp.coerceAtLeast(0))
+        // Rewards only for levels never reached before: uncheck -> re-check can't farm them.
+        val rewarded = level > rewards.rewardedLevel
+        if (rewarded) rewards = RewardEngine.grantLevels(rewards, level)
+        if (announce && level > before) levelUpEvent = LevelUpEvent(level, rewarded)
+    }
+
+    // ======================= Rewards =======================
+
+    /** Level items stay unlocked once the level was reached; box items once owned. */
+    fun isUnlocked(acc: Accessory) = acc.unlockLevel?.let { rewards.rewardedLevel >= it } ?: (acc.id in rewards.items)
+
+    /** Tap an accessory: wear it (replacing the one in the same slot) or take it off. */
+    fun toggleAccessory(acc: Accessory) {
+        if (!isUnlocked(acc)) {
+            showMessage(strings.msgAccessoryLocked(acc))
+            return
+        }
+        val o = character.outfit
+        setOutfit(o.withAccessory(acc.slot, if (o.accessoryIn(acc.slot) == acc.id) "" else acc.id))
+    }
+
+    private fun sanitizeAccessories(outfit: Outfit) = AccessorySlot.entries.fold(outfit) { o, slot ->
+        val id = o.accessoryIn(slot)
+        if (id.isEmpty() || Accessories.byId(id)?.let(::isUnlocked) == true) o else o.withAccessory(slot, "")
+    }
+
+    /** Streak a shield on [date] would keep alive (0 = nothing to protect, so don't waste one). */
+    private fun streakProtectedBy(date: LocalDate) = Streaks.endingAt(date.minusDays(1), ::isComplete, ::isShielded)
+
+    /** Shields work on today or yesterday, for a day that isn't complete or shielded and that has a streak to keep. */
+    fun canShield(date: LocalDate): Boolean =
+        rewards.shields > 0 && (date == todayDate || date == todayDate.minusDays(1)) &&
+            !isComplete(date) && !isShielded(date) && streakProtectedBy(date) > 0
+
+    /** Yesterday broke a streak a shield could save: the streak it brings back, else null. */
+    val rescuableStreak: Int?
+        get() {
+            val yesterday = todayDate.minusDays(1)
+            return if (canShield(yesterday)) streakProtectedBy(yesterday) else null
+        }
+
+    fun useShield(date: LocalDate) {
+        if (rewards.shields <= 0) {
+            showMessage(strings.msgNoShield)
+            return
+        }
+        if (!canShield(date)) {
+            showMessage(if (streakProtectedBy(date) == 0) strings.msgNoStreakToProtect else strings.errShieldNotAllowed)
+            return
+        }
+        rewards = rewards.copy(shields = rewards.shields - 1, shieldedDates = rewards.shieldedDates + date.toString())
+        if (date == todayDate) Notifier.cancel(getApplication(), Notifier.ID_STREAK)
+        refreshTitles()
+        persist()
+        showMessage(strings.msgShieldUsed(streak))
+    }
+
+    /** "Use shield" button on the evening streak notification. */
+    fun useShieldFromNotification() {
+        refreshDay()
+        Notifier.cancel(getApplication(), Notifier.ID_STREAK)
+        if (isComplete(todayDate) || isShielded(todayDate)) return // already safe (e.g. tapped twice)
+        useShield(todayDate) // explains itself if there's nothing to protect
+    }
+
+    fun openBox() {
+        val (next, reward) = RewardEngine.openBox(rewards) ?: return
+        rewards = next
+        boxResult = reward
+        persist()
+    }
+
+    fun consumeBoxResult() {
+        boxResult = null
+    }
+
+    fun exchangeStardust() {
+        val next = RewardEngine.exchangeStardust(rewards)
+        if (next == null) {
+            showMessage(strings.msgNotEnoughStardust(RewardEngine.SHIELD_PRICE))
+            return
+        }
+        rewards = next
+        persist()
+        showMessage(strings.msgExchanged)
+    }
+
+    fun equipTitle(id: String) {
+        if (id !in rewards.titles || id == rewards.equippedTitle) return
+        rewards = rewards.copy(equippedTitle = id)
+        persist()
+    }
+
+    /** Adds newly earned titles (never removes one, so unchecking a quest can't take it back). */
+    private fun refreshTitles(announce: Boolean = true) {
+        fun parse(d: String) = runCatching { LocalDate.parse(d) }.getOrNull()
+        val completeDays = questsByDate.filter { (_, l) -> l.isNotEmpty() && l.all { it.done } }.keys.mapNotNull(::parse).toSet()
+        val progress = Progress(
+            maxLevel = rewards.rewardedLevel,
+            bestStreak = Streaks.best(completeDays, rewards.shieldedDates.mapNotNull(::parse).toSet()),
+            totalCompleted = totalCompleted,
+            perfectDay = questsByDate.values.any { l -> l.size >= MAX_QUESTS_PER_DAY && l.all { it.done } },
+        )
+        val new = Titles.earnedBy(progress) - rewards.titles
+        if (new.isEmpty()) return
+        rewards = rewards.copy(titles = rewards.titles + new)
+        if (announce) Titles.all.lastOrNull { it.id in new }?.let { showMessage(strings.msgNewTitle(it)) }
     }
 
     // ======================= Outfit =======================
 
+    /** Preset or photo style: colors change, worn accessories stay. */
     fun applyOutfit(outfit: Outfit) {
-        character = character.copy(outfit = outfit)
-        persist()
+        setOutfit(outfit.withAccessoriesOf(character.outfit))
     }
 
     /** Manual fine-tuning from the wardrobe editor. */
     fun editOutfit(transform: (Outfit) -> Outfit) {
-        applyOutfit(transform(character.outfit))
+        setOutfit(transform(character.outfit))
+    }
+
+    private fun setOutfit(outfit: Outfit) {
+        character = character.copy(outfit = outfit)
+        persist()
     }
 
     fun analyzePhoto(uri: Uri) {
@@ -716,6 +838,7 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
     private fun snapshot() = SavedState(
         character, questsByDate.toMap(), settings, friends.toList(),
         if (settings.saveChatHistory) chats.mapValues { it.value.toList() } else null,
+        rewards,
     )
 
     private fun persist() {

@@ -81,6 +81,7 @@ import com.today.app.ui.components.WeekCalendar
 import com.today.app.ui.theme.Coral
 import com.today.app.ui.theme.Gold
 import com.today.app.ui.theme.Mint
+import com.today.app.ui.theme.Sky
 import com.today.app.ui.theme.NightSurfaceHigh
 import com.today.app.ui.theme.PixelFont
 import com.today.app.ui.theme.TextMuted
@@ -98,6 +99,8 @@ fun HomeScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
     val s = LocalStrings.current
     var editor by remember { mutableStateOf<Editor?>(null) }
     var pendingDelete by remember { mutableStateOf<Quest?>(null) }
+    var showShield by remember { mutableStateOf(false) }
+    var showTitles by remember { mutableStateOf(false) }
 
     val date = vm.selectedDate
     val quests = vm.questsFor(date)
@@ -112,7 +115,23 @@ fun HomeScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
         ) {
             item(key = "header") { Header(vm.todayDate, vm.settings.nickname) }
             item(key = "character") {
-                CharacterCard(vm.character, vm.streak, todayQuests.count { it.done }, todayQuests.size)
+                CharacterCard(
+                    vm.character, vm.streak, todayQuests.count { it.done }, todayQuests.size,
+                    shields = vm.rewards.shields,
+                    titleId = vm.rewards.equippedTitle,
+                    onShield = { showShield = true },
+                    onTitle = { showTitles = true },
+                )
+            }
+            vm.rescuableStreak?.let { saved ->
+                item(key = "rescue") {
+                    RewardBanner("🛡", s.rescueBanner(saved), s.rescueButton, Sky) { vm.useShield(vm.todayDate.minusDays(1)) }
+                }
+            }
+            if (vm.rewards.boxes > 0) {
+                item(key = "box") {
+                    RewardBanner("🎁", s.boxBanner(vm.rewards.boxes), s.openBox, Gold, vm::openBox)
+                }
             }
             item(key = "calendar") {
                 WeekCalendar(
@@ -197,21 +216,11 @@ fun HomeScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
         )
     }
 
-    vm.levelUpEvent?.let { level ->
-        AlertDialog(
-            onDismissRequest = vm::consumeLevelUp,
-            title = { Text("⭐ LEVEL UP! ⭐", fontFamily = PixelFont, fontWeight = FontWeight.Bold) },
-            text = {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                    PixelAvatar(vm.character.outfit, Modifier.height(120.dp))
-                    Spacer(Modifier.height(12.dp))
-                    Text(s.levelReached(level), fontFamily = PixelFont, fontSize = 22.sp, color = Gold)
-                    Text(s.levelUpBody, color = TextMuted, textAlign = TextAlign.Center)
-                }
-            },
-            confirmButton = { TextButton(onClick = vm::consumeLevelUp) { Text(s.levelUpOk) } },
-        )
-    }
+    if (showShield) ShieldDialog(vm, onDismiss = { showShield = false })
+    if (showTitles) TitlePickerDialog(vm, onDismiss = { showTitles = false })
+    vm.levelUpEvent?.let { LevelUpDialog(vm, it) }
+    // After the level-up dialog, so a box opened from it isn't hidden behind.
+    vm.boxResult?.let { BoxDialog(vm, it) }
 }
 
 @Composable
@@ -224,7 +233,16 @@ private fun Header(today: LocalDate, nickname: String) {
 }
 
 @Composable
-private fun CharacterCard(c: CharacterState, streak: Int, done: Int, total: Int) {
+private fun CharacterCard(
+    c: CharacterState,
+    streak: Int,
+    done: Int,
+    total: Int,
+    shields: Int,
+    titleId: String,
+    onShield: () -> Unit,
+    onTitle: () -> Unit,
+) {
     val s = LocalStrings.current
     val xpProgress by animateFloatAsState(c.progress, tween(600), label = "xp")
     Card(
@@ -261,6 +279,11 @@ private fun CharacterCard(c: CharacterState, streak: Int, done: Int, total: Int)
                     s.outfitName(c.outfit.name),
                     style = MaterialTheme.typography.labelSmall, color = Violet, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    RewardPill("🛡 $shields", Sky, onShield)
+                    RewardPill(s.titleLabel(titleId), Gold, onTitle, Modifier.weight(1f, fill = false))
+                }
             }
         }
     }

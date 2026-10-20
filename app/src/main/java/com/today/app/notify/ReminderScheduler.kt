@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import com.today.app.data.AppSettings
+import com.today.app.data.Streaks
 import com.today.app.data.TodayStorage
 import com.today.app.i18n.strings
 import java.time.LocalDate
@@ -74,8 +75,19 @@ class ReminderReceiver : BroadcastReceiver() {
                 ReminderScheduler.ACTION_QUEST -> if (settings.questReminder) {
                     Notifier.post(context, s, Notifier.ID_QUEST, Notifier.CHANNEL_REMINDERS, s.questReminderTitle, s.questReminderBody(remaining))
                 }
-                ReminderScheduler.ACTION_STREAK -> if (settings.streakReminder) {
-                    Notifier.post(context, s, Notifier.ID_STREAK, Notifier.CHANNEL_REMINDERS, s.streakReminderTitle, s.streakReminderBody(remaining))
+                // A shielded day is already safe: no alert.
+                ReminderScheduler.ACTION_STREAK -> if (settings.streakReminder && today !in saved.rewards.shieldedDates) {
+                    val shields = saved.rewards.shields
+                    // Only offer the shield when there is a streak (ending yesterday) for it to keep.
+                    val streak = Streaks.endingAt(
+                        LocalDate.now().minusDays(1),
+                        { d -> saved.questsByDate[d.toString()].let { !it.isNullOrEmpty() && it.all { q -> q.done } } },
+                        { d -> d.toString() in saved.rewards.shieldedDates },
+                    )
+                    Notifier.post(
+                        context, s, Notifier.ID_STREAK, Notifier.CHANNEL_REMINDERS, s.streakReminderTitle, s.streakReminderBody(remaining),
+                        actions = if (shields > 0 && streak > 0) listOf(Notifier.useShieldAction(context, s, shields)) else emptyList(),
+                    )
                 }
             }
         }

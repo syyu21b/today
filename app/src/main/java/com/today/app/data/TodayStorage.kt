@@ -15,6 +15,7 @@ data class SavedState(
     val friends: List<Friend>,
     /** friendId -> messages; null when nothing was saved (history off or first run). */
     val chats: Map<String, List<ChatMessage>>?,
+    val rewards: RewardState = RewardState(),
 )
 
 /** Tiny SharedPreferences + JSON persistence (enough for a 2–3 day project, no Room needed). */
@@ -63,6 +64,7 @@ class TodayStorage(context: Context) {
             settings = loadSettings(),
             friends = friends,
             chats = chats,
+            rewards = loadRewards(),
         )
     }
 
@@ -76,6 +78,7 @@ class TodayStorage(context: Context) {
             putString("questsByDate", byDate.toString())
             putString("settings", settingsToJson(s.settings).toString())
             putString("friends", JSONArray().apply { s.friends.forEach { put(friendToJson(it)) } }.toString())
+            putString("rewards", rewardsToJson(s.rewards).toString())
             if (s.chats == null) {
                 remove("chats")
             } else {
@@ -103,6 +106,7 @@ class TodayStorage(context: Context) {
         .put("character", JSONObject().put("level", s.character.level).put("xp", s.character.xp).put("outfit", outfitToJson(s.character.outfit)))
         .put("questsByDate", JSONObject().apply { s.questsByDate.toSortedMap().forEach { (d, q) -> put(d, questsToJson(q)) } })
         .put("friends", JSONArray().apply { s.friends.forEach { put(friendToJson(it)) } })
+        .put("rewards", rewardsToJson(s.rewards))
         .put("settings", settingsToJson(s.settings))
         .toString(2)
 
@@ -166,6 +170,37 @@ class TodayStorage(context: Context) {
     private inline fun <reified E : Enum<E>> enumOr(name: String?, default: E): E =
         runCatching { enumValueOf<E>(name ?: "") }.getOrDefault(default)
 
+    // ------------------------------------------------------------------ rewards
+
+    /** Missing / broken data -> defaults; unknown ids from other versions are dropped. */
+    private fun loadRewards(): RewardState {
+        val d = RewardState()
+        val j = prefs.getString("rewards", null)?.let { runCatching { JSONObject(it) }.getOrNull() } ?: return d
+        fun strings(key: String): Set<String> =
+            j.optJSONArray(key)?.let { arr -> List(arr.length()) { arr.optString(it) }.toSet() }.orEmpty()
+        val titles = strings("titles").filter { Titles.byId(it) != null }.toSet() + Titles.DEFAULT
+        return RewardState(
+            rewardedLevel = j.optInt("rewardedLevel", d.rewardedLevel).coerceAtLeast(1),
+            shields = j.optInt("shields", 0).coerceAtLeast(0),
+            shieldedDates = strings("shieldedDates").filter { runCatching { java.time.LocalDate.parse(it) }.isSuccess }.toSet(),
+            boxes = j.optInt("boxes", 0).coerceAtLeast(0),
+            stardust = j.optInt("stardust", 0).coerceAtLeast(0),
+            items = strings("items").filter { Accessories.byId(it) != null }.toSet(),
+            titles = titles,
+            equippedTitle = j.optString("equippedTitle", Titles.DEFAULT).takeIf { it in titles } ?: Titles.DEFAULT,
+        )
+    }
+
+    private fun rewardsToJson(r: RewardState) = JSONObject()
+        .put("rewardedLevel", r.rewardedLevel)
+        .put("shields", r.shields)
+        .put("shieldedDates", JSONArray(r.shieldedDates.sorted()))
+        .put("boxes", r.boxes)
+        .put("stardust", r.stardust)
+        .put("items", JSONArray(r.items.sorted()))
+        .put("titles", JSONArray(r.titles.sorted()))
+        .put("equippedTitle", r.equippedTitle)
+
     // ------------------------------------------------------------------ quests
 
     private fun questsToJson(quests: List<Quest>) = JSONArray().apply {
@@ -224,11 +259,15 @@ class TodayStorage(context: Context) {
 
     // ------------------------------------------------------------------ outfit
 
+    /** Only a known accessory of the right slot survives loading. */
+    private fun accessoryOr(id: String, slot: AccessorySlot) = if (Accessories.byId(id)?.slot == slot) id else ""
+
     private fun outfitToJson(o: Outfit) = JSONObject()
         .put("name", o.name).put("hair", o.hair).put("shirt", o.shirt)
         .put("accent", o.accent).put("pants", o.pants).put("shoes", o.shoes)
         .put("skin", o.skin).put("stripe", o.stripe).put("striped", o.striped)
         .put("shortSleeve", o.shortSleeve).put("shorts", o.shorts).put("longHair", o.longHair)
+        .put("head", o.head).put("face", o.face).put("back", o.back)
 
     private fun outfitFromJson(j: JSONObject): Outfit {
         val accent = j.getInt("accent")
@@ -245,6 +284,9 @@ class TodayStorage(context: Context) {
             shortSleeve = j.optBoolean("shortSleeve", false),
             shorts = j.optBoolean("shorts", false),
             longHair = j.optBoolean("longHair", false),
+            head = accessoryOr(j.optString("head"), AccessorySlot.HEAD),
+            face = accessoryOr(j.optString("face"), AccessorySlot.FACE),
+            back = accessoryOr(j.optString("back"), AccessorySlot.BACK),
         )
     }
 }

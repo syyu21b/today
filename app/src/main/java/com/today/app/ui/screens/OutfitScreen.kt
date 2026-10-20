@@ -225,6 +225,9 @@ fun OutfitScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
         // ---- Manual fine-tune ----
         FineTuneCard(outfit = outfit, extracted = vm.styleResult?.regions?.map { it.color }.orEmpty(), onChange = vm::editOutfit)
 
+        // ---- Accessories (level / reward-box unlocks) ----
+        AccessoriesCard(vm)
+
         // ---- Presets ----
         Text(s.presetsTitle, style = MaterialTheme.typography.titleLarge)
         Outfits.presets.chunked(3).forEach { row ->
@@ -232,7 +235,7 @@ fun OutfitScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
                 row.forEach { preset ->
                     PresetCard(
                         outfit = preset,
-                        selected = outfit == preset,
+                        selected = outfit.withoutAccessories() == preset,
                         onClick = { vm.applyOutfit(preset) },
                         modifier = Modifier.weight(1f),
                     )

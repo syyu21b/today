@@ -3,6 +3,7 @@ package com.today.app.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -45,6 +47,7 @@ import com.today.app.i18n.LocalStrings
 import com.today.app.ui.theme.Coral
 import com.today.app.ui.theme.Gold
 import com.today.app.ui.theme.Mint
+import com.today.app.ui.theme.Sky
 import com.today.app.ui.theme.TextMuted
 import com.today.app.ui.theme.Violet
 import java.time.DayOfWeek
@@ -57,6 +60,7 @@ private fun statusColor(s: DayStatus): Color? = when (s) {
     DayStatus.PARTIAL -> Gold
     DayStatus.COMPLETE -> Mint
     DayStatus.MISSED -> Coral
+    DayStatus.SHIELDED -> Sky
 }
 
 /** Days before [date] back to the start of its week (Sunday- or Monday-first). */
@@ -263,8 +267,15 @@ private fun MonthCalendarDialog(
 @Composable
 private fun Legend() {
     val s = LocalStrings.current
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-        listOf(DayStatus.COMPLETE to s.legendComplete, DayStatus.PARTIAL to s.legendPartial, DayStatus.PLANNED to s.legendPlanned, DayStatus.MISSED to s.legendMissed).forEach { (s, label) ->
+    Row(
+        Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        listOf(
+            DayStatus.COMPLETE to s.legendComplete, DayStatus.PARTIAL to s.legendPartial, DayStatus.PLANNED to s.legendPlanned,
+            DayStatus.MISSED to s.legendMissed, DayStatus.SHIELDED to s.legendShielded,
+        ).forEach { (s, label) ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(6.dp).clip(CircleShape).background(statusColor(s)!!))
                 Spacer(Modifier.width(4.dp))

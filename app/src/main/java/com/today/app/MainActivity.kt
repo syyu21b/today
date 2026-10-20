@@ -95,8 +95,14 @@ class MainActivity : ComponentActivity() {
         handleNotificationIntent(intent)
     }
 
-    /** Tapping a message notification opens that chat. */
+    /** Tapping a message notification opens that chat; the streak alert's button spends a shield. */
     private fun handleNotificationIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra(Notifier.EXTRA_USE_SHIELD, false) == true) {
+            intent.removeExtra(Notifier.EXTRA_USE_SHIELD)
+            // Our notification targets MainActivity itself; other apps can only reach the exported
+            // launcher aliases, so they can't spend shields.
+            if (intent.component?.className == MainActivity::class.java.name) vm.useShieldFromNotification()
+        }
         val friendId = intent?.getStringExtra(Notifier.EXTRA_OPEN_CHAT) ?: return
         intent.removeExtra(Notifier.EXTRA_OPEN_CHAT)
         vm.openChatFromNotification(friendId)

@@ -26,7 +26,7 @@ object AppIconManager {
 
     /** Which preset icon best represents [outfit]. */
     fun iconKeyFor(outfit: Outfit): String {
-        Outfits.presets.firstOrNull { it == outfit }?.let { return it.name }
+        Outfits.presets.firstOrNull { it == outfit.withoutAccessories() }?.let { return it.name }
         // What the icon shows: hair (and its length), skin, top, collar.
         return Outfits.presets.minBy { p ->
             StyleAnalyzer.colorDist(p.hair, outfit.hair) * 1.5 +

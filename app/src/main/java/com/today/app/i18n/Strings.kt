@@ -1,13 +1,19 @@
 package com.today.app.i18n
 
 import androidx.compose.runtime.staticCompositionLocalOf
+import com.today.app.data.Accessories
+import com.today.app.data.Accessory
 import com.today.app.data.AppLanguage
 import com.today.app.data.BodyPart
+import com.today.app.data.BoxReward
 import com.today.app.data.ChatMessage
 import com.today.app.data.Friend
 import com.today.app.data.Outfits
+import com.today.app.data.RewardEngine
 import com.today.app.data.StyleNote
 import com.today.app.data.StyleResult
+import com.today.app.data.TitleDef
+import com.today.app.data.Titles
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
@@ -315,6 +321,61 @@ interface Strings {
     val permGranted: String
     val permDenied: String
     val licenses: String
+
+    // ---- rewards ----
+    val shieldName: String
+    val shieldDialogBody: String
+    fun shieldCount(n: Int): String
+    val useShieldToday: String
+    val useShieldYesterday: String
+    fun msgShieldUsed(streak: Int): String
+    val msgNoShield: String
+    val msgNoStreakToProtect: String
+    val errShieldNotAllowed: String
+    fun rescueBanner(streak: Int): String
+    val rescueButton: String
+    fun useShieldAction(shields: Int): String
+    fun stardustLine(n: Int, price: Int): String
+    val exchange: String
+    val msgExchanged: String
+    fun msgNotEnoughStardust(price: Int): String
+    val legendShielded: String
+    fun boxBanner(n: Int): String
+    val openBox: String
+    val boxTitle: String
+    val boxOpening: String
+    fun boxRewardText(r: BoxReward): String
+    fun openAnother(n: Int): String
+    val levelRewards: String
+    fun newUnlock(acc: Accessory): String
+    fun nextUnlock(acc: Accessory): String
+    fun titleName(id: String): String
+    fun titleHow(id: String): String
+    val titlePickerTitle: String
+    val titleEquipped: String
+    fun msgNewTitle(t: TitleDef): String
+    val accessoriesTitle: String
+    val accessoriesHint: String
+    fun accessoryName(id: String): String
+    fun accessoryLock(acc: Accessory): String
+    fun msgAccessoryLocked(acc: Accessory): String
+    val rewardsTitle: String
+    val statShields: String
+    val statBoxes: String
+    val statStardust: String
+    val statTitles: String
+    val statItems: String
+    fun boxesLeft(n: Int): String
+    fun stardustProgress(n: Int, price: Int): String
+    fun titleCollection(owned: Int, total: Int): String
+    val shieldedDaysTitle: String
+    val noShieldedDays: String
+
+    /** "🧢 Cap" */
+    fun accessoryLabel(id: String): String = "${Accessories.byId(id)?.emoji.orEmpty()} ${accessoryName(id)}".trim()
+
+    /** "🔥 Getting Steady" */
+    fun titleLabel(id: String): String = "${Titles.byId(id)?.emoji.orEmpty()} ${titleName(id)}".trim()
 
     // ---- derived helpers (shared by both languages) ----
     fun outfitName(raw: String): String {
@@ -649,6 +710,101 @@ object KoStrings : Strings {
     override val permGranted = "허용됨"
     override val permDenied = "허용 안 됨"
     override val licenses = "오픈소스 라이선스"
+
+    // ---- rewards ----
+    override val shieldName = "스트릭 보호권"
+    override val shieldDialogBody =
+        "레벨업할 때마다 1장씩 받아요. 퀘스트를 다 못 끝낸 날(오늘 또는 어제)에 쓰면 스트릭이 끊기지 않아요. " +
+            "보호한 날은 일수에 더해지지 않고 스트릭을 이어주기만 해요."
+    override fun shieldCount(n: Int) = "보유 ${n}장"
+    override val useShieldToday = "오늘 지키기"
+    override val useShieldYesterday = "어제 복구"
+    override fun msgShieldUsed(streak: Int) = "🛡 보호권 사용! 🔥 스트릭 ${streak}일 유지"
+    override val msgNoShield = "보호권이 없어요. 레벨업하거나 별조각으로 교환해요"
+    override val msgNoStreakToProtect = "지킬 스트릭이 없어요. 하루를 완료해서 스트릭을 시작해요"
+    override val errShieldNotAllowed = "보호권은 아직 완료하지 못한 오늘이나 어제에만 쓸 수 있어요"
+    override fun rescueBanner(streak: Int) = "어제 퀘스트를 놓쳤어요! 보호권을 쓰면 🔥 ${streak}일 스트릭이 이어져요"
+    override val rescueButton = "복구"
+    override fun useShieldAction(shields: Int) = "🛡 보호권 사용 (${shields}장)"
+    override fun stardustLine(n: Int, price: Int) = "✨ 별조각 $n / $price · 모으면 보호권 1장과 교환"
+    override val exchange = "교환"
+    override val msgExchanged = "✨ 별조각 → 🛡 보호권 1장 교환 완료!"
+    override fun msgNotEnoughStardust(price: Int) = "별조각이 ${price}개 필요해요"
+    override val legendShielded = "보호"
+    override fun boxBanner(n: Int) = "보상 상자 ${n}개가 도착했어요"
+    override val openBox = "열기"
+    override val boxTitle = "🎁 보상 상자"
+    override val boxOpening = "두근두근… 무엇이 나올까?"
+    override fun boxRewardText(r: BoxReward) = when (r) {
+        BoxReward.Shield -> "🛡 스트릭 보호권 +1"
+        is BoxReward.Item ->
+            if (r.duplicate) "이미 가진 ${accessoryLabel(r.id)} → ✨ 별조각 +${RewardEngine.DUPLICATE_STARDUST}"
+            else "희귀 아이템 ${accessoryLabel(r.id)} 획득! 옷장에서 착용해 보세요"
+        is BoxReward.Title ->
+            if (r.duplicate) "이미 가진 칭호 「${titleName(r.id)}」 → ✨ 별조각 +${RewardEngine.DUPLICATE_STARDUST}"
+            else "희귀 칭호 「${titleLabel(r.id)}」 획득!"
+        is BoxReward.Stardust -> "✨ 별조각 +${r.amount}"
+    }
+    override fun openAnother(n: Int) = "하나 더 열기 ($n)"
+    override val levelRewards = "🛡 보호권 +1 · 🎁 보상 상자 +1"
+    override fun newUnlock(acc: Accessory) = "🔓 새 아이템 해금: ${accessoryLabel(acc.id)}"
+    override fun nextUnlock(acc: Accessory) = "다음 보상: LV ${acc.unlockLevel} ${accessoryLabel(acc.id)}"
+    override fun titleName(id: String) = when (id) {
+        "rookie" -> "새싹 모험가"
+        "first_quest" -> "첫 발걸음"
+        "streak_3" -> "꾸준함의 시작"
+        "streak_7" -> "일주일의 전사"
+        "streak_30" -> "30일의 전설"
+        "level_5" -> "성장하는 모험가"
+        "level_10" -> "베테랑"
+        "quests_50" -> "퀘스트 수집가"
+        "perfect_day" -> "완벽주의자"
+        "lucky" -> "행운아"
+        "starlight" -> "별빛 수집가"
+        else -> id
+    }
+    override fun titleHow(id: String) = when (id) {
+        "rookie" -> "기본 칭호"
+        "first_quest" -> "퀘스트 1개 완료"
+        "streak_3" -> "3일 연속 달성"
+        "streak_7" -> "7일 연속 달성"
+        "streak_30" -> "30일 연속 달성"
+        "level_5" -> "LV 5 달성"
+        "level_10" -> "LV 10 달성"
+        "quests_50" -> "퀘스트 50개 완료"
+        "perfect_day" -> "하루 퀘스트 10개 모두 완료"
+        else -> "보상 상자 전용"
+    }
+    override val titlePickerTitle = "칭호 선택"
+    override val titleEquipped = "착용 중"
+    override fun msgNewTitle(t: TitleDef) = "🏅 새 칭호 획득: ${titleLabel(t.id)}"
+    override val accessoriesTitle = "액세서리"
+    override val accessoriesHint = "레벨업으로 해금하고 보상 상자에서 희귀 아이템을 모아요. 탭해서 착용/해제"
+    override fun accessoryName(id: String) = when (id) {
+        "cap" -> "캡모자"
+        "glasses" -> "동그란 안경"
+        "headphones" -> "헤드폰"
+        "cape" -> "영웅 망토"
+        "crown" -> "왕관"
+        "sunglasses" -> "선글라스"
+        "catears" -> "고양이 귀"
+        "halo" -> "천사 링"
+        else -> id
+    }
+    override fun accessoryLock(acc: Accessory) = acc.unlockLevel?.let { "LV $it" } ?: "🎁 상자"
+    override val rewardsTitle = "내 보상"
+    override val statShields = "보호권"
+    override val statBoxes = "상자"
+    override val statStardust = "별조각"
+    override val statTitles = "칭호"
+    override val statItems = "아이템"
+    override fun boxesLeft(n: Int) = if (n == 0) "레벨업하면 1개씩 받아요" else "열지 않은 상자 ${n}개"
+    override fun titleCollection(owned: Int, total: Int) = "칭호 도감 $owned / $total"
+    override fun stardustProgress(n: Int, price: Int) = "$n / $price · ${price}개 모으면 보호권 1장과 교환"
+    override val shieldedDaysTitle = "보호권으로 지킨 날"
+    override val noShieldedDays = "아직 보호권을 쓴 날이 없어요"
+    override fun msgAccessoryLocked(acc: Accessory) =
+        acc.unlockLevel?.let { "🔒 ${accessoryName(acc.id)}: LV ${it}에 해금돼요" } ?: "🔒 ${accessoryName(acc.id)}: 보상 상자에서 얻을 수 있어요"
 }
 
 object EnStrings : Strings {
@@ -965,6 +1121,105 @@ object EnStrings : Strings {
     override val permGranted = "Allowed"
     override val permDenied = "Not allowed"
     override val licenses = "Open-source licenses"
+
+    // ---- rewards ----
+    override val shieldName = "Streak shield"
+    override val shieldDialogBody =
+        "You get one every level-up. Use it on a day you couldn't finish (today or yesterday) and your streak won't break. " +
+            "A shielded day doesn't add to the count, it just keeps the streak going."
+    override fun shieldCount(n: Int) = "You have $n"
+    override val useShieldToday = "Protect today"
+    override val useShieldYesterday = "Save yesterday"
+    override fun msgShieldUsed(streak: Int) = "🛡 Shield used! 🔥 Streak kept: ${days(streak)}"
+    override val msgNoShield = "No shields left. Level up or trade in stardust"
+    override val msgNoStreakToProtect = "No streak to protect yet. Finish a day to start one"
+    override val errShieldNotAllowed = "Shields only work on today or yesterday, if it isn't complete"
+    override fun rescueBanner(streak: Int) = "You missed yesterday! A shield keeps your 🔥 ${days(streak)} streak alive"
+    override val rescueButton = "Save"
+    override fun useShieldAction(shields: Int) = "🛡 Use shield ($shields)"
+    override fun stardustLine(n: Int, price: Int) = "✨ Stardust $n / $price · trade for 1 shield"
+    override val exchange = "Trade"
+    override val msgExchanged = "✨ Stardust → 🛡 1 shield!"
+    override fun msgNotEnoughStardust(price: Int) = "You need $price stardust"
+    override val legendShielded = "Shielded"
+    override fun boxBanner(n: Int) = if (n == 1) "A reward box arrived" else "$n reward boxes arrived"
+    override val openBox = "Open"
+    override val boxTitle = "🎁 Reward box"
+    override val boxOpening = "What's inside…?"
+    override fun boxRewardText(r: BoxReward) = when (r) {
+        BoxReward.Shield -> "🛡 Streak shield +1"
+        is BoxReward.Item ->
+            if (r.duplicate) "Already have ${accessoryLabel(r.id)} → ✨ Stardust +${RewardEngine.DUPLICATE_STARDUST}"
+            else "Rare item: ${accessoryLabel(r.id)}! Try it on in the wardrobe"
+        is BoxReward.Title ->
+            if (r.duplicate) "Already have the ${titleName(r.id)} title → ✨ Stardust +${RewardEngine.DUPLICATE_STARDUST}"
+            else "Rare title: ${titleLabel(r.id)}!"
+        is BoxReward.Stardust -> "✨ Stardust +${r.amount}"
+    }
+    override fun openAnother(n: Int) = "Open another ($n)"
+    override val levelRewards = "🛡 Shield +1 · 🎁 Reward box +1"
+    override fun newUnlock(acc: Accessory) = "🔓 Unlocked: ${accessoryLabel(acc.id)}"
+    override fun nextUnlock(acc: Accessory) = "Next reward: LV ${acc.unlockLevel} ${accessoryLabel(acc.id)}"
+    override fun titleName(id: String) = when (id) {
+        "rookie" -> "Sprout Adventurer"
+        "first_quest" -> "First Steps"
+        "streak_3" -> "Getting Steady"
+        "streak_7" -> "Weeklong Warrior"
+        "streak_30" -> "30-Day Legend"
+        "level_5" -> "Rising Adventurer"
+        "level_10" -> "Veteran"
+        "quests_50" -> "Quest Collector"
+        "perfect_day" -> "Perfectionist"
+        "lucky" -> "Lucky One"
+        "starlight" -> "Starlight Collector"
+        else -> id
+    }
+    override fun titleHow(id: String) = when (id) {
+        "rookie" -> "Starting title"
+        "first_quest" -> "Complete 1 quest"
+        "streak_3" -> "3-day streak"
+        "streak_7" -> "7-day streak"
+        "streak_30" -> "30-day streak"
+        "level_5" -> "Reach LV 5"
+        "level_10" -> "Reach LV 10"
+        "quests_50" -> "Complete 50 quests"
+        "perfect_day" -> "Finish all 10 quests in a day"
+        else -> "Reward box only"
+    }
+    override val titlePickerTitle = "Choose a title"
+    override val titleEquipped = "Equipped"
+    override fun msgNewTitle(t: TitleDef) = "🏅 New title: ${titleLabel(t.id)}"
+    override val accessoriesTitle = "Accessories"
+    override val accessoriesHint = "Unlock them by leveling up and collect rare ones from reward boxes. Tap to wear / remove"
+    override fun accessoryName(id: String) = when (id) {
+        "cap" -> "Cap"
+        "glasses" -> "Round Glasses"
+        "headphones" -> "Headphones"
+        "cape" -> "Hero Cape"
+        "crown" -> "Crown"
+        "sunglasses" -> "Sunglasses"
+        "catears" -> "Cat Ears"
+        "halo" -> "Halo"
+        else -> id
+    }
+    override fun accessoryLock(acc: Accessory) = acc.unlockLevel?.let { "LV $it" } ?: "🎁 Box"
+    override val rewardsTitle = "My rewards"
+    override val statShields = "Shields"
+    override val statBoxes = "Boxes"
+    override val statStardust = "Stardust"
+    override val statTitles = "Titles"
+    override val statItems = "Items"
+    override fun boxesLeft(n: Int) = when (n) {
+        0 -> "You get one every level-up"
+        1 -> "1 unopened box"
+        else -> "$n unopened boxes"
+    }
+    override fun titleCollection(owned: Int, total: Int) = "Title collection $owned / $total"
+    override fun stardustProgress(n: Int, price: Int) = "$n / $price · trade $price for 1 shield"
+    override val shieldedDaysTitle = "Days saved by a shield"
+    override val noShieldedDays = "No shields used yet"
+    override fun msgAccessoryLocked(acc: Accessory) =
+        acc.unlockLevel?.let { "🔒 ${accessoryName(acc.id)} unlocks at LV $it" } ?: "🔒 ${accessoryName(acc.id)} comes from reward boxes"
 
     private fun quests(n: Int) = if (n == 1) "quest" else "quests"
 }

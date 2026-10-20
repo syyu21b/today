@@ -19,6 +19,8 @@ object Notifier {
     const val CHANNEL_REMINDERS = "reminders"
     const val CHANNEL_MESSAGES = "messages"
     const val EXTRA_OPEN_CHAT = "com.today.app.OPEN_CHAT"
+    const val EXTRA_USE_SHIELD = "com.today.app.USE_SHIELD"
+    private const val REQUEST_USE_SHIELD = 5001
 
     const val ID_QUEST = 1001
     const val ID_STREAK = 1002
@@ -56,6 +58,7 @@ object Notifier {
         title: String,
         text: String,
         openChatFriendId: String? = null,
+        actions: List<NotificationCompat.Action> = emptyList(),
     ) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -79,8 +82,19 @@ object Notifier {
             .setContentIntent(content)
             .setAutoCancel(true)
             .setCategory(if (channel == CHANNEL_MESSAGES) NotificationCompat.CATEGORY_MESSAGE else NotificationCompat.CATEGORY_REMINDER)
+            .apply { actions.forEach { addAction(it) } }
             .build()
         nm.notify(id, notification)
+    }
+
+    /** Streak alert button: opens the app, which spends a shield on today (the app owns the saved state). */
+    fun useShieldAction(context: Context, s: Strings, shields: Int): NotificationCompat.Action {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra(EXTRA_USE_SHIELD, true)
+        }
+        val pi = PendingIntent.getActivity(context, REQUEST_USE_SHIELD, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        return NotificationCompat.Action(R.drawable.ic_notification, s.useShieldAction(shields), pi)
     }
 
     fun cancel(context: Context, id: Int) = NotificationManagerCompat.from(context).cancel(id)

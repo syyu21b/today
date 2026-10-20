@@ -101,6 +101,7 @@ fun SettingsScreen(
     ) { current ->
         when (current) {
             SettingsPage.HOME -> SettingsHome(vm, onOpenOutfit, onNavigate = { page = it })
+            SettingsPage.REWARDS -> RewardsPage(vm, back)
             SettingsPage.LANGUAGE -> LanguagePage(vm, back)
             SettingsPage.NOTIFICATIONS -> NotificationsPage(vm, back)
             SettingsPage.FRIENDS -> FriendsPage(vm, back, onOpenChat)
@@ -127,7 +128,7 @@ private fun SettingsHome(vm: TodayViewModel, onOpenOutfit: () -> Unit, onNavigat
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
         Text(s.settingsTitle, style = MaterialTheme.typography.headlineMedium)
-        ProfileCard(vm, onOpenOutfit)
+        ProfileCard(vm, onOpenOutfit, onOpenRewards = { onNavigate(SettingsPage.REWARDS) })
 
         SettingsGroup(s.groupGeneral) {
             SettingsRow(
@@ -175,7 +176,7 @@ private fun SettingsHome(vm: TodayViewModel, onOpenOutfit: () -> Unit, onNavigat
 }
 
 @Composable
-private fun ProfileCard(vm: TodayViewModel, onOpenOutfit: () -> Unit) {
+private fun ProfileCard(vm: TodayViewModel, onOpenOutfit: () -> Unit, onOpenRewards: () -> Unit) {
     val s = LocalStrings.current
     val c = vm.character
     var editingName by remember { mutableStateOf(false) }
@@ -208,6 +209,7 @@ private fun ProfileCard(vm: TodayViewModel, onOpenOutfit: () -> Unit) {
                     Spacer(Modifier.width(6.dp))
                     Icon(Icons.Filled.Edit, contentDescription = s.editNickname, tint = TextMuted, modifier = Modifier.size(16.dp))
                 }
+                Text(s.titleLabel(vm.rewards.equippedTitle), color = Gold, fontSize = 12.sp)
                 Text(s.outfitName(c.outfit.name), color = Violet, fontFamily = PixelFont, fontSize = 12.sp)
                 Spacer(Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -223,6 +225,8 @@ private fun ProfileCard(vm: TodayViewModel, onOpenOutfit: () -> Unit) {
             Stat("✅", "${vm.totalCompleted}", s.statCompleted)
             Stat("🗓️", s.days(vm.recordedDays), s.statDays)
         }
+        Spacer(Modifier.height(12.dp))
+        RewardStrip(vm, onOpenRewards)
         Spacer(Modifier.height(12.dp))
         FilledTonalButton(onClick = onOpenOutfit, modifier = Modifier.fillMaxWidth()) {
             Icon(Icons.Filled.Checkroom, null, Modifier.size(18.dp))
