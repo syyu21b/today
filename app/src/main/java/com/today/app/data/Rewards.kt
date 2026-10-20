@@ -157,6 +157,17 @@ object Streaks {
         return endingAt(start, complete, shielded)
     }
 
+    // From saved data (widget / reminders, no ViewModel): shielded and planned rest days bridge.
+    private fun completeIn(byDate: Map<String, List<Quest>>) = { d: LocalDate -> byDate[d.toString()].orEmpty().completeOn(d) }
+    private fun bridgedIn(byDate: Map<String, List<Quest>>, shieldedDates: Set<String>) =
+        { d: LocalDate -> d.toString() in shieldedDates || byDate[d.toString()].orEmpty().isRestDayOn(d) }
+
+    fun currentFor(byDate: Map<String, List<Quest>>, shieldedDates: Set<String>, today: LocalDate): Int =
+        current(today, completeIn(byDate), bridgedIn(byDate, shieldedDates))
+
+    fun endingAtFor(byDate: Map<String, List<Quest>>, shieldedDates: Set<String>, day: LocalDate): Int =
+        endingAt(day, completeIn(byDate), bridgedIn(byDate, shieldedDates))
+
     /** Longest streak ever, from the set of completed days and shielded days. */
     fun best(completeDays: Set<LocalDate>, shieldedDays: Set<LocalDate>): Int {
         val kept = (completeDays + shieldedDays).sorted()

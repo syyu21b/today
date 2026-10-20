@@ -27,6 +27,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.today.app.widget.TodayWidget
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
@@ -250,20 +251,8 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
     /** Today's scheduled quests (what progress, reminders and mood count). */
     val todayActive: List<Quest> get() = questsFor(todayDate).activeOn(todayDate)
 
-    /** The character's face: proud when today is done, gloomy right after a missed day, sleepy before starting. */
-    val mood: Mood
-        get() {
-            val active = todayActive
-            val done = active.count { it.done }
-            val yesterday = todayDate.minusDays(1)
-            val missedYesterday = questsFor(yesterday).activeOn(yesterday).isNotEmpty() && !isComplete(yesterday) && !isShielded(yesterday)
-            return when {
-                active.isNotEmpty() && done == active.size -> Mood.HAPPY
-                done == 0 && missedYesterday -> Mood.SAD
-                done == 0 && active.isNotEmpty() -> Mood.SLEEPY
-                else -> Mood.NORMAL
-            }
-        }
+    /** The character's face (same rule as the widget). */
+    val mood: Mood get() = Moods.of(questsByDate, rewards.shieldedDates, todayDate)
 
     val totalCompleted: Int get() = questsByDate.values.sumOf { list -> list.count { it.done } }
     val totalQuests: Int get() = questsByDate.values.sumOf { it.size }
@@ -925,8 +914,16 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         rewards,
     )
 
+    private var widgetSignature = 0
+
     private fun persist() {
         storage.save(snapshot())
+        // Redraw the home-screen widget only when something it shows changed (chats save often).
+        val signature = listOf(todayDate, questsFor(todayDate), character, rewards.shieldedDates, settings.language).hashCode()
+        if (signature != widgetSignature) {
+            widgetSignature = signature
+            TodayWidget.updateAll(getApplication())
+        }
     }
 
     override fun onCleared() {

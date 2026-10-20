@@ -5,6 +5,7 @@ import androidx.core.content.edit
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.DayOfWeek
+import java.time.LocalDate
 import java.time.LocalTime
 
 /** Saved snapshot of everything that should survive an app restart. */
@@ -18,6 +19,21 @@ data class SavedState(
     val chats: Map<String, List<ChatMessage>>?,
     val rewards: RewardState = RewardState(),
 )
+
+/**
+ * [date]'s quests as the app will show them: the saved list, or - if the app hasn't been opened
+ * that day yet - the list it will carry over (unchecked). Used where there's no ViewModel.
+ */
+fun SavedState.questsOn(date: LocalDate): List<Quest> {
+    val key = date.toString()
+    questsByDate[key]?.let { return it }
+    if (!settings.autoCarryOver) return emptyList()
+    return questsByDate.keys.filter { it < key }.sortedDescending()
+        .firstNotNullOfOrNull { k -> questsByDate[k]?.takeIf { it.isNotEmpty() } }
+        ?.take(MAX_QUESTS_PER_DAY)
+        ?.map { it.copy(done = false) }
+        .orEmpty()
+}
 
 /** Tiny SharedPreferences + JSON persistence (enough for a 2–3 day project, no Room needed). */
 class TodayStorage(context: Context) {

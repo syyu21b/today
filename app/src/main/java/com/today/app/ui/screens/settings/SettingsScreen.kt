@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.TaskAlt
+import androidx.compose.material.icons.filled.Widgets
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -69,6 +70,7 @@ import com.today.app.ui.theme.Mint
 import com.today.app.ui.theme.PixelFont
 import com.today.app.ui.theme.TextMuted
 import com.today.app.ui.theme.Violet
+import com.today.app.widget.TodayWidget
 import java.time.LocalTime
 
 private val Blue = Color(0xFF5AA9FF)
@@ -158,6 +160,11 @@ private fun SettingsHome(vm: TodayViewModel, onOpenOutfit: () -> Unit, onNavigat
             SettingsRow(
                 s.sectionQuests, s.questsSummary(st.autoCarryOver, st.weekStartsMonday), Icons.Filled.TaskAlt, Gold,
                 onClick = { onNavigate(SettingsPage.QUESTS) },
+            )
+            SettingsDivider()
+            SettingsRow(
+                s.rowWidget, s.widgetRowDesc, Icons.Filled.Widgets, Mint,
+                onClick = { if (!TodayWidget.requestPin(context)) vm.showMessage(s.msgWidgetUnsupported) },
             )
         }
         SettingsGroup(s.groupMore) {

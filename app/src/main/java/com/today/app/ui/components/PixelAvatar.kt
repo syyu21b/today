@@ -1,5 +1,6 @@
 package com.today.app.ui.components
 
+import android.graphics.Bitmap
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -14,8 +15,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.graphics.Canvas as GraphicsCanvas
 import com.today.app.data.Mood
 import com.today.app.data.Outfit
 import kotlinx.coroutines.delay
@@ -276,4 +283,21 @@ fun PixelAvatar(outfit: Outfit, modifier: Modifier = Modifier, animateColors: Bo
             blink,
         )
     }
+}
+
+/**
+ * The sprite as a plain bitmap ([pixel] px per sprite pixel), for places without Compose
+ * such as the home-screen widget.
+ */
+fun renderSpriteBitmap(outfit: Outfit, mood: Mood = Mood.NORMAL, pixel: Int = 6): Bitmap {
+    val image = ImageBitmap(SPRITE_W * pixel, SPRITE_H * pixel)
+    CanvasDrawScope().draw(
+        Density(1f),
+        LayoutDirection.Ltr,
+        GraphicsCanvas(image),
+        Size(image.width.toFloat(), image.height.toFloat()),
+    ) {
+        drawPixelSprite(Offset.Zero, pixel.toFloat(), outfit.toSpriteStyle(mood))
+    }
+    return image.asAndroidBitmap()
 }

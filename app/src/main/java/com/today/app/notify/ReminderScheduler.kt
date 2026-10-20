@@ -9,8 +9,8 @@ import android.util.Log
 import com.today.app.data.AppSettings
 import com.today.app.data.Streaks
 import com.today.app.data.activeOn
-import com.today.app.data.completeOn
-import com.today.app.data.isRestDayOn
+import com.today.app.data.questsOn
+import com.today.app.widget.TodayWidget
 import com.today.app.data.TodayStorage
 import com.today.app.i18n.strings
 import java.time.LocalDate
@@ -62,11 +62,7 @@ class ReminderReceiver : BroadcastReceiver() {
         val todayDate = LocalDate.now()
         val today = todayDate.toString()
         // Today's list may not exist yet (app not opened today): use what will be carried over.
-        val todays = saved.questsByDate[today]
-            ?: saved.questsByDate.keys.filter { it < today }.sortedDescending()
-                .firstNotNullOfOrNull { k -> saved.questsByDate[k]?.takeIf { it.isNotEmpty() } }
-                ?.map { it.copy(done = false) }
-                .orEmpty()
+        val todays = saved.questsOn(todayDate)
         // Rest-day quests aren't due today.
         val remaining = todays.activeOn(todayDate).count { !it.done }
         Log.i(
@@ -84,11 +80,7 @@ class ReminderReceiver : BroadcastReceiver() {
                 ReminderScheduler.ACTION_STREAK -> if (settings.streakReminder && today !in saved.rewards.shieldedDates) {
                     val shields = saved.rewards.shields
                     // Only offer the shield when there is a streak (ending yesterday) for it to keep.
-                    val streak = Streaks.endingAt(
-                        todayDate.minusDays(1),
-                        { d -> saved.questsByDate[d.toString()].orEmpty().completeOn(d) },
-                        { d -> d.toString() in saved.rewards.shieldedDates || saved.questsByDate[d.toString()].orEmpty().isRestDayOn(d) },
-                    )
+                    val streak = Streaks.endingAtFor(saved.questsByDate, saved.rewards.shieldedDates, todayDate.minusDays(1))
                     Notifier.post(
                         context, s, Notifier.ID_STREAK, Notifier.CHANNEL_REMINDERS, s.streakReminderTitle, s.streakReminderBody(remaining),
                         actions = if (shields > 0 && streak > 0) listOf(Notifier.useShieldAction(context, s, shields)) else emptyList(),
@@ -104,8 +96,11 @@ class ReminderReceiver : BroadcastReceiver() {
 class RescheduleReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
-            Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED, Intent.ACTION_TIMEZONE_CHANGED ->
+            Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED, Intent.ACTION_TIMEZONE_CHANGED -> {
                 ReminderScheduler.reschedule(context, TodayStorage(context).load().settings)
+                // The widget's "today" (and its midnight alarm) depends on the clock too.
+                TodayWidget.updateAll(context)
+            }
         }
     }
 }

@@ -131,6 +131,24 @@ data class UiMessage(val id: Long, val text: String, val action: String? = null)
 /** The character's face, from how today (and yesterday) went. */
 enum class Mood(val emoji: String) { HAPPY("😄"), NORMAL("🙂"), SLEEPY("😴"), SAD("😢") }
 
+object Moods {
+    /** Proud when today is done, gloomy right after a missed day, sleepy before starting. Shared by the app and the widget. */
+    fun of(byDate: Map<String, List<Quest>>, shieldedDates: Set<String>, today: LocalDate): Mood {
+        val active = byDate[today.toString()].orEmpty().activeOn(today)
+        val done = active.count { it.done }
+        val yesterday = today.minusDays(1)
+        val yList = byDate[yesterday.toString()].orEmpty()
+        val missedYesterday = yList.activeOn(yesterday).isNotEmpty() && !yList.completeOn(yesterday) &&
+            yesterday.toString() !in shieldedDates
+        return when {
+            active.isNotEmpty() && done == active.size -> Mood.HAPPY
+            done == 0 && missedYesterday -> Mood.SAD
+            done == 0 && active.isNotEmpty() -> Mood.SLEEPY
+            else -> Mood.NORMAL
+        }
+    }
+}
+
 enum class FriendSource { DEMO, CONTACT, MANUAL }
 
 data class Friend(

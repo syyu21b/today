@@ -403,6 +403,14 @@ interface Strings {
     // ---- mood ----
     fun moodGreeting(nickname: String, mood: Mood): String
 
+    // ---- widget ----
+    val widgetTodayLabel: String
+    val widgetNoQuests: String
+    val widgetOpen: String
+    val rowWidget: String
+    val widgetRowDesc: String
+    val msgWidgetUnsupported: String
+
     /** "월·수·금", or "매일" for every day. */
     fun repeatLabel(days: Set<DayOfWeek>): String =
         if (days.isEmpty()) repeatEveryDay else DayOfWeek.entries.filter { it in days }.joinToString("·") { weekdayShort(it) }
@@ -881,6 +889,14 @@ object KoStrings : Strings {
         Mood.SLEEPY -> "${nickname}님, 오늘의 첫 퀘스트를 시작해 볼까요?"
         Mood.NORMAL -> greeting(nickname)
     }
+
+    // ---- widget ----
+    override val widgetTodayLabel = "오늘 진행"
+    override val widgetNoQuests = "퀘스트 없음"
+    override val widgetOpen = "열기"
+    override val rowWidget = "홈 화면 위젯"
+    override val widgetRowDesc = "캐릭터와 오늘 진행률을 홈 화면에 한 줄로 두고 바로 열어요"
+    override val msgWidgetUnsupported = "이 런처는 바로 추가를 지원하지 않아요. 홈 화면을 길게 눌러 위젯에서 추가해 주세요"
     override fun msgAccessoryLocked(acc: Accessory) =
         acc.unlockLevel?.let { "🔒 ${accessoryName(acc.id)}: LV ${it}에 해금돼요" } ?: "🔒 ${accessoryName(acc.id)}: 보상 상자에서 얻을 수 있어요"
 }
@@ -1338,6 +1354,14 @@ object EnStrings : Strings {
         Mood.SLEEPY -> "Ready for your first quest, $nickname?"
         Mood.NORMAL -> greeting(nickname)
     }
+
+    // ---- widget ----
+    override val widgetTodayLabel = "Today"
+    override val widgetNoQuests = "No quests"
+    override val widgetOpen = "Open"
+    override val rowWidget = "Home-screen widget"
+    override val widgetRowDesc = "A one-row bar with your character and today's progress that opens the app"
+    override val msgWidgetUnsupported = "This launcher can't add it directly. Long-press the home screen and add it from Widgets"
     override fun msgAccessoryLocked(acc: Accessory) =
         acc.unlockLevel?.let { "🔒 ${accessoryName(acc.id)} unlocks at LV $it" } ?: "🔒 ${accessoryName(acc.id)} comes from reward boxes"
 
