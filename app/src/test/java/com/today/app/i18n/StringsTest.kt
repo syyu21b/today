@@ -56,7 +56,7 @@ class StringsTest {
                 e.statStardust, e.statTitles, e.statItems, e.boxesLeft(0), e.boxesLeft(1), e.boxesLeft(3), e.titleCollection(2, 11), e.stardustProgress(3, 5),
                 e.shieldedDaysTitle, e.noShieldedDays,
                 e.monthDelta(null), e.monthDelta(5), e.monthDelta(-3), e.monthDelta(0), e.dayDetail(date, 2, 5), e.dayDetail(date, 0, 0),
-                e.bestWeekday(java.time.DayOfWeek.TUESDAY, 80), e.statsIntro, e.questRatesEmpty, e.statsTapHint, e.gestureHint,
+                e.bestWeekday(java.time.DayOfWeek.TUESDAY, 80), e.statsIntro, e.questRatesEmpty, e.statsTapHint, e.gestureHint, e.reorder, e.reorderDone, e.reorderHint,
                 e.msgRestored("Run"), e.msgRestDay, e.widgetTodayLabel, e.widgetNoQuests, e.widgetOpen,
                 e.rowWidget, e.widgetRowDesc, e.msgWidgetUnsupported, e.repeatLabel(emptySet()),
                 e.repeatLabel(setOf(java.time.DayOfWeek.MONDAY, java.time.DayOfWeek.FRIDAY)),

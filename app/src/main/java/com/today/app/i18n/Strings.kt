@@ -399,6 +399,9 @@ interface Strings {
     val undo: String
     fun msgRestored(title: String): String
     val gestureHint: String
+    val reorder: String
+    val reorderDone: String
+    val reorderHint: String
 
     // ---- mood ----
     fun moodGreeting(nickname: String, mood: Mood): String
@@ -880,7 +883,10 @@ object KoStrings : Strings {
     override val msgRestDay = "오늘은 쉬는 날로 정한 퀘스트예요"
     override val undo = "실행 취소"
     override fun msgRestored(title: String) = "「$title」 복구했어요"
-    override val gestureHint = "👉 밀어서 완료 · 👈 밀어서 삭제 · 길게 눌러 순서 변경"
+    override val gestureHint = "👉 밀어서 완료 · 👈 밀어서 삭제 · 순서 변경 버튼이나 길게 눌러 이동"
+    override val reorder = "순서 변경"
+    override val reorderDone = "완료"
+    override val reorderHint = "≡ 를 끌어서 순서를 바꾸고, 다 바꿨으면 완료를 눌러요"
 
     // ---- mood ----
     override fun moodGreeting(nickname: String, mood: Mood) = when (mood) {
@@ -1345,7 +1351,10 @@ object EnStrings : Strings {
     override val msgRestDay = "This quest rests today"
     override val undo = "Undo"
     override fun msgRestored(title: String) = "Restored \"$title\""
-    override val gestureHint = "👉 swipe to complete · 👈 swipe to delete · long-press to reorder"
+    override val gestureHint = "👉 swipe to complete · 👈 swipe to delete · Reorder button or long-press to move"
+    override val reorder = "Reorder"
+    override val reorderDone = "Done"
+    override val reorderHint = "Drag ≡ to change the order, then tap Done"
 
     // ---- mood ----
     override fun moodGreeting(nickname: String, mood: Mood) = when (mood) {

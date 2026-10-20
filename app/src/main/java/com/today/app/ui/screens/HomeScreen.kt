@@ -11,9 +11,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,6 +31,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -40,8 +43,10 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
@@ -56,12 +61,15 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -106,6 +114,7 @@ import com.today.app.ui.theme.TextMuted
 import com.today.app.ui.theme.Violet
 import java.time.DayOfWeek
 import java.time.LocalDate
+import kotlinx.coroutines.launch
 
 /** Which quest editor is open: a new quest, or an existing one. */
 private sealed interface Editor {
@@ -124,8 +133,12 @@ fun HomeScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
     // Drag-to-reorder: which row is lifted and how far it has moved since its last swap.
     var draggingId by remember { mutableStateOf<String?>(null) }
     var dragOffset by remember { mutableFloatStateOf(0f) }
-    var rowHeight by remember { mutableIntStateOf(0) }
-    val rowGap = with(LocalDensity.current) { 12.dp.toPx() }
+    val density = LocalDensity.current
+    val rowGap = with(density) { 12.dp.toPx() }
+    val scrollEdge = with(density) { 72.dp.toPx() }
+    val scrollStep = with(density) { 14.dp.toPx() }
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
 
     val date = vm.selectedDate
     val quests = vm.questsFor(date)
@@ -133,8 +146,55 @@ fun HomeScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
     val todayQuests = vm.todayActive
     val clipboard = vm.clipboard
 
+    // "순서 변경" mode: drag handles instead of menus. Leaves when the day changes or can't be reordered.
+    var reorderMode by rememberSaveable { mutableStateOf(false) }
+    val canReorder = editable && quests.size > 1
+    LaunchedEffect(date, canReorder) { if (!canReorder) reorderMode = false }
+
+    /** Moves the lifted row by [dy]; swaps past half a neighbor's height and scrolls near the edges. */
+    fun dragBy(questId: String, dy: Float) {
+        dragOffset += dy
+        val list = vm.questsFor(date)
+        val index = list.indexOfFirst { it.id == questId }
+        if (index < 0) return
+        val visible = listState.layoutInfo.visibleItemsInfo
+        fun heightOf(id: String) = visible.firstOrNull { it.key == id }?.size
+        val own = heightOf(questId) ?: return
+        if (dragOffset > 0 && index < list.lastIndex) {
+            val next = heightOf(list[index + 1].id) ?: own
+            if (dragOffset > next / 2f) {
+                vm.moveQuest(date, index, index + 1)
+                dragOffset -= next + rowGap
+                haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
+            }
+        } else if (dragOffset < 0 && index > 0) {
+            val prev = heightOf(list[index - 1].id) ?: own
+            if (-dragOffset > prev / 2f) {
+                vm.moveQuest(date, index, index - 1)
+                dragOffset += prev + rowGap
+                haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
+            }
+        }
+        // Near the top/bottom of the screen: scroll, and keep the row under the finger.
+        val me = visible.firstOrNull { it.key == questId } ?: return
+        val top = me.offset + dragOffset
+        val layout = listState.layoutInfo
+        val delta = when {
+            top + me.size > layout.viewportEndOffset - scrollEdge -> scrollStep
+            top < layout.viewportStartOffset + scrollEdge -> -scrollStep
+            else -> 0f
+        }
+        if (delta != 0f) {
+            scope.launch {
+                val used = listState.scrollBy(delta)
+                if (draggingId == questId) dragOffset += used
+            }
+        }
+    }
+
     Box(modifier.fillMaxSize()) {
         LazyColumn(
+            state = listState,
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -189,6 +249,9 @@ fun HomeScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
                         else editor = Editor.New
                     },
                     onCopy = { vm.copyDay(date) },
+                    canReorder = canReorder,
+                    reorderMode = reorderMode,
+                    onReorder = { reorderMode = !reorderMode },
                 )
             }
             if (quests.isEmpty()) {
@@ -202,44 +265,27 @@ fun HomeScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
                     editable = editable,
                     checkable = vm.isCheckable(date),
                     dragging = isDragging,
+                    reorderMode = reorderMode,
                     onToggle = { vm.toggleQuest(date, quest.id) },
                     onEdit = { editor = Editor.Existing(quest) },
+                    // Menu and swipe both ask first (the dialog below), then Undo is still offered.
                     onDelete = { pendingDelete = quest },
-                    onSwipeDelete = { vm.deleteQuest(date, quest.id) },
                     onDragStart = {
                         draggingId = quest.id
                         dragOffset = 0f
                     },
-                    onDrag = { dy ->
-                        dragOffset += dy
-                        // Past half a row: swap with the neighbor and keep the finger's position.
-                        val list = vm.questsFor(date)
-                        val index = list.indexOfFirst { it.id == quest.id }
-                        val step = rowHeight + rowGap
-                        if (index >= 0 && step > 0f) {
-                            if (dragOffset > step / 2 && index < list.lastIndex) {
-                                vm.moveQuest(date, index, index + 1)
-                                dragOffset -= step
-                                haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
-                            } else if (dragOffset < -step / 2 && index > 0) {
-                                vm.moveQuest(date, index, index - 1)
-                                dragOffset += step
-                                haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
-                            }
-                        }
-                    },
+                    onDrag = { dy -> dragBy(quest.id, dy) },
                     onDragEnd = {
                         draggingId = null
                         dragOffset = 0f
                         vm.commitOrder()
                     },
-                    onHeight = { rowHeight = it },
                     modifier = if (isDragging) Modifier.graphicsLayer { translationY = dragOffset } else Modifier.animateItem(),
                 )
             }
             item(key = "footer") {
                 Text(
-                    (if (editable && quests.isNotEmpty()) s.gestureHint + "\n" else "") + s.footer(MAX_QUESTS_PER_DAY),
+                    (if (editable && quests.isNotEmpty() && !reorderMode) s.gestureHint + "\n" else "") + s.footer(MAX_QUESTS_PER_DAY),
                     style = MaterialTheme.typography.bodyMedium,
                     color = TextMuted,
                     modifier = Modifier.padding(top = 4.dp, bottom = 24.dp),
@@ -375,7 +421,17 @@ fun PixelProgressBar(progress: Float, segments: Int = 20) {
 }
 
 @Composable
-private fun DayHeader(date: LocalDate, today: LocalDate, count: Int, editable: Boolean, onAdd: () -> Unit, onCopy: () -> Unit) {
+private fun DayHeader(
+    date: LocalDate,
+    today: LocalDate,
+    count: Int,
+    editable: Boolean,
+    onAdd: () -> Unit,
+    onCopy: () -> Unit,
+    canReorder: Boolean,
+    reorderMode: Boolean,
+    onReorder: () -> Unit,
+) {
     val s = LocalStrings.current
     val tag = when {
         date == today -> s.tagToday
@@ -397,7 +453,7 @@ private fun DayHeader(date: LocalDate, today: LocalDate, count: Int, editable: B
             Text("$count / $MAX_QUESTS_PER_DAY", fontFamily = PixelFont, color = if (count >= MAX_QUESTS_PER_DAY) Coral else TextMuted)
         }
         Spacer(Modifier.height(6.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             AssistChip(
                 onClick = onCopy,
                 enabled = count > 0,
@@ -411,9 +467,24 @@ private fun DayHeader(date: LocalDate, today: LocalDate, count: Int, editable: B
                     leadingIcon = { Icon(Icons.Filled.Add, null, Modifier.size(16.dp)) },
                     colors = AssistChipDefaults.assistChipColors(containerColor = Violet.copy(alpha = 0.2f)),
                 )
+                // Right of "Add": toggles reorder mode; reads "Done" while active.
+                AssistChip(
+                    onClick = onReorder,
+                    enabled = canReorder,
+                    label = { Text(if (reorderMode) s.reorderDone else s.reorder) },
+                    leadingIcon = {
+                        Icon(if (reorderMode) Icons.Filled.Check else Icons.Filled.SwapVert, null, Modifier.size(16.dp))
+                    },
+                    colors = AssistChipDefaults.assistChipColors(
+                        containerColor = if (reorderMode) Violet else Color.Transparent,
+                        labelColor = Color.White,
+                        leadingIconContentColor = Color.White,
+                    ),
+                )
             }
         }
         when {
+            reorderMode -> Hint(s.reorderHint)
             date.isBefore(today) -> Hint(s.hintPast)
             date.isAfter(today) -> Hint(s.hintFuture)
         }
@@ -475,14 +546,13 @@ private fun QuestRow(
     editable: Boolean,
     checkable: Boolean,
     dragging: Boolean,
+    reorderMode: Boolean,
     onToggle: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
-    onSwipeDelete: () -> Unit,
     onDragStart: () -> Unit,
     onDrag: (Float) -> Unit,
     onDragEnd: () -> Unit,
-    onHeight: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val s = LocalStrings.current
@@ -491,8 +561,9 @@ private fun QuestRow(
     var menuOpen by remember { mutableStateOf(false) }
     var width by remember { mutableIntStateOf(1) }
     var offsetX by remember { mutableFloatStateOf(0f) }
-    val canComplete = checkable && active // swipe right
-    val canDelete = editable // swipe left
+    // Reorder mode: only the handle moves rows, so taps and swipes are off.
+    val canComplete = checkable && active && !reorderMode // swipe right
+    val canDelete = editable && !reorderMode // swipe left
     // pointerInput outlives recompositions: always call the latest callbacks.
     val latestDragStart by rememberUpdatedState(onDragStart)
     val latestDrag by rememberUpdatedState(onDrag)
@@ -512,7 +583,7 @@ private fun QuestRow(
     Box(
         modifier
             .fillMaxWidth()
-            .onSizeChanged { width = it.width; onHeight(it.height) }
+            .onSizeChanged { width = it.width }
             .zIndex(if (dragging) 1f else 0f)
             .graphicsLayer {
                 if (dragging) {
@@ -543,8 +614,9 @@ private fun QuestRow(
                 .graphicsLayer { translationX = offsetX }
                 .clip(RoundedCornerShape(16.dp))
                 .background(if (dragging) NightSurfaceHigh else bg)
+                .then(if (reorderMode) Modifier.border(1.dp, Violet.copy(alpha = 0.5f), RoundedCornerShape(16.dp)) else Modifier)
                 .then(
-                    if (editable) {
+                    if (editable && !reorderMode) {
                         Modifier.pointerInput(quest.id) {
                             detectDragGesturesAfterLongPress(
                                 onDragStart = {
@@ -580,16 +652,16 @@ private fun QuestRow(
                                 animate(offsetX, 0f) { v, _ -> offsetX = v }
                             }
                             offsetX < -threshold -> {
-                                animate(offsetX, -width.toFloat(), animationSpec = tween(150)) { v, _ -> offsetX = v }
+                                // Don't delete yet: spring back and ask in the confirm dialog.
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onSwipeDelete()
-                                offsetX = 0f
+                                onDelete()
+                                animate(offsetX, 0f) { v, _ -> offsetX = v }
                             }
                             else -> animate(offsetX, 0f) { v, _ -> offsetX = v }
                         }
                     },
                 )
-                .clickable(onClick = toggle)
+                .clickable(enabled = !reorderMode, onClick = toggle)
                 .alpha(if (active) 1f else 0.5f)
                 .padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -622,7 +694,31 @@ private fun QuestRow(
                 }
             }
             Text("+${quest.xp} XP", fontFamily = PixelFont, fontWeight = FontWeight.Bold, color = if (quest.done) Mint else Gold)
-            if (editable) {
+            if (reorderMode) {
+                // Drag handle: moves the row immediately (no long press needed).
+                Icon(
+                    Icons.Filled.DragHandle,
+                    contentDescription = s.reorder,
+                    tint = Violet,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .pointerInput(quest.id) {
+                            detectDragGestures(
+                                onDragStart = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    latestDragStart()
+                                },
+                                onDrag = { change, amount ->
+                                    change.consume()
+                                    latestDrag(amount.y)
+                                },
+                                onDragEnd = { latestDragEnd() },
+                                onDragCancel = { latestDragEnd() },
+                            )
+                        }
+                        .padding(12.dp),
+                )
+            } else if (editable) {
                 Box {
                     IconButton(onClick = { menuOpen = true }) {
                         Icon(Icons.Filled.MoreVert, contentDescription = s.questMenu, tint = TextMuted)
