@@ -16,6 +16,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.lerp
+import com.today.app.data.Mood
 import com.today.app.data.Outfit
 import kotlinx.coroutines.delay
 
@@ -123,6 +124,24 @@ private val LensShine = Color(0xFF7A7AA8)
 private val CapeColor = Color(0xFFB0283A)
 private val CapeShade = Color(0xFF7A1A28)
 
+/** Face overlays per mood, like accessories (' ' keeps the pixel). q = tear. */
+private val MOOD_ART = mapOf(
+    // Mouth corners lifted into a smile.
+    Mood.HAPPY to mapOf(7 to "      m  m      "),
+    // Eyes shut into lines, small mouth.
+    Mood.SLEEPY to mapOf(
+        6 to "     ee  ee     ",
+        8 to "       ms       ",
+    ),
+    // Frown (corners down) and a tear.
+    Mood.SAD to mapOf(
+        7 to "     q mm       ",
+        8 to "      mssm      ",
+    ),
+)
+
+private val Tear = Color(0xFF6EC8FF)
+
 const val SPRITE_W = 16
 const val SPRITE_H = 24
 
@@ -146,18 +165,22 @@ data class SpriteStyle(
     val longHair: Boolean,
     /** Accessory ids, drawn in this order (back first). */
     val accessories: List<String> = emptyList(),
+    val mood: Mood = Mood.NORMAL,
 )
 
-fun Outfit.toSpriteStyle() = SpriteStyle(
+fun Outfit.toSpriteStyle(mood: Mood = Mood.NORMAL) = SpriteStyle(
     Color(hair), Color(skin), Color(shirt), Color(stripe), Color(accent), Color(pants), Color(shoes),
     striped, shortSleeve, shorts, longHair,
     listOf(back, head, face).filter { it.isNotEmpty() },
+    mood,
 )
 
 /** Which sprite code ends up at (x, y) once the garment options are applied. */
 private fun spriteCode(x: Int, y: Int, style: SpriteStyle, blink: Boolean): Char {
     var ch = SPRITE[y][x]
     if (style.longHair) LONG_HAIR[y]?.get(x)?.takeIf { it != ' ' }?.let { ch = it }
+    // Face before accessories, so sunglasses still cover the eyes.
+    MOOD_ART[style.mood]?.get(y)?.getOrNull(x)?.takeIf { it != ' ' }?.let { ch = it }
     for (id in style.accessories) {
         val art = ACCESSORY_ART[id] ?: continue
         val c = art.rows[y]?.getOrNull(x)?.takeIf { it != ' ' && it != '.' } ?: continue
@@ -215,6 +238,7 @@ fun DrawScope.drawPixelSprite(topLeft: Offset, px: Float, style: SpriteStyle, bl
             'Z' -> LensShine
             'v' -> CapeColor
             'V' -> CapeShade
+            'q' -> Tear
             else -> null
         } ?: continue
         drawRect(color, Offset(topLeft.x + x * px, topLeft.y + y * px), cell)
@@ -223,8 +247,8 @@ fun DrawScope.drawPixelSprite(topLeft: Offset, px: Float, style: SpriteStyle, bl
 
 /** Stand-alone avatar with smooth color transitions and idle blinking. */
 @Composable
-fun PixelAvatar(outfit: Outfit, modifier: Modifier = Modifier, animateColors: Boolean = true) {
-    val target = outfit.toSpriteStyle()
+fun PixelAvatar(outfit: Outfit, modifier: Modifier = Modifier, animateColors: Boolean = true, mood: Mood = Mood.NORMAL) {
+    val target = outfit.toSpriteStyle(mood)
     val spec = tween<Color>(durationMillis = if (animateColors) 700 else 0)
     val hair by animateColorAsState(target.hair, spec, label = "hair")
     val skin by animateColorAsState(target.skin, spec, label = "skin")

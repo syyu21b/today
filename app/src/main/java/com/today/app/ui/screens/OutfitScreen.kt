@@ -76,6 +76,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import androidx.core.net.toUri
+import com.today.app.data.Mood
 import com.today.app.data.Outfit
 import com.today.app.data.Outfits
 import com.today.app.data.StyleResult
@@ -183,7 +184,7 @@ fun OutfitScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
                     .clip(CircleShape)
                     .background(Color.Black.copy(alpha = 0.35f)),
             )
-            FloatingAvatar(outfit)
+            FloatingAvatar(outfit, vm.mood)
             Text(
                 s.outfitName(outfit.name),
                 fontFamily = PixelFont, color = Gold,
@@ -378,10 +379,10 @@ private fun FineTuneCard(outfit: Outfit, extracted: List<Int>, onChange: ((Outfi
 }
 
 @Composable
-private fun FloatingAvatar(outfit: Outfit) {
+private fun FloatingAvatar(outfit: Outfit, mood: Mood) {
     val t = rememberInfiniteTransition(label = "float")
     val dy by t.animateFloat(0f, -8f, infiniteRepeatable(tween(1200), RepeatMode.Reverse), label = "dy")
-    PixelAvatar(outfit, Modifier.height(200.dp).graphicsLayer { translationY = dy.dp.toPx() })
+    PixelAvatar(outfit, Modifier.height(200.dp).graphicsLayer { translationY = dy.dp.toPx() }, mood = mood)
 }
 
 @Composable

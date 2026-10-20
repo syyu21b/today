@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Checkroom
 import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.Settings
@@ -30,8 +31,10 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -56,6 +59,7 @@ import com.today.app.ui.components.IntroSplash
 import com.today.app.ui.screens.CommunityScreen
 import com.today.app.ui.screens.HomeScreen
 import com.today.app.ui.screens.OutfitScreen
+import com.today.app.ui.screens.StatsScreen
 import com.today.app.ui.screens.settings.SettingsScreen
 import com.today.app.ui.theme.NightSurface
 import com.today.app.ui.theme.TodayTheme
@@ -111,12 +115,14 @@ class MainActivity : ComponentActivity() {
 
 private enum class Tab(val icon: ImageVector) {
     Quests(Icons.Filled.TaskAlt),
+    Stats(Icons.Filled.BarChart),
     Outfit(Icons.Filled.Checkroom),
     Messages(Icons.Filled.Forum),
     Settings(Icons.Filled.Settings);
 
     fun label(s: Strings) = when (this) {
         Quests -> s.tabQuests
+        Stats -> s.tabStats
         Outfit -> s.tabOutfit
         Messages -> s.tabMessages
         Settings -> s.tabSettings
@@ -155,7 +161,13 @@ private fun TodayScaffold(vm: TodayViewModel) {
     vm.message?.let { msg ->
         LaunchedEffect(msg.id) {
             snackbar.currentSnackbarData?.dismiss()
-            snackbar.showSnackbar(msg.text)
+            // With a button (Undo) it stays a bit longer; without an explicit duration it would never close.
+            val result = snackbar.showSnackbar(
+                msg.text,
+                actionLabel = msg.action,
+                duration = if (msg.action != null) SnackbarDuration.Long else SnackbarDuration.Short,
+            )
+            if (result == SnackbarResult.ActionPerformed) vm.onMessageAction(msg.id)
             vm.consumeMessage(msg.id)
         }
     }
@@ -193,6 +205,7 @@ private fun TodayScaffold(vm: TodayViewModel) {
         Crossfade(targetState = tab, label = "tab") { current ->
             when (current) {
                 Tab.Quests -> HomeScreen(vm, contentModifier)
+                Tab.Stats -> StatsScreen(vm, contentModifier)
                 Tab.Outfit -> OutfitScreen(vm, contentModifier)
                 Tab.Messages -> CommunityScreen(vm, contentModifier)
                 Tab.Settings -> SettingsScreen(

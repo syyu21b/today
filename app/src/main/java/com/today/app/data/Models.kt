@@ -1,5 +1,6 @@
 package com.today.app.data
 
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
 
@@ -10,7 +11,20 @@ data class Quest(
     val emoji: String,
     val xp: Int,
     val done: Boolean = false,
-)
+    /** Weekdays it's scheduled on; empty = every day. On other days it rests (shown, not counted). */
+    val days: Set<DayOfWeek> = emptySet(),
+) {
+    fun activeOn(date: LocalDate) = days.isEmpty() || date.dayOfWeek in days
+}
+
+/** The quests that count on [date] (rest-day quests are left out). */
+fun List<Quest>.activeOn(date: LocalDate) = filter { it.activeOn(date) }
+
+/** Every quest scheduled on [date] is done (nothing scheduled = not complete). */
+fun List<Quest>.completeOn(date: LocalDate) = activeOn(date).let { it.isNotEmpty() && it.all { q -> q.done } }
+
+/** The day has quests but none is scheduled: a planned rest day, which doesn't break a streak. */
+fun List<Quest>.isRestDayOn(date: LocalDate) = isNotEmpty() && activeOn(date).isEmpty()
 
 const val MAX_QUESTS_PER_DAY = 10
 const val MAX_QUEST_TITLE = 30
@@ -111,8 +125,11 @@ data class AppSettings(
     val contactsPromptDone: Boolean = false,
 )
 
-/** One-shot snackbar message; the id makes identical texts re-trigger. */
-data class UiMessage(val id: Long, val text: String)
+/** One-shot snackbar message; the id makes identical texts re-trigger. [action] adds a button (e.g. Undo). */
+data class UiMessage(val id: Long, val text: String, val action: String? = null)
+
+/** The character's face, from how today (and yesterday) went. */
+enum class Mood(val emoji: String) { HAPPY("😄"), NORMAL("🙂"), SLEEPY("😴"), SAD("😢") }
 
 enum class FriendSource { DEMO, CONTACT, MANUAL }
 

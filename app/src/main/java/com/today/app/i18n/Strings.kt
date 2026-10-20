@@ -8,6 +8,7 @@ import com.today.app.data.BodyPart
 import com.today.app.data.BoxReward
 import com.today.app.data.ChatMessage
 import com.today.app.data.Friend
+import com.today.app.data.Mood
 import com.today.app.data.Outfits
 import com.today.app.data.RewardEngine
 import com.today.app.data.StyleNote
@@ -370,6 +371,41 @@ interface Strings {
     fun titleCollection(owned: Int, total: Int): String
     val shieldedDaysTitle: String
     val noShieldedDays: String
+
+    // ---- stats ----
+    val tabStats: String
+    val statsIntro: String
+    val statCurrentStreak: String
+    val statBestStreak: String
+    val statTotalXp: String
+    val statMonthRate: String
+    /** [points] = this month minus last month in percentage points; null = no data last month. */
+    fun monthDelta(points: Int?): String
+    val heatmapTitle: String
+    val heatLess: String
+    val heatMore: String
+    fun dayDetail(date: LocalDate, done: Int, total: Int): String
+    val weekChartTitle: String
+    fun bestWeekday(day: DayOfWeek, percent: Int): String
+    val questRatesTitle: String
+    val questRatesEmpty: String
+    val statsTapHint: String
+
+    // ---- quest usability ----
+    val fieldRepeat: String
+    val repeatEveryDay: String
+    val restDay: String
+    val msgRestDay: String
+    val undo: String
+    fun msgRestored(title: String): String
+    val gestureHint: String
+
+    // ---- mood ----
+    fun moodGreeting(nickname: String, mood: Mood): String
+
+    /** "월·수·금", or "매일" for every day. */
+    fun repeatLabel(days: Set<DayOfWeek>): String =
+        if (days.isEmpty()) repeatEveryDay else DayOfWeek.entries.filter { it in days }.joinToString("·") { weekdayShort(it) }
 
     /** "🧢 Cap" */
     fun accessoryLabel(id: String): String = "${Accessories.byId(id)?.emoji.orEmpty()} ${accessoryName(id)}".trim()
@@ -803,6 +839,48 @@ object KoStrings : Strings {
     override fun stardustProgress(n: Int, price: Int) = "$n / $price · ${price}개 모으면 보호권 1장과 교환"
     override val shieldedDaysTitle = "보호권으로 지킨 날"
     override val noShieldedDays = "아직 보호권을 쓴 날이 없어요"
+
+    // ---- stats ----
+    override val tabStats = "통계"
+    override val statsIntro = "기록이 쌓일수록 나의 습관 패턴이 보여요"
+    override val statCurrentStreak = "현재 스트릭"
+    override val statBestStreak = "최고 스트릭"
+    override val statTotalXp = "누적 XP"
+    override val statMonthRate = "이번 달 달성률"
+    override fun monthDelta(points: Int?) = when {
+        points == null -> "지난달 기록 없음"
+        points > 0 -> "지난달보다 +${points}%p"
+        points < 0 -> "지난달보다 ${points}%p"
+        else -> "지난달과 같아요"
+    }
+    override val heatmapTitle = "최근 12주"
+    override val heatLess = "적음"
+    override val heatMore = "많음"
+    override fun dayDetail(date: LocalDate, done: Int, total: Int) =
+        if (total == 0) "${shortDate(date)} · 할 퀘스트 없음" else "${shortDate(date)} · ${total}개 중 ${done}개 완료"
+    override val weekChartTitle = "최근 7일 완료 수"
+    override fun bestWeekday(day: DayOfWeek, percent: Int) =
+        "📈 ${day.getDisplayName(TextStyle.FULL, locale)}에 가장 꾸준해요 (평균 $percent%)"
+    override val questRatesTitle = "퀘스트별 달성률"
+    override val questRatesEmpty = "어제까지의 기록이 쌓이면 보여요"
+    override val statsTapHint = "칸이나 막대를 누르면 그날 기록을 볼 수 있어요"
+
+    // ---- quest usability ----
+    override val fieldRepeat = "반복 요일 (선택 안 하면 매일)"
+    override val repeatEveryDay = "매일"
+    override val restDay = "쉬는 날"
+    override val msgRestDay = "오늘은 쉬는 날로 정한 퀘스트예요"
+    override val undo = "실행 취소"
+    override fun msgRestored(title: String) = "「$title」 복구했어요"
+    override val gestureHint = "👉 밀어서 완료 · 👈 밀어서 삭제 · 길게 눌러 순서 변경"
+
+    // ---- mood ----
+    override fun moodGreeting(nickname: String, mood: Mood) = when (mood) {
+        Mood.HAPPY -> "${nickname}님, 오늘 퀘스트 완료! 최고예요 🎉"
+        Mood.SAD -> "${nickname}님, 어제는 아쉬웠지만 오늘 다시 시작해요!"
+        Mood.SLEEPY -> "${nickname}님, 오늘의 첫 퀘스트를 시작해 볼까요?"
+        Mood.NORMAL -> greeting(nickname)
+    }
     override fun msgAccessoryLocked(acc: Accessory) =
         acc.unlockLevel?.let { "🔒 ${accessoryName(acc.id)}: LV ${it}에 해금돼요" } ?: "🔒 ${accessoryName(acc.id)}: 보상 상자에서 얻을 수 있어요"
 }
@@ -1218,6 +1296,48 @@ object EnStrings : Strings {
     override fun stardustProgress(n: Int, price: Int) = "$n / $price · trade $price for 1 shield"
     override val shieldedDaysTitle = "Days saved by a shield"
     override val noShieldedDays = "No shields used yet"
+
+    // ---- stats ----
+    override val tabStats = "Stats"
+    override val statsIntro = "Your habit patterns show up as you log more days"
+    override val statCurrentStreak = "Current streak"
+    override val statBestStreak = "Best streak"
+    override val statTotalXp = "Total XP"
+    override val statMonthRate = "This month"
+    override fun monthDelta(points: Int?) = when {
+        points == null -> "No data last month"
+        points > 0 -> "+$points pts vs last month"
+        points < 0 -> "$points pts vs last month"
+        else -> "Same as last month"
+    }
+    override val heatmapTitle = "Last 12 weeks"
+    override val heatLess = "Less"
+    override val heatMore = "More"
+    override fun dayDetail(date: LocalDate, done: Int, total: Int) =
+        if (total == 0) "${shortDate(date)} · nothing scheduled" else "${shortDate(date)} · $done of $total done"
+    override val weekChartTitle = "Completed, last 7 days"
+    override fun bestWeekday(day: DayOfWeek, percent: Int) =
+        "📈 Most consistent on ${day.getDisplayName(TextStyle.FULL, locale)}s (avg $percent%)"
+    override val questRatesTitle = "Success rate by quest"
+    override val questRatesEmpty = "Shows up once you have past days logged"
+    override val statsTapHint = "Tap a cell or bar to see that day"
+
+    // ---- quest usability ----
+    override val fieldRepeat = "Repeat on (none = every day)"
+    override val repeatEveryDay = "Every day"
+    override val restDay = "Rest day"
+    override val msgRestDay = "This quest rests today"
+    override val undo = "Undo"
+    override fun msgRestored(title: String) = "Restored \"$title\""
+    override val gestureHint = "👉 swipe to complete · 👈 swipe to delete · long-press to reorder"
+
+    // ---- mood ----
+    override fun moodGreeting(nickname: String, mood: Mood) = when (mood) {
+        Mood.HAPPY -> "All done today, $nickname! 🎉"
+        Mood.SAD -> "Yesterday slipped, $nickname. Let's go again today!"
+        Mood.SLEEPY -> "Ready for your first quest, $nickname?"
+        Mood.NORMAL -> greeting(nickname)
+    }
     override fun msgAccessoryLocked(acc: Accessory) =
         acc.unlockLevel?.let { "🔒 ${accessoryName(acc.id)} unlocks at LV $it" } ?: "🔒 ${accessoryName(acc.id)} comes from reward boxes"
 

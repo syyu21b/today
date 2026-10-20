@@ -8,6 +8,9 @@ import android.content.Intent
 import android.util.Log
 import com.today.app.data.AppSettings
 import com.today.app.data.Streaks
+import com.today.app.data.activeOn
+import com.today.app.data.completeOn
+import com.today.app.data.isRestDayOn
 import com.today.app.data.TodayStorage
 import com.today.app.i18n.strings
 import java.time.LocalDate
@@ -56,14 +59,16 @@ class ReminderReceiver : BroadcastReceiver() {
         val saved = TodayStorage(context).load()
         val settings = saved.settings
         val s = settings.language.strings()
-        val today = LocalDate.now().toString()
+        val todayDate = LocalDate.now()
+        val today = todayDate.toString()
         // Today's list may not exist yet (app not opened today): use what will be carried over.
         val todays = saved.questsByDate[today]
             ?: saved.questsByDate.keys.filter { it < today }.sortedDescending()
                 .firstNotNullOfOrNull { k -> saved.questsByDate[k]?.takeIf { it.isNotEmpty() } }
                 ?.map { it.copy(done = false) }
                 .orEmpty()
-        val remaining = todays.count { !it.done }
+        // Rest-day quests aren't due today.
+        val remaining = todays.activeOn(todayDate).count { !it.done }
         Log.i(
             TAG,
             "fired ${intent.action} enabled=${settings.notificationsEnabled} quest=${settings.questReminder} " +
@@ -80,9 +85,9 @@ class ReminderReceiver : BroadcastReceiver() {
                     val shields = saved.rewards.shields
                     // Only offer the shield when there is a streak (ending yesterday) for it to keep.
                     val streak = Streaks.endingAt(
-                        LocalDate.now().minusDays(1),
-                        { d -> saved.questsByDate[d.toString()].let { !it.isNullOrEmpty() && it.all { q -> q.done } } },
-                        { d -> d.toString() in saved.rewards.shieldedDates },
+                        todayDate.minusDays(1),
+                        { d -> saved.questsByDate[d.toString()].orEmpty().completeOn(d) },
+                        { d -> d.toString() in saved.rewards.shieldedDates || saved.questsByDate[d.toString()].orEmpty().isRestDayOn(d) },
                     )
                     Notifier.post(
                         context, s, Notifier.ID_STREAK, Notifier.CHANNEL_REMINDERS, s.streakReminderTitle, s.streakReminderBody(remaining),

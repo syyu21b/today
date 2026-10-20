@@ -54,7 +54,12 @@ class StringsTest {
             listOf(
                 e.shieldDialogBody, e.msgNoStreakToProtect, e.shieldCount(2), e.rewardsTitle, e.statShields, e.statBoxes,
                 e.statStardust, e.statTitles, e.statItems, e.boxesLeft(0), e.boxesLeft(1), e.boxesLeft(3), e.titleCollection(2, 11), e.stardustProgress(3, 5),
-                e.shieldedDaysTitle, e.noShieldedDays, e.msgShieldUsed(3), e.rescueBanner(4), e.useShieldAction(1),
+                e.shieldedDaysTitle, e.noShieldedDays,
+                e.monthDelta(null), e.monthDelta(5), e.monthDelta(-3), e.monthDelta(0), e.dayDetail(date, 2, 5), e.dayDetail(date, 0, 0),
+                e.bestWeekday(java.time.DayOfWeek.TUESDAY, 80), e.statsIntro, e.questRatesEmpty, e.statsTapHint, e.gestureHint,
+                e.msgRestored("Run"), e.msgRestDay, e.repeatLabel(emptySet()),
+                e.repeatLabel(setOf(java.time.DayOfWeek.MONDAY, java.time.DayOfWeek.FRIDAY)),
+            ) + com.today.app.data.Mood.entries.map { e.moodGreeting("Sam", it) } + listOf( e.msgShieldUsed(3), e.rescueBanner(4), e.useShieldAction(1),
                 e.stardustLine(2, 5), e.msgNotEnoughStardust(5), e.boxBanner(1), e.boxBanner(2), e.openAnother(2), e.levelRewards,
             )
         english.forEach { assertFalse("Korean in English text: $it", hangul.containsMatchIn(it)) }
@@ -64,6 +69,11 @@ class StringsTest {
             Accessories.all.forEach { assertNotEquals(it.id, s.accessoryName(it.id)) }
         }
         assertEquals("🧢 캡모자", KoStrings.accessoryLabel("cap"))
+        val mwf = setOf(java.time.DayOfWeek.FRIDAY, java.time.DayOfWeek.MONDAY, java.time.DayOfWeek.WEDNESDAY)
+        assertEquals("월·수·금", KoStrings.repeatLabel(mwf))
+        assertEquals("Mon·Wed·Fri", EnStrings.repeatLabel(mwf))
+        assertEquals("매일", KoStrings.repeatLabel(emptySet()))
+        assertEquals("10월 20일 (화) · 5개 중 2개 완료", KoStrings.dayDetail(java.time.LocalDate.of(2026, 10, 20), 2, 5))
     }
 
     @Test

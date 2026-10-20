@@ -197,7 +197,7 @@ private fun ProfileCard(vm: TodayViewModel, onOpenOutfit: () -> Unit, onOpenRewa
                     .background(Color.Black.copy(alpha = 0.2f)),
                 contentAlignment = Alignment.Center,
             ) {
-                PixelAvatar(c.outfit, Modifier.height(72.dp))
+                PixelAvatar(c.outfit, Modifier.height(72.dp), mood = vm.mood)
             }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {

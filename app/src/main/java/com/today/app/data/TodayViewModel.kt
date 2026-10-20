@@ -27,6 +27,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
 import java.util.UUID
@@ -210,12 +211,12 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
     fun isCheckable(date: LocalDate) = date == todayDate
 
     fun dayStatus(date: LocalDate): DayStatus {
-        val quests = questsFor(date)
+        val quests = questsFor(date).activeOn(date)
         val done = quests.count { it.done }
         return when {
             quests.isNotEmpty() && done == quests.size -> DayStatus.COMPLETE
             isShielded(date) -> DayStatus.SHIELDED
-            quests.isEmpty() -> DayStatus.EMPTY
+            quests.isEmpty() -> DayStatus.EMPTY // includes planned rest days
             date.isAfter(todayDate) -> DayStatus.PLANNED
             date.isBefore(todayDate) -> DayStatus.MISSED
             done > 0 -> DayStatus.PARTIAL
@@ -223,11 +224,46 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private fun isComplete(d: LocalDate) = questsFor(d).let { it.isNotEmpty() && it.all { q -> q.done } }
+    private fun isComplete(d: LocalDate) = questsFor(d).completeOn(d)
     fun isShielded(d: LocalDate) = d.toString() in rewards.shieldedDates
+    private fun isRestDay(d: LocalDate) = questsFor(d).isRestDayOn(d)
 
-    /** Consecutive fully-completed days ending today (or yesterday if today isn't finished yet); shielded days bridge gaps. */
-    val streak: Int get() = Streaks.current(todayDate, ::isComplete, ::isShielded)
+    /** Shielded days and planned rest days keep a streak going without adding to it. */
+    private fun isBridged(d: LocalDate) = isShielded(d) || isRestDay(d)
+
+    /** Consecutive fully-completed days ending today (or yesterday if today isn't finished yet). */
+    val streak: Int get() = Streaks.current(todayDate, ::isComplete, ::isBridged)
+
+    /** Longest streak ever (shielded and rest days bridge, like the current one). */
+    val bestStreak: Int
+        get() {
+            val dated = questsByDate.mapNotNull { (k, l) -> runCatching { LocalDate.parse(k) }.getOrNull()?.let { it to l } }
+            val completeDays = dated.filter { (d, l) -> l.completeOn(d) }.map { it.first }.toSet()
+            val bridges = rewards.shieldedDates.mapNotNull { runCatching { LocalDate.parse(it) }.getOrNull() }.toSet() +
+                dated.filter { (d, l) -> l.isRestDayOn(d) }.map { it.first }
+            return Streaks.best(completeDays, bridges)
+        }
+
+    /** All quests by ISO date, for the statistics screen. */
+    val questHistory: Map<String, List<Quest>> get() = questsByDate
+
+    /** Today's scheduled quests (what progress, reminders and mood count). */
+    val todayActive: List<Quest> get() = questsFor(todayDate).activeOn(todayDate)
+
+    /** The character's face: proud when today is done, gloomy right after a missed day, sleepy before starting. */
+    val mood: Mood
+        get() {
+            val active = todayActive
+            val done = active.count { it.done }
+            val yesterday = todayDate.minusDays(1)
+            val missedYesterday = questsFor(yesterday).activeOn(yesterday).isNotEmpty() && !isComplete(yesterday) && !isShielded(yesterday)
+            return when {
+                active.isNotEmpty() && done == active.size -> Mood.HAPPY
+                done == 0 && missedYesterday -> Mood.SAD
+                done == 0 && active.isNotEmpty() -> Mood.SLEEPY
+                else -> Mood.NORMAL
+            }
+        }
 
     val totalCompleted: Int get() = questsByDate.values.sumOf { list -> list.count { it.done } }
     val totalQuests: Int get() = questsByDate.values.sumOf { it.size }
@@ -258,6 +294,10 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         }
         val list = questsFor(date)
         val quest = list.firstOrNull { it.id == id } ?: return
+        if (!quest.activeOn(date)) {
+            showMessage(strings.msgRestDay)
+            return
+        }
         val nowDone = !quest.done
         val streakBefore = streak
         setQuests(date, list.map { if (it.id == id) it.copy(done = nowDone) else it })
@@ -270,35 +310,43 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         }
         refreshTitles()
         // Everything done: no need for tonight's streak alert.
-        if (list.size > 0 && questsFor(date).all { it.done }) Notifier.cancel(getApplication(), Notifier.ID_STREAK)
+        if (isComplete(date)) Notifier.cancel(getApplication(), Notifier.ID_STREAK)
         persist()
     }
 
     /** @return null on success, otherwise the (localized) reason it failed. */
-    fun addQuest(date: LocalDate, title: String, emoji: String, xp: Int): String? {
+    fun addQuest(date: LocalDate, title: String, emoji: String, xp: Int, days: Set<DayOfWeek> = emptySet()): String? {
         if (!isEditable(date)) return strings.errAddPast
         val list = questsFor(date)
         if (list.size >= MAX_QUESTS_PER_DAY) return strings.errLimit(MAX_QUESTS_PER_DAY)
         val cleanTitle = title.trim().take(MAX_QUEST_TITLE)
         if (cleanTitle.isEmpty()) return strings.errEmptyTitle
-        setQuests(date, list + Quest(newId(), cleanTitle, emoji.ifBlank { "⭐" }, xp.coerceIn(MIN_QUEST_XP, MAX_QUEST_XP)))
+        setQuests(date, list + Quest(newId(), cleanTitle, emoji.ifBlank { "⭐" }, xp.coerceIn(MIN_QUEST_XP, MAX_QUEST_XP), days = normalizeDays(days)))
         persist()
         return null
     }
 
-    fun updateQuest(date: LocalDate, id: String, title: String, emoji: String, xp: Int): String? {
+    fun updateQuest(date: LocalDate, id: String, title: String, emoji: String, xp: Int, days: Set<DayOfWeek> = emptySet()): String? {
         if (!isEditable(date)) return strings.errEditPast
         val list = questsFor(date)
         val old = list.firstOrNull { it.id == id } ?: return strings.errNotFound
         val cleanTitle = title.trim().take(MAX_QUEST_TITLE)
         if (cleanTitle.isEmpty()) return strings.errEmptyTitle
         val newXp = xp.coerceIn(MIN_QUEST_XP, MAX_QUEST_XP)
-        setQuests(date, list.map { if (it.id == id) it.copy(title = cleanTitle, emoji = emoji.ifBlank { "⭐" }, xp = newXp) else it })
-        // Already completed today: keep total XP consistent with the new reward.
-        if (old.done && newXp != old.xp) addXp(newXp - old.xp)
+        val edited = old.copy(title = cleanTitle, emoji = emoji.ifBlank { "⭐" }, xp = newXp, days = normalizeDays(days))
+        // Moved off this weekday: it rests now, so it can't stay completed.
+        val updated = if (old.done && !edited.activeOn(date)) edited.copy(done = false) else edited
+        setQuests(date, list.map { if (it.id == id) updated else it })
+        // Keep total XP consistent with the new reward (or with the check being removed).
+        val xpDelta = (if (updated.done) updated.xp else 0) - (if (old.done) old.xp else 0)
+        if (xpDelta != 0) addXp(xpDelta)
+        refreshTitles()
         persist()
         return null
     }
+
+    /** All seven days is the same as "every day". */
+    private fun normalizeDays(days: Set<DayOfWeek>) = if (days.size == DayOfWeek.entries.size) emptySet() else days
 
     fun deleteQuest(date: LocalDate, id: String) {
         if (!isEditable(date)) {
@@ -306,11 +354,45 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         val list = questsFor(date)
-        val quest = list.firstOrNull { it.id == id } ?: return
+        val index = list.indexOfFirst { it.id == id }
+        if (index < 0) return
+        val quest = list[index]
         setQuests(date, list.filterNot { it.id == id })
         if (quest.done) addXp(-quest.xp) // no XP farming by check -> delete -> re-add
+        refreshTitles()
         persist()
-        showMessage(strings.msgDeleted(quest.title))
+        val messageId = showMessage(strings.msgDeleted(quest.title), action = strings.undo)
+        lastDeleted = DeletedQuest(date, quest, index, messageId)
+    }
+
+    private data class DeletedQuest(val date: LocalDate, val quest: Quest, val index: Int, val messageId: Long)
+
+    private var lastDeleted: DeletedQuest? = null
+
+    /** Snackbar button pressed: currently only "Undo" after a delete. */
+    fun onMessageAction(messageId: Long) {
+        val d = lastDeleted?.takeIf { it.messageId == messageId } ?: return
+        lastDeleted = null
+        if (!isEditable(d.date)) return
+        val list = questsFor(d.date)
+        if (list.size >= MAX_QUESTS_PER_DAY || list.any { it.id == d.quest.id }) return
+        setQuests(d.date, list.toMutableList().apply { add(d.index.coerceAtMost(size), d.quest) })
+        if (d.quest.done) addXp(d.quest.xp)
+        refreshTitles()
+        persist()
+        showMessage(strings.msgRestored(d.quest.title))
+    }
+
+    /** Drag-to-reorder: moves in memory while dragging; [commitOrder] saves when the finger lifts. */
+    fun moveQuest(date: LocalDate, from: Int, to: Int) {
+        if (!isEditable(date)) return
+        val list = questsFor(date)
+        if (from !in list.indices || to !in list.indices || from == to) return
+        setQuests(date, list.toMutableList().apply { add(to, removeAt(from)) })
+    }
+
+    fun commitOrder() {
+        persist()
     }
 
     // ======================= Copy / paste =======================
@@ -400,12 +482,12 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Streak a shield on [date] would keep alive (0 = nothing to protect, so don't waste one). */
-    private fun streakProtectedBy(date: LocalDate) = Streaks.endingAt(date.minusDays(1), ::isComplete, ::isShielded)
+    private fun streakProtectedBy(date: LocalDate) = Streaks.endingAt(date.minusDays(1), ::isComplete, ::isBridged)
 
     /** Shields work on today or yesterday, for a day that isn't complete or shielded and that has a streak to keep. */
     fun canShield(date: LocalDate): Boolean =
         rewards.shields > 0 && (date == todayDate || date == todayDate.minusDays(1)) &&
-            !isComplete(date) && !isShielded(date) && streakProtectedBy(date) > 0
+            !isComplete(date) && !isBridged(date) && streakProtectedBy(date) > 0
 
     /** Yesterday broke a streak a shield could save: the streak it brings back, else null. */
     val rescuableStreak: Int?
@@ -469,12 +551,12 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
     /** Adds newly earned titles (never removes one, so unchecking a quest can't take it back). */
     private fun refreshTitles(announce: Boolean = true) {
         fun parse(d: String) = runCatching { LocalDate.parse(d) }.getOrNull()
-        val completeDays = questsByDate.filter { (_, l) -> l.isNotEmpty() && l.all { it.done } }.keys.mapNotNull(::parse).toSet()
+        val dated = questsByDate.mapNotNull { (k, l) -> parse(k)?.let { it to l } }
         val progress = Progress(
             maxLevel = rewards.rewardedLevel,
-            bestStreak = Streaks.best(completeDays, rewards.shieldedDates.mapNotNull(::parse).toSet()),
+            bestStreak = bestStreak,
             totalCompleted = totalCompleted,
-            perfectDay = questsByDate.values.any { l -> l.size >= MAX_QUESTS_PER_DAY && l.all { it.done } },
+            perfectDay = dated.any { (d, l) -> l.activeOn(d).size >= MAX_QUESTS_PER_DAY && l.completeOn(d) },
         )
         val new = Titles.earnedBy(progress) - rewards.titles
         if (new.isEmpty()) return
@@ -634,8 +716,10 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun showMessage(text: String) {
-        message = UiMessage(++messageCounter, text)
+    /** @return the message id, so an [action] press can be matched to it. */
+    fun showMessage(text: String, action: String? = null): Long {
+        message = UiMessage(++messageCounter, text, action)
+        return messageCounter
     }
 
     fun consumeMessage(id: Long) {

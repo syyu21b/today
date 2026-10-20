@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.core.content.edit
 import org.json.JSONArray
 import org.json.JSONObject
+import java.time.DayOfWeek
 import java.time.LocalTime
 
 /** Saved snapshot of everything that should survive an app restart. */
@@ -205,13 +206,19 @@ class TodayStorage(context: Context) {
 
     private fun questsToJson(quests: List<Quest>) = JSONArray().apply {
         quests.forEach { q ->
-            put(JSONObject().put("id", q.id).put("title", q.title).put("emoji", q.emoji).put("xp", q.xp).put("done", q.done))
+            put(
+                JSONObject().put("id", q.id).put("title", q.title).put("emoji", q.emoji).put("xp", q.xp).put("done", q.done)
+                    .apply { if (q.days.isNotEmpty()) put("days", JSONArray(q.days.map { it.value }.sorted())) }
+            )
         }
     }
 
     private fun questsFromJson(arr: JSONArray): List<Quest> = List(arr.length()) { i ->
         val o = arr.getJSONObject(i)
-        Quest(o.getString("id"), o.getString("title"), o.optString("emoji", "⭐"), o.optInt("xp", 20), o.optBoolean("done", false))
+        Quest(
+            o.getString("id"), o.getString("title"), o.optString("emoji", "⭐"), o.optInt("xp", 20), o.optBoolean("done", false),
+            days = o.optJSONArray("days")?.let { arr -> List(arr.length()) { arr.optInt(it) }.filter { it in 1..7 }.map(DayOfWeek::of).toSet() }.orEmpty(),
+        )
     }
 
     // ------------------------------------------------------------------ friends & chats
