@@ -825,11 +825,11 @@ object KoStrings : Strings {
     override val titlePickerTitle = "칭호 선택"
     override val titleEquipped = "착용 중"
     override fun msgNewTitle(t: TitleDef) = "🏅 새 칭호 획득: ${titleLabel(t.id)}"
-    override val accessoriesTitle = "액세서리"
+    override val accessoriesTitle = "악세사리"
     override val accessoriesHint = "레벨업으로 해금하고 보상 상자에서 희귀 아이템을 모아요. 탭해서 착용/해제"
     override fun accessoryName(id: String) = when (id) {
         "cap" -> "캡모자"
-        "glasses" -> "동그란 안경"
+        "glasses" -> "하트 안경"
         "headphones" -> "헤드폰"
         "cape" -> "영웅 망토"
         "crown" -> "왕관"
@@ -1293,7 +1293,7 @@ object EnStrings : Strings {
     override val accessoriesHint = "Unlock them by leveling up and collect rare ones from reward boxes. Tap to wear / remove"
     override fun accessoryName(id: String) = when (id) {
         "cap" -> "Cap"
-        "glasses" -> "Round Glasses"
+        "glasses" -> "Heart Glasses"
         "headphones" -> "Headphones"
         "cape" -> "Hero Cape"
         "crown" -> "Crown"

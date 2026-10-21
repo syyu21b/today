@@ -72,64 +72,153 @@ private val LONG_HAIR = mapOf(
 )
 
 /**
- * Accessory pixel art per row (' ' and '.' keep the pixel underneath).
- *  c/C cap  w logo  y crown  g gem  l halo  n ear  d headphones  z/Z dark lens  v/V cape
+ * Accessory art on a finer 32 x 48 grid (half a sprite pixel per cell), drawn over the finished sprite.
+ * '.' = transparent. Codes come from the art's own [palette]; k/h/H/s/S fall back to the sprite's
+ * outline/hair/skin, so e.g. cat ears match the hair. [behind] cells only show where the sprite is empty.
  */
-private class AccessoryArt(val rows: Map<Int, String>, val behind: Boolean = false)
+private class AccessoryArt(
+    val palette: Map<Char, Color>,
+    val front: Map<Int, String> = emptyMap(),
+    val behind: Map<Int, String> = emptyMap(),
+)
+
+private const val ART_W = 32
 
 private val ACCESSORY_ART = mapOf(
     "cap" to AccessoryArt(
-        mapOf(
-            2 to "...kcccwcccck...",
-            3 to "..kcccccccccck..",
-            4 to "..kCCCCCCCCCCCCk",
+        palette = mapOf('C' to Color(0xFFE94B5A), 'L' to Color(0xFFFF8F98), 'c' to Color(0xFFB8323F), 'B' to Color(0xFFD83F4E), 'b' to Color(0xFF7E1F2A), 'Y' to Color(0xFFFFE066)),
+        front = mapOf(
+            0 to "..............kkkk..............",
+            1 to "..........kkkkkcckkkkk..........",
+            2 to "........kkCCLLCCCCLLCCkk........",
+            3 to "......kkCCCLCCCYYCCCLCCCkk......",
+            4 to ".....kCCCCLCCCYYYYCCCLCCCCk.....",
+            5 to "....kCCCCCCCCYYYYYYCCCCCCCCk....",
+            6 to "....kCCCCCCCCCYYYYCCCCCCCCCk....",
+            7 to "...kcCCCCCCCCCCYYCCCCCCCCCCck...",
+            8 to "...kcccccccccccccccccccccccck...",
+            9 to "...kBBBBBBBBBBBBBBBBBBBBBBBBk...",
+            10 to "..kBBBBBBBBBBBBBBBBBBBBBBBBBBk..",
+            11 to "..kbbbbbbbbbbbbbbbbbbbbbbbbbbk..",
         ),
     ),
-    "crown" to AccessoryArt(
-        mapOf(
-            0 to "....y..yy..y....",
-            1 to "...kyykyykyyk...",
-            2 to "...kyygyygyyk...",
-        ),
-    ),
-    "halo" to AccessoryArt(mapOf(0 to "....llllllll....")),
-    "catears" to AccessoryArt(
-        mapOf(
-            0 to "...kk......kk...",
-            1 to "...knkkkkkknk...",
+    "glasses" to AccessoryArt(
+        palette = mapOf('F' to Color(0xFFE23D78), 'p' to Color(0x99FF7FAE), 'w' to Color(0xCCFFFFFF)),
+        front = mapOf(
+            10 to "..........FF.FF..FF.FF..........",
+            11 to ".......FFFwppppFFppppwFFF.......",
+            12 to ".........FpppppFFpppppF.........",
+            13 to "..........FpppF..FpppF..........",
+            14 to "...........FpF....FpF...........",
+            15 to "............F......F............",
         ),
     ),
     "headphones" to AccessoryArt(
-        mapOf(
-            0 to "....kkkkkkkk....",
-            1 to "...kddddddddk...",
-            2 to "...d        d...",
-            3 to "..d          d..",
-            4 to "..d          d..",
-            5 to ".kd          dk.",
-            6 to ".kd          dk.",
-            7 to ".kd          dk.",
+        palette = mapOf('d' to Color(0xFF3A3A4A), 'D' to Color(0xFF6A6A80), 'c' to Color(0xFF7C6CF0), 'L' to Color(0xFFB3A8FF), 'S' to Color(0xFF5246B8), 'p' to Color(0xFF2A2A36)),
+        front = mapOf(
+            0 to ".........kkkkkkkkkkkkkk.........",
+            1 to ".......kkDDDDDDDDDDDDDDkk.......",
+            2 to "......kddddddddddddddddddk......",
+            3 to ".....kddk..............kddk.....",
+            4 to "....kddk................kddk....",
+            5 to "....kddk................kddk....",
+            6 to "...kddk..................kddk...",
+            7 to "...kddk..................kddk...",
+            8 to ".kkkkkk..................kkkkkk.",
+            9 to "kLLccpk..................kpccLLk",
+            10 to "kLcccpk..................kpcccLk",
+            11 to "kccccpk..................kpcccck",
+            12 to "kccccpk..................kpcccck",
+            13 to "kccccpk..................kpcccck",
+            14 to "kScccpk..................kpcccSk",
+            15 to "kSSSSpk..................kpSSSSk",
+            16 to ".kkkkkk..................kkkkkk.",
         ),
     ),
-    "glasses" to AccessoryArt(mapOf(6 to "     kekkek     ")),
-    "sunglasses" to AccessoryArt(mapOf(6 to "    zzZzzZzz    ")),
-    // Behind the body: only fills empty pixels, so it peeks out at the sides.
     "cape" to AccessoryArt(
-        mapOf(11 to " v            v ") + (12..15).associateWith { "v              v" } + (16..22).associateWith { "vV            Vv" },
-        behind = true,
+        palette = mapOf('v' to Color(0xFFB0283A), 'V' to Color(0xFF7A1A28), 'y' to Color(0xFFFFD34E), 'Y' to Color(0xFFFFF2A8)),
+        front = mapOf(
+            21 to ".............kkkkkk.............",
+            22 to "....vvvvvvvvvkYyyYkvvvvvvvvv....",
+            23 to "......kkkvvvvkyyyykvvvvkkk......",
+            24 to ".............kkkkkk.............",
+        ),
+        behind = mapOf(
+            20 to "......kVVVVVVVVVVVVVVVVVVk......",
+            21 to ".....kvvvvvvvvvvvvvvvvvvvvk.....",
+            22 to "..kvvvvvvvvvvvvvvvvvvvvvvvvvvk..",
+            23 to ".kvvvvvvvvvvvvvvvvvvvvvvvvvvvvk.",
+            24 to "kvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvk",
+            25 to "kvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvk",
+            26 to "kvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvk",
+            27 to "kvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvk",
+            28 to "kvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvk",
+            29 to "kvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvk",
+            30 to "kvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvk",
+            31 to "kvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvk",
+            32 to "kvvVvvvvvvvvvvvvvvvvvvvvvvvvVvvk",
+            33 to "kvvVvvvvvvvvvvvvvvvvvvvvvvvvVvvk",
+            34 to "kvvVvvvvvvvvvvvvvvvvvvvvvvvvVvvk",
+            35 to "kvvVvvvvvvvvvvvvvvvvvvvvvvvvVvvk",
+            36 to "kvvVvvvvvvvvvvvvvvvvvvvvvvvvVvvk",
+            37 to "kvvVvvvvvvvvvvvvvvvvvvvvvvvvVvvk",
+            38 to "kvvVvvvvvvvvvvvvvvvvvvvvvvvvVvvk",
+            39 to "kvvVvvvvvvvvvvvvvvvvvvvvvvvvVvvk",
+            40 to "kvvVvvvvvvvvvvvvvvvvvvvvvvvvVvvk",
+            41 to "kvVvvvvvvvvvvvvvvvvvvvvvvvvvvVvk",
+            42 to "kVVVvVVVVVVVVVVVVVVVVVVVVVVvVVVk",
+            43 to ".kkkkkkkkkkkkkkkkkkkkkkkkkkkkkk.",
+        ),
+    ),
+    "crown" to AccessoryArt(
+        palette = mapOf('y' to Color(0xFFFFD34E), 'Y' to Color(0xFFFFF2A8), 'o' to Color(0xFFC8901E), 'r' to Color(0xFFFF4D6D), 'g' to Color(0xFF3DDCFF)),
+        front = mapOf(
+            0 to "........oY.....YY.....Yo........",
+            1 to "........yy.....yy.....yy........",
+            2 to ".......oYyo...oyyo...oyYo.......",
+            3 to ".......oYyyo.oyyyyo.oyyYo.......",
+            4 to "......oyyyyyoyyyyyyoyyyyyo......",
+            5 to "......oyyyyyyyyyyyyyyyyyyo......",
+            6 to "......oYYYYYYYYYYYYYYYYYYo......",
+            7 to "......oyyrryyyggggyyyrryyo......",
+            8 to "......oyyrryyyggggyyyrryyo......",
+            9 to "......kooooooooooooooooook......",
+        ),
+    ),
+    "sunglasses" to AccessoryArt(
+        palette = mapOf('F' to Color(0xFF101018), 'd' to Color(0xFF1E2436), 'l' to Color(0xFF3A4A6A), 'w' to Color(0xDDFFFFFF)),
+        front = mapOf(
+            10 to "......FFFFFFFFFFFFFFFFFFFF......",
+            11 to "......FFFddwddF..FddwddFFF......",
+            12 to "........FdwdddF..FdwdddF........",
+            13 to "........FlllllF..FlllllF........",
+            14 to ".........FlllF....FlllF.........",
+            15 to "..........FFF......FFF..........",
+        ),
+    ),
+    "catears" to AccessoryArt(
+        palette = mapOf('p' to Color(0xFFF59AA0), 'P' to Color(0xFFFFD0D4)),
+        front = mapOf(
+            0 to "..kk........................kk..",
+            1 to "..kHkk....................kkHk..",
+            2 to "..kHpphkk..............kkhppHk..",
+            3 to "..khppphhkk..........kkhhppphk..",
+            4 to "..khpppPphhk........khhpPppphk..",
+            5 to "...khppPpphhhh....hhhhppPpphk...",
+            6 to "...khhpppphh........hhpppphhk...",
+            7 to "....khhhhh............hhhhhk....",
+        ),
+    ),
+    "halo" to AccessoryArt(
+        palette = mapOf('l' to Color(0xFFFFF3A0), 'L' to Color(0xFFFFC93C), 'Y' to Color(0xFFFFFFFF), 'q' to Color(0x66FFF3A0)),
+        front = mapOf(
+            0 to "........qqLLLLLLLLLLLLqq........",
+            1 to ".....qlLL..............LLlq.....",
+            2 to "......qlllllllYYYYlllllllq......",
+            3 to ".........qqqqqqqqqqqqqq.........",
+        ),
     ),
 )
-
-private val CapColor = Color(0xFFE94B5A)
-private val CapShade = Color(0xFFB8323F)
-private val CrownGold = Color(0xFFFFD34E)
-private val CrownGem = Color(0xFF3DDCFF)
-private val HaloColor = Color(0xFFFFF3A0)
-private val PhonesColor = Color(0xFF3A3A4A)
-private val LensColor = Color(0xFF151520)
-private val LensShine = Color(0xFF7A7AA8)
-private val CapeColor = Color(0xFFB0283A)
-private val CapeShade = Color(0xFF7A1A28)
 
 /** Face overlays per mood, like accessories (' ' keeps the pixel). q = tear. */
 private val MOOD_ART = mapOf(
@@ -186,14 +275,7 @@ fun Outfit.toSpriteStyle(mood: Mood = Mood.NORMAL) = SpriteStyle(
 private fun spriteCode(x: Int, y: Int, style: SpriteStyle, blink: Boolean): Char {
     var ch = SPRITE[y][x]
     if (style.longHair) LONG_HAIR[y]?.get(x)?.takeIf { it != ' ' }?.let { ch = it }
-    // Face before accessories, so sunglasses still cover the eyes.
     MOOD_ART[style.mood]?.get(y)?.getOrNull(x)?.takeIf { it != ' ' }?.let { ch = it }
-    for (id in style.accessories) {
-        val art = ACCESSORY_ART[id] ?: continue
-        val c = art.rows[y]?.getOrNull(x)?.takeIf { it != ' ' && it != '.' } ?: continue
-        if (art.behind && ch != '.') continue
-        ch = c
-    }
     if (blink && ch == 'e') ch = 's'
     // Stripes on every other torso row
     if (style.striped && (y == 12 || y == 14)) {
@@ -233,22 +315,37 @@ fun DrawScope.drawPixelSprite(topLeft: Offset, px: Float, style: SpriteStyle, bl
             'p' -> style.pants
             'P' -> pantsShade
             'o' -> style.shoes
-            'c' -> CapColor
-            'C' -> CapShade
-            'w' -> Color.White
-            'y' -> CrownGold
-            'g' -> CrownGem
-            'l' -> HaloColor
-            'n' -> Blush
-            'd' -> PhonesColor
-            'z' -> LensColor
-            'Z' -> LensShine
-            'v' -> CapeColor
-            'V' -> CapeShade
             'q' -> Tear
             else -> null
         } ?: continue
         drawRect(color, Offset(topLeft.x + x * px, topLeft.y + y * px), cell)
+    }
+    drawAccessories(topLeft, px / 2, style, blink, hairShine, skinShadow)
+}
+
+/** Second pass: accessories (back first) on the half-pixel grid. */
+private fun DrawScope.drawAccessories(topLeft: Offset, half: Float, style: SpriteStyle, blink: Boolean, hairShine: Color, skinShadow: Color) {
+    val cell = Size(half + 0.6f, half + 0.6f)
+    // Translucent cells (glass, glow) must not overlap, or the seams show darker.
+    val exact = Size(half, half)
+    for (id in style.accessories) {
+        val art = ACCESSORY_ART[id] ?: continue
+        for ((layer, behind) in listOf(art.behind to true, art.front to false)) {
+            for ((y, row) in layer) for (x in 0 until ART_W) {
+                val code = row[x]
+                if (code == '.') continue
+                if (behind && spriteCode(x / 2, y / 2, style, blink) != '.') continue
+                val color = art.palette[code] ?: when (code) {
+                    'k' -> Outline
+                    'h' -> style.hair
+                    'H' -> hairShine
+                    's' -> style.skin
+                    'S' -> skinShadow
+                    else -> null
+                } ?: continue
+                drawRect(color, Offset(topLeft.x + x * half, topLeft.y + y * half), if (color.alpha < 1f) exact else cell)
+            }
+        }
     }
 }
 
