@@ -56,7 +56,7 @@ object TodayWidget {
         val done = active.count { it.done }
         val percent = if (active.isEmpty()) 0 else (done * 100f / active.size).roundToInt()
         val streak = Streaks.currentFor(byDate, saved.rewards.shieldedDates, today)
-        val mood = Moods.of(byDate, saved.rewards.shieldedDates, today)
+        val mood = saved.settings.statusMood ?: Moods.of(byDate, saved.rewards.shieldedDates, today)
 
         val views = RemoteViews(context.packageName, R.layout.widget_today)
         views.setImageViewBitmap(R.id.widget_avatar, renderSpriteBitmap(saved.character.outfit, mood))

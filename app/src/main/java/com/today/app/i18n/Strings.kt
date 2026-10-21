@@ -29,7 +29,7 @@ import java.util.Locale
  * Every piece of user-visible text. Both languages implement this interface, so a missing
  * translation is a compile error rather than a stray Korean/English string at runtime.
  */
-interface Strings {
+interface Strings : FeatureStrings {
     val language: AppLanguage
     val locale: Locale
 
@@ -452,7 +452,7 @@ interface Strings {
     fun messageText(m: ChatMessage) = if (language == AppLanguage.ENGLISH && m.textEn != null) m.textEn else m.text
 }
 
-object KoStrings : Strings {
+object KoStrings : Strings, FeatureStrings by KoFeatureStrings {
     override val language = AppLanguage.KOREAN
     override val locale: Locale = Locale.KOREAN
 
@@ -844,9 +844,14 @@ object KoStrings : Strings {
         "sunglasses" -> "선글라스"
         "catears" -> "고양이 귀"
         "halo" -> "천사 링"
+        "partyhat" -> "새해 파티 모자"
+        "flowercrown" -> "봄꽃 화관"
+        "strawhat" -> "여름 밀짚모자"
+        "witchhat" -> "할로윈 마녀 모자"
+        "santahat" -> "산타 모자"
         else -> id
     }
-    override fun accessoryLock(acc: Accessory) = acc.unlockLevel?.let { "LV $it" } ?: "🎁 상자"
+    override fun accessoryLock(acc: Accessory) = acc.unlockLevel?.let { "LV $it" } ?: if (acc.event != null) "🎪 이벤트" else "🎁 상자"
     override val rewardsTitle = "내 보상"
     override val statShields = "보호권"
     override val statBoxes = "상자"
@@ -902,6 +907,11 @@ object KoStrings : Strings {
         Mood.SAD -> "${nickname}님, 어제는 아쉬웠지만 오늘 다시 시작해요!"
         Mood.SLEEPY -> "${nickname}님, 오늘의 첫 퀘스트를 시작해 볼까요?"
         Mood.NORMAL -> greeting(nickname)
+        Mood.EXCITED -> "${nickname}님, 신나는 하루네요! 기세를 몰아가요 🔥"
+        Mood.CALM -> "${nickname}님, 오늘은 차분하게 하나씩 해 봐요"
+        Mood.LOVE -> "${nickname}님, 설레는 하루 보내세요 💕"
+        Mood.ANGRY -> "${nickname}님, 힘든 날엔 작은 퀘스트 하나부터!"
+        Mood.SICK -> "${nickname}님, 무리하지 말고 푹 쉬어요. 쉬는 것도 퀘스트예요"
     }
 
     // ---- widget ----
@@ -912,12 +922,15 @@ object KoStrings : Strings {
     override val widgetRowDesc = "캐릭터와 오늘 진행률을 홈 화면에 한 줄로 두고 바로 열어요"
     override val msgWidgetUnsupported = "이 런처는 바로 추가를 지원하지 않아요. 홈 화면을 길게 눌러 위젯에서 추가해 주세요"
     override fun msgAccessoryLocked(acc: Accessory) =
-        acc.unlockLevel?.let { "🔒 ${accessoryName(acc.id)}: LV ${it}에 해금돼요" } ?: "🔒 ${accessoryName(acc.id)}: 보상 상자에서 얻을 수 있어요"
+        acc.unlockLevel?.let { "🔒 ${accessoryName(acc.id)}: LV ${it}에 해금돼요" }
+            ?: acc.event?.let { "🔒 ${accessoryName(acc.id)}: ${eventName(it)} 기간에 이벤트 미션으로 얻을 수 있어요" }
+            ?: "🔒 ${accessoryName(acc.id)}: 보상 상자에서 얻을 수 있어요"
     override fun rarityName(r: Rarity) = when (r) {
         Rarity.COMMON -> "일반"
         Rarity.RARE -> "희귀"
         Rarity.EPIC -> "영웅"
         Rarity.LEGENDARY -> "전설"
+        Rarity.LIMITED -> "한정"
     }
     override val backdropTitle = "배경"
     override val backdropHint = "레벨이 오르면 새 배경이 열려요. 홈 캐릭터 카드와 옷장에 함께 적용돼요"
@@ -932,7 +945,7 @@ object KoStrings : Strings {
     override fun msgBackdropLocked(b: BackdropDef) = "🔒 ${backdropName(b.id)}: LV ${b.unlockLevel}에 해금돼요"
 }
 
-object EnStrings : Strings {
+object EnStrings : Strings, FeatureStrings by EnFeatureStrings {
     override val language = AppLanguage.ENGLISH
     override val locale: Locale = Locale.ENGLISH
 
@@ -1325,9 +1338,14 @@ object EnStrings : Strings {
         "sunglasses" -> "Sunglasses"
         "catears" -> "Cat Ears"
         "halo" -> "Halo"
+        "partyhat" -> "New Year Party Hat"
+        "flowercrown" -> "Spring Flower Crown"
+        "strawhat" -> "Summer Straw Hat"
+        "witchhat" -> "Halloween Witch Hat"
+        "santahat" -> "Santa Hat"
         else -> id
     }
-    override fun accessoryLock(acc: Accessory) = acc.unlockLevel?.let { "LV $it" } ?: "🎁 Box"
+    override fun accessoryLock(acc: Accessory) = acc.unlockLevel?.let { "LV $it" } ?: if (acc.event != null) "🎪 Event" else "🎁 Box"
     override val rewardsTitle = "My rewards"
     override val statShields = "Shields"
     override val statBoxes = "Boxes"
@@ -1387,6 +1405,11 @@ object EnStrings : Strings {
         Mood.SAD -> "Yesterday slipped, $nickname. Let's go again today!"
         Mood.SLEEPY -> "Ready for your first quest, $nickname?"
         Mood.NORMAL -> greeting(nickname)
+        Mood.EXCITED -> "What a day, $nickname! Keep the streak rolling 🔥"
+        Mood.CALM -> "Nice and steady today, $nickname"
+        Mood.LOVE -> "Have a lovely day, $nickname 💕"
+        Mood.ANGRY -> "Tough day, $nickname? Start with one small quest"
+        Mood.SICK -> "Rest up, $nickname. Taking a break counts too"
     }
 
     // ---- widget ----
@@ -1397,12 +1420,15 @@ object EnStrings : Strings {
     override val widgetRowDesc = "A one-row bar with your character and today's progress that opens the app"
     override val msgWidgetUnsupported = "This launcher can't add it directly. Long-press the home screen and add it from Widgets"
     override fun msgAccessoryLocked(acc: Accessory) =
-        acc.unlockLevel?.let { "🔒 ${accessoryName(acc.id)} unlocks at LV $it" } ?: "🔒 ${accessoryName(acc.id)} comes from reward boxes"
+        acc.unlockLevel?.let { "🔒 ${accessoryName(acc.id)} unlocks at LV $it" }
+            ?: acc.event?.let { "🔒 ${accessoryName(acc.id)} comes from ${eventName(it)} event missions" }
+            ?: "🔒 ${accessoryName(acc.id)} comes from reward boxes"
     override fun rarityName(r: Rarity) = when (r) {
         Rarity.COMMON -> "Common"
         Rarity.RARE -> "Rare"
         Rarity.EPIC -> "Epic"
         Rarity.LEGENDARY -> "Legendary"
+        Rarity.LIMITED -> "Limited"
     }
     override val backdropTitle = "Backgrounds"
     override val backdropHint = "New backgrounds open as you level up. They show on the home character card and in the wardrobe"

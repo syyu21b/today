@@ -82,6 +82,8 @@ import com.today.app.ui.theme.Gold
 import com.today.app.ui.theme.Mint
 import com.today.app.ui.theme.PixelFont
 import com.today.app.ui.theme.Sky
+import com.today.app.ui.theme.Hairline
+import com.today.app.ui.theme.Ink
 import com.today.app.ui.theme.TextMuted
 import com.today.app.ui.theme.Violet
 import kotlinx.coroutines.delay
@@ -96,10 +98,11 @@ fun Modifier.silhouette(): Modifier = this
 
 val Rarity.color: Color
     get() = when (this) {
-        Rarity.COMMON -> Color(0xFFB4BCCC)
+        Rarity.COMMON -> Color(0xFF9AA3B8)
         Rarity.RARE -> Color(0xFF4FA8FF)
         Rarity.EPIC -> Color(0xFFB26BFF)
         Rarity.LEGENDARY -> Color(0xFFFFB238)
+        Rarity.LIMITED -> Color(0xFFFF5FA2)
     }
 
 /** Small rounded pill used on the character card (shields, title). */
@@ -474,7 +477,7 @@ private fun AccessoryTile(
         Text(
             if (unlocked) s.accessoryName(acc.id) else s.accessoryLock(acc),
             fontSize = 11.sp, maxLines = 1,
-            color = if (worn) Gold else if (unlocked) Color.White else TextMuted,
+            color = if (worn) Gold else if (unlocked) Ink else TextMuted,
             fontWeight = if (worn) FontWeight.Bold else null,
         )
     }
@@ -516,7 +519,7 @@ private fun BackdropTile(b: BackdropDef, unlocked: Boolean, selected: Boolean, m
                 .fillMaxWidth()
                 .aspectRatio(0.8f)
                 .clip(RoundedCornerShape(12.dp))
-                .border(if (selected) 3.dp else 1.dp, if (selected) Gold else Color.White.copy(alpha = 0.1f), RoundedCornerShape(12.dp))
+                .border(if (selected) 3.dp else 1.dp, if (selected) Gold else Hairline.copy(alpha = 0.1f), RoundedCornerShape(12.dp))
                 .clickable(onClick = onClick)
                 .alpha(if (unlocked) 1f else 0.45f),
             animated = false,
@@ -527,7 +530,7 @@ private fun BackdropTile(b: BackdropDef, unlocked: Boolean, selected: Boolean, m
         Text(
             if (unlocked) s.backdropName(b.id) else "LV ${b.unlockLevel}",
             fontSize = 11.sp, maxLines = 1,
-            color = if (selected) Gold else if (unlocked) Color.White else TextMuted,
+            color = if (selected) Gold else if (unlocked) Ink else TextMuted,
             fontWeight = if (selected) FontWeight.Bold else null,
         )
     }

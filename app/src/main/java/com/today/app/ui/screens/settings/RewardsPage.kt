@@ -38,6 +38,8 @@ import com.today.app.ui.screens.ShieldDialog
 import com.today.app.ui.screens.TitleRow
 import com.today.app.ui.screens.silhouette
 import com.today.app.ui.theme.Gold
+import com.today.app.ui.theme.LocalTodayColors
+import com.today.app.ui.theme.Hairline
 import com.today.app.ui.theme.PixelFont
 import com.today.app.ui.theme.Sky
 import com.today.app.ui.theme.TextMuted
@@ -52,7 +54,7 @@ fun RewardStrip(vm: TodayViewModel, onOpen: () -> Unit) {
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(Color.Black.copy(alpha = 0.2f))
+            .background(Hairline.copy(alpha = if (LocalTodayColors.current.isDark) 0.12f else 0.06f))
             .clickable(onClick = onOpen)
             .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {

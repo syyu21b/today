@@ -43,6 +43,8 @@ import com.today.app.ui.theme.Mint
 import com.today.app.ui.theme.NightSurfaceHigh
 import com.today.app.ui.theme.PixelFont
 import com.today.app.ui.theme.Sky
+import com.today.app.ui.theme.Hairline
+import com.today.app.ui.theme.Ink
 import com.today.app.ui.theme.TextMuted
 import java.time.YearMonth
 import kotlin.math.roundToInt
@@ -50,6 +52,8 @@ import kotlin.math.roundToInt
 private const val WEEKS = 12
 
 /** One hue (mint), dim -> bright with the share of the day done; 0 = the empty track. */
+@androidx.compose.runtime.Composable
+@androidx.compose.runtime.ReadOnlyComposable
 private fun heatColor(level: Int): Color = when (level) {
     0 -> NightSurfaceHigh
     1 -> Mint.copy(alpha = 0.3f)
@@ -172,7 +176,7 @@ private fun Heatmap(vm: TodayViewModel) {
                                         .size(cell)
                                         .clip(RoundedCornerShape(4.dp))
                                         .background(if (shielded) Sky.copy(alpha = 0.7f) else heatColor(Stats.heatLevel(day)))
-                                        .then(if (selected?.date == date) Modifier.border(1.5.dp, Color.White, RoundedCornerShape(4.dp)) else Modifier)
+                                        .then(if (selected?.date == date) Modifier.border(1.5.dp, Ink, RoundedCornerShape(4.dp)) else Modifier)
                                         .clickable { selected = day },
                                 )
                             }
@@ -215,11 +219,11 @@ private fun WeekBars(vm: TodayViewModel) {
                         .fillMaxHeight()
                         .clip(RoundedCornerShape(8.dp))
                         .clickable { selected = day }
-                        .then(if (selected?.date == day.date) Modifier.background(Color.White.copy(alpha = 0.06f)) else Modifier),
+                        .then(if (selected?.date == day.date) Modifier.background(Hairline.copy(alpha = 0.06f)) else Modifier),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Bottom,
                 ) {
-                    Text("${day.done}", fontSize = 11.sp, fontFamily = PixelFont, color = if (day.done > 0) Color.White else TextMuted)
+                    Text("${day.done}", fontSize = 11.sp, fontFamily = PixelFont, color = if (day.done > 0) Ink else TextMuted)
                     Spacer(Modifier.height(4.dp))
                     // Track = what was scheduled, fill = what got done (both on one scale).
                     Box(
@@ -245,7 +249,7 @@ private fun WeekBars(vm: TodayViewModel) {
                     Text(
                         s.weekdayShort(day.date.dayOfWeek),
                         fontSize = 11.sp,
-                        color = if (isToday) Color.White else TextMuted,
+                        color = if (isToday) Ink else TextMuted,
                         fontWeight = if (isToday) FontWeight.Bold else null,
                     )
                 }

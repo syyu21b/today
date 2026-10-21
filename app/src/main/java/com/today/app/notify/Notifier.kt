@@ -26,6 +26,7 @@ object Notifier {
     const val ID_STREAK = 1002
     const val ID_TEST = 1003
     private const val ID_MESSAGE_BASE = 2000
+    private const val ID_QUEST_ITEM_BASE = 100_000
 
     /** Android 13+ needs the runtime permission; older versions only the user-level toggle. */
     fun hasPermission(context: Context): Boolean =
@@ -49,6 +50,9 @@ object Notifier {
     }
 
     fun messageId(friendId: String) = ID_MESSAGE_BASE + (friendId.hashCode() and 0xFFFF)
+
+    /** One slot per quest title, so a quest re-alerting replaces its own notification. */
+    fun questItemId(title: String) = ID_QUEST_ITEM_BASE + (title.hashCode() and 0xFFFF)
 
     fun post(
         context: Context,

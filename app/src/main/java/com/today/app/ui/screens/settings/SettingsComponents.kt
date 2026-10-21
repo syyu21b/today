@@ -43,10 +43,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import com.today.app.i18n.LocalStrings
+import com.today.app.ui.theme.Hairline
+import com.today.app.ui.theme.Ink
 import com.today.app.ui.theme.TextMuted
 
 /** Pages inside the Settings tab. */
-enum class SettingsPage { HOME, REWARDS, LANGUAGE, NOTIFICATIONS, FRIENDS, MESSAGES, QUESTS, DATA, ABOUT }
+enum class SettingsPage { HOME, REWARDS, LANGUAGE, NOTIFICATIONS, FRIENDS, MESSAGES, QUESTS, DATA, ABOUT, APPEARANCE, PRIVACY }
 
 /** Scrolling detail page with a back arrow + title. */
 @Composable
@@ -94,7 +96,7 @@ fun SettingsGroup(title: String? = null, footer: String? = null, content: @Compo
 
 @Composable
 fun SettingsDivider() {
-    HorizontalDivider(Modifier.padding(start = 64.dp), color = Color.White.copy(alpha = 0.06f))
+    HorizontalDivider(Modifier.padding(start = 64.dp), color = Hairline.copy(alpha = 0.06f))
 }
 
 /** Colored rounded-square icon used at the start of rows. */
@@ -121,7 +123,7 @@ fun SettingsRow(
     subtitle: String? = null,
     icon: ImageVector? = null,
     iconColor: Color = TextMuted,
-    titleColor: Color = Color.White,
+    titleColor: Color = Ink,
     enabled: Boolean = true,
     onClick: (() -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = if (onClick != null) ({ Chevron() }) else null,

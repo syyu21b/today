@@ -13,6 +13,8 @@ data class Quest(
     val done: Boolean = false,
     /** Weekdays it's scheduled on; empty = every day. On other days it rests (shown, not counted). */
     val days: Set<DayOfWeek> = emptySet(),
+    /** Minute of the day for this quest's own reminder; null = none. */
+    val remindAt: Int? = null,
 ) {
     fun activeOn(date: LocalDate) = days.isEmpty() || date.dayOfWeek in days
 }
@@ -32,6 +34,14 @@ const val MIN_QUEST_XP = 5
 const val MAX_QUEST_XP = 30
 
 const val DEFAULT_SKIN = 0xFFF5C9A3.toInt()
+
+/** Hair shapes drawn by the avatar (art in CharacterArt.kt). */
+enum class HairStyle(val long: Boolean) {
+    SHORT(false), LONG(true), BOB(true), PONYTAIL(true), TWINTAIL(true), BUN(false), SPIKY(false), CURLY(false), BUZZ(false),
+}
+
+/** Optional face details, e.g. for an older-looking character. */
+enum class FaceFeature { FRECKLES, MUSTACHE, BEARD, WRINKLES }
 
 /**
  * Everything needed to paint the pixel avatar: colors (ARGB ints) + garment shape flags.
@@ -55,7 +65,12 @@ data class Outfit(
     val head: String = "",
     val face: String = "",
     val back: String = "",
+    /** Chosen hair shape; null = follow [longHair] (presets and photo styles). */
+    val hairStyle: HairStyle? = null,
+    val features: Set<FaceFeature> = emptySet(),
 ) {
+    val style: HairStyle get() = hairStyle ?: if (longHair) HairStyle.LONG else HairStyle.SHORT
+
     fun accessoryIn(slot: AccessorySlot) = when (slot) {
         AccessorySlot.HEAD -> head
         AccessorySlot.FACE -> face
@@ -72,6 +87,9 @@ data class Outfit(
 
     /** Presets and photo styles keep whatever the character is already wearing. */
     fun withAccessoriesOf(other: Outfit) = copy(head = other.head, face = other.face, back = other.back)
+
+    /** Clothes from this outfit on [other]'s body: accessories, hair style, face details and skin stay. */
+    fun withBodyOf(other: Outfit) = withAccessoriesOf(other).copy(hairStyle = other.hairStyle, features = other.features, skin = other.skin)
 }
 
 data class CharacterState(
@@ -123,13 +141,32 @@ data class AppSettings(
     val saveChatHistory: Boolean = true,
     // Friends
     val contactsPromptDone: Boolean = false,
+    // Profile status: a mood shown on the character (null = automatic) and a short message
+    val statusMood: Mood? = null,
+    val statusMessage: String = "",
+    val themeMode: ThemeMode = ThemeMode.DARK,
+    /** First-run guide finished (existing users count as done). */
+    val onboardingDone: Boolean = true,
+    /** Offer to share a crash report on the next launch. */
+    val crashReports: Boolean = true,
 )
+
+const val MAX_STATUS_MESSAGE = 40
 
 /** One-shot snackbar message; the id makes identical texts re-trigger. [action] adds a button (e.g. Undo). */
 data class UiMessage(val id: Long, val text: String, val action: String? = null)
 
-/** The character's face, from how today (and yesterday) went. */
-enum class Mood(val emoji: String) { HAPPY("😄"), NORMAL("🙂"), SLEEPY("😴"), SAD("😢") }
+/**
+ * The character's face. The first four follow how today (and yesterday) went; all of them can
+ * also be picked as the profile status.
+ */
+enum class Mood(val emoji: String) {
+    HAPPY("😄"), NORMAL("🙂"), SLEEPY("😴"), SAD("😢"),
+    EXCITED("🤩"), CALM("😌"), LOVE("🥰"), ANGRY("😤"), SICK("🤒"),
+}
+
+/** Light / dark appearance; SYSTEM follows the phone. */
+enum class ThemeMode { SYSTEM, DARK, LIGHT }
 
 object Moods {
     /** Proud when today is done, gloomy right after a missed day, sleepy before starting. Shared by the app and the widget. */
@@ -216,7 +253,10 @@ object Outfits {
         0xFF6C4BF4, 0xFFFF4FD8, 0xFFE8DCC2, 0xFF5B2A4E,
     ).map { it.toInt() }
 
-    val skinTones = listOf(0xFFFBE0CC, 0xFFF5C9A3, 0xFFE0A985, 0xFFC68A5E, 0xFF8D5A3B, 0xFF5C3A24).map { it.toInt() }
+    val skinTones = listOf(0xFFFFEDE0, 0xFFFBE0CC, 0xFFF5C9A3, 0xFFE8B98F, 0xFFE0A985, 0xFFC68A5E, 0xFF8D5A3B, 0xFF5C3A24).map { it.toInt() }
+
+    /** Extra hair colours offered with the hair slot (grey and white for older characters). */
+    val hairColors = listOf(0xFF111111, 0xFF3B2A20, 0xFF7A4E2D, 0xFFB4462E, 0xFFD9A441, 0xFFF2D58A, 0xFF9E9E9E, 0xFFD8D8E0, 0xFFF4F4F8).map { it.toInt() }
 }
 
 object DummyData {
@@ -237,10 +277,10 @@ object DummyData {
     }
 
     /** Built-in title in the other language, or null for user-written titles. */
-    fun translateDefaultTitle(title: String, to: AppLanguage): String? = defaultQuestTemplates.firstNotNullOfOrNull { t ->
+    fun translateDefaultTitle(title: String, to: AppLanguage): String? = Templates.allQuests.firstNotNullOfOrNull { t ->
         when {
-            to == AppLanguage.ENGLISH && title == t[1] -> t[2]
-            to == AppLanguage.KOREAN && title == t[2] -> t[1]
+            to == AppLanguage.ENGLISH && title == t.ko -> t.en
+            to == AppLanguage.KOREAN && title == t.en -> t.ko
             else -> null
         }
     }

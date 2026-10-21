@@ -96,6 +96,8 @@ import com.today.app.ui.theme.Mint
 import com.today.app.ui.theme.NightSurfaceHigh
 import com.today.app.ui.theme.PixelFont
 import com.today.app.ui.theme.StoryGradient
+import com.today.app.ui.theme.Hairline
+import com.today.app.ui.theme.Ink
 import com.today.app.ui.theme.TextMuted
 
 @Composable
@@ -174,7 +176,7 @@ private fun FriendList(vm: TodayViewModel) {
                             last.fromMe -> s.youPrefix(s.messageText(last))
                             else -> s.messageText(last)
                         },
-                        color = if (isUnread || isTyping) Color.White else TextMuted,
+                        color = if (isUnread || isTyping) Ink else TextMuted,
                         fontWeight = if (isUnread) FontWeight.SemiBold else FontWeight.Normal,
                         maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 14.sp,
                     )
@@ -289,8 +291,8 @@ private fun DmChat(vm: TodayViewModel, friend: Friend) {
             }
             BasicTextField(
                 state = input,
-                textStyle = TextStyle(color = Color.White, fontSize = (st.chatFontSize.sp + 1).sp),
-                cursorBrush = SolidColor(Color.White),
+                textStyle = TextStyle(color = Ink, fontSize = (st.chatFontSize.sp + 1).sp),
+                cursorBrush = SolidColor(Ink),
                 lineLimits = if (st.enterToSend) TextFieldLineLimits.SingleLine else TextFieldLineLimits.MultiLine(maxHeightInLines = 4),
                 keyboardOptions = KeyboardOptions(imeAction = if (st.enterToSend) ImeAction.Send else ImeAction.Default),
                 onKeyboardAction = if (st.enterToSend) KeyboardActionHandler { send() } else null,
@@ -377,9 +379,9 @@ private fun MessageBubble(m: ChatMessage, friend: Friend, fontSize: Int, showRea
                     .pointerInput(m.id) { detectTapGestures(onDoubleTap = { onDoubleTap() }) }
                     .padding(horizontal = 14.dp, vertical = 10.dp),
             ) {
-                Text(s.messageText(m), color = Color.White, fontSize = fontSize.sp)
+                Text(s.messageText(m), color = if (m.fromMe) Color.White else Ink, fontSize = fontSize.sp)
                 Text(
-                    s.chatTime(m.time), fontSize = 10.sp, color = Color.White.copy(alpha = 0.6f),
+                    s.chatTime(m.time), fontSize = 10.sp, color = (if (m.fromMe) Color.White else Ink).copy(alpha = 0.6f),
                     modifier = Modifier.align(Alignment.End),
                 )
             }
@@ -423,7 +425,7 @@ private fun TypingBubble(friend: Friend) {
                     animationSpec = infiniteRepeatable(tween(500, delayMillis = i * 150), RepeatMode.Reverse),
                     label = "dot$i",
                 )
-                Box(Modifier.size(8.dp).clip(CircleShape).background(Color.White.copy(alpha = a)))
+                Box(Modifier.size(8.dp).clip(CircleShape).background(Ink.copy(alpha = a)))
             }
         }
     }

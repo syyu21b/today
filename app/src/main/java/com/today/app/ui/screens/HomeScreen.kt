@@ -82,6 +82,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
@@ -98,12 +99,17 @@ import com.today.app.data.MAX_QUEST_TITLE
 import com.today.app.data.MAX_QUEST_XP
 import com.today.app.data.MIN_QUEST_XP
 import com.today.app.data.Mood
+import com.today.app.data.PetState
 import com.today.app.data.Quest
 import com.today.app.data.TodayViewModel
 import com.today.app.i18n.LocalStrings
 import com.today.app.ui.components.Backdrop
 import com.today.app.ui.components.CelebrationOverlay
 import com.today.app.ui.components.PixelAvatar
+import com.today.app.ui.components.PixelPet
+import com.today.app.ui.screens.settings.ReminderTimeDialog
+import com.today.app.ui.screens.settings.minutesToTime
+import com.today.app.ui.theme.Ink
 import com.today.app.ui.components.WeekCalendar
 import com.today.app.ui.theme.Coral
 import com.today.app.ui.theme.Gold
@@ -130,6 +136,8 @@ fun HomeScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
     var pendingDelete by remember { mutableStateOf<Quest?>(null) }
     var showShield by remember { mutableStateOf(false) }
     var showTitles by remember { mutableStateOf(false) }
+    var showStatus by remember { mutableStateOf(false) }
+    var showTemplates by remember { mutableStateOf(false) }
     val haptic = LocalHapticFeedback.current
     // Drag-to-reorder: which row is lifted and how far it has moved since its last swap.
     var draggingId by remember { mutableStateOf<String?>(null) }
@@ -200,6 +208,7 @@ fun HomeScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item(key = "header") { Header(vm.todayDate, s.moodGreeting(vm.settings.nickname, vm.mood)) }
+            vm.pendingCrashReport?.let { report -> item(key = "crash") { CrashReportCard(report, onDismiss = vm::dismissCrashReport) } }
             item(key = "character") {
                 CharacterCard(
                     vm.character, vm.streak, todayQuests.count { it.done }, todayQuests.size,
@@ -207,10 +216,16 @@ fun HomeScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
                     titleId = vm.rewards.equippedTitle,
                     mood = vm.mood,
                     backdrop = vm.backdrop,
+                    pet = vm.pet,
+                    status = vm.settings.statusMessage,
                     onShield = { showShield = true },
                     onTitle = { showTitles = true },
+                    onStatus = { showStatus = true },
+                    onPet = vm::petThePet,
                 )
             }
+            if (vm.activeEvent != null) item(key = "event") { EventBanner(vm) }
+            item(key = "missions") { MissionsCard(vm) }
             vm.rescuableStreak?.let { saved ->
                 item(key = "rescue") {
                     RewardBanner("🛡", s.rescueBanner(saved), s.rescueButton, Sky) { vm.useShield(vm.todayDate.minusDays(1)) }
@@ -251,6 +266,7 @@ fun HomeScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
                         else editor = Editor.New
                     },
                     onCopy = { vm.copyDay(date) },
+                    onTemplates = { showTemplates = true },
                     canReorder = canReorder,
                     reorderMode = reorderMode,
                     onReorder = { reorderMode = !reorderMode },
@@ -305,13 +321,15 @@ fun HomeScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
             defaultXp = vm.settings.defaultQuestXp,
             weekStartsMonday = vm.settings.weekStartsMonday,
             onDismiss = { editor = null },
-            onSave = { title, emoji, xp, days ->
-                val error = if (existing == null) vm.addQuest(date, title, emoji, xp, days)
-                else vm.updateQuest(date, existing.id, title, emoji, xp, days)
+            onSave = { title, emoji, xp, days, remindAt ->
+                val error = if (existing == null) vm.addQuest(date, title, emoji, xp, days, remindAt)
+                else vm.updateQuest(date, existing.id, title, emoji, xp, days, remindAt)
                 if (error == null) editor = null else vm.showMessage(error)
             },
         )
     }
+    if (showStatus) StatusDialog(vm, onDismiss = { showStatus = false })
+    if (showTemplates) TemplatesDialog(vm, onDismiss = { showTemplates = false })
 
     pendingDelete?.let { q ->
         AlertDialog(
@@ -349,8 +367,12 @@ private fun CharacterCard(
     titleId: String,
     mood: Mood,
     backdrop: String,
+    pet: PetState?,
+    status: String,
     onShield: () -> Unit,
     onTitle: () -> Unit,
+    onStatus: () -> Unit,
+    onPet: () -> Unit,
 ) {
     val s = LocalStrings.current
     val xpProgress by animateFloatAsState(c.progress, tween(600), label = "xp")
@@ -358,14 +380,24 @@ private fun CharacterCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = RoundedCornerShape(20.dp),
     ) {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Backdrop(
                 backdrop,
                 Modifier
-                    .size(110.dp)
+                    .size(width = 124.dp, height = 116.dp)
                     .clip(RoundedCornerShape(16.dp)),
             ) {
-                PixelAvatar(c.outfit, Modifier.height(92.dp), mood = mood)
+                PixelAvatar(
+                    c.outfit,
+                    Modifier
+                        .height(96.dp)
+                        .align(if (pet != null) Alignment.CenterStart else Alignment.Center)
+                        .padding(start = if (pet != null) 10.dp else 0.dp),
+                    mood = mood,
+                )
+                if (pet != null) {
+                    PixelPet(pet.species, pet.stage, Modifier.width(54.dp).align(Alignment.BottomEnd).padding(end = 4.dp, bottom = 6.dp), onPet = onPet)
+                }
                 // Mood badge in the corner; the face itself changes too.
                 Text(mood.emoji, fontSize = 16.sp, modifier = Modifier.align(Alignment.TopEnd).padding(6.dp))
             }
@@ -396,6 +428,11 @@ private fun CharacterCard(
                 }
             }
         }
+        StatusBubble(
+            if (status.isBlank()) "💬 ${s.statusEmpty}" else "💬 $status",
+            onClick = onStatus,
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 14.dp),
+        )
     }
 }
 
@@ -430,6 +467,7 @@ private fun DayHeader(
     editable: Boolean,
     onAdd: () -> Unit,
     onCopy: () -> Unit,
+    onTemplates: () -> Unit,
     canReorder: Boolean,
     reorderMode: Boolean,
     onReorder: () -> Unit,
@@ -445,7 +483,7 @@ private fun DayHeader(
             Text(s.shortDate(date), style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.width(8.dp))
             Text(
-                tag, fontSize = 12.sp, color = Color.White,
+                tag, fontSize = 12.sp, color = if (date == today) Color.White else Ink,
                 modifier = Modifier
                     .clip(RoundedCornerShape(6.dp))
                     .background(if (date == today) Violet else NightSurfaceHigh)
@@ -469,6 +507,11 @@ private fun DayHeader(
                     leadingIcon = { Icon(Icons.Filled.Add, null, Modifier.size(16.dp)) },
                     colors = AssistChipDefaults.assistChipColors(containerColor = Violet.copy(alpha = 0.2f)),
                 )
+                AssistChip(
+                    onClick = onTemplates,
+                    label = { Text(s.templatesButton) },
+                    leadingIcon = { Text("📋", fontSize = 14.sp) },
+                )
                 // Right of "Add": toggles reorder mode; reads "Done" while active.
                 AssistChip(
                     onClick = onReorder,
@@ -479,8 +522,8 @@ private fun DayHeader(
                     },
                     colors = AssistChipDefaults.assistChipColors(
                         containerColor = if (reorderMode) Violet else Color.Transparent,
-                        labelColor = Color.White,
-                        leadingIconContentColor = Color.White,
+                        labelColor = if (reorderMode) Color.White else Ink,
+                        leadingIconContentColor = if (reorderMode) Color.White else Ink,
                     ),
                 )
             }
@@ -683,16 +726,19 @@ private fun QuestRow(
             Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
                 Text(
                     quest.title,
-                    style = MaterialTheme.typography.titleMedium,
+                    // System font for quest names: easier to read than the pixel font in long text.
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.SemiBold,
                     textDecoration = if (quest.done) TextDecoration.LineThrough else null,
-                    color = if (quest.done) TextMuted else Color.White,
+                    color = if (quest.done) TextMuted else Ink,
                     maxLines = 2, overflow = TextOverflow.Ellipsis,
                 )
-                if (quest.days.isNotEmpty()) {
-                    Text(
-                        "🔁 ${s.repeatLabel(quest.days)}" + if (active) "" else " · ${s.restDay}",
-                        fontSize = 12.sp, color = if (active) Violet else TextMuted,
-                    )
+                val info = listOfNotNull(
+                    quest.days.takeIf { it.isNotEmpty() }?.let { "🔁 ${s.repeatLabel(it)}" + if (active) "" else " · ${s.restDay}" },
+                    quest.remindAt?.let { "⏰ ${s.chatTime(minutesToTime(it))}" },
+                )
+                if (info.isNotEmpty()) {
+                    Text(info.joinToString("  "), fontSize = 12.sp, color = if (active) Violet else TextMuted)
                 }
             }
             Text("+${quest.xp} XP", fontFamily = PixelFont, fontWeight = FontWeight.Bold, color = if (quest.done) Mint else Gold)
@@ -770,9 +816,11 @@ private fun QuestEditorDialog(
     defaultXp: Int,
     weekStartsMonday: Boolean,
     onDismiss: () -> Unit,
-    onSave: (String, String, Int, Set<DayOfWeek>) -> Unit,
+    onSave: (String, String, Int, Set<DayOfWeek>, Int?) -> Unit,
 ) {
     val s = LocalStrings.current
+    var remindAt by remember { mutableStateOf(initial?.remindAt) }
+    var pickingTime by remember { mutableStateOf(false) }
     var title by remember { mutableStateOf(initial?.title ?: "") }
     var days by remember { mutableStateOf(initial?.days ?: emptySet()) }
     var emoji by remember { mutableStateOf(initial?.emoji ?: "⭐") }
@@ -826,15 +874,30 @@ private fun QuestEditorDialog(
                 }
                 Text(s.fieldRepeat, fontSize = 12.sp, color = TextMuted)
                 WeekdayPicker(days, weekStartsMonday) { days = it }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("⏰ ${s.questReminderField}", fontSize = 13.sp, color = TextMuted, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { pickingTime = true }) {
+                        Text(remindAt?.let { s.chatTime(minutesToTime(it)) } ?: s.questReminderPick)
+                    }
+                    if (remindAt != null) {
+                        IconButton(onClick = { remindAt = null }) { Icon(Icons.Filled.Close, contentDescription = s.questReminderClear, tint = TextMuted) }
+                    }
+                }
             }
         },
         confirmButton = {
-            TextButton(onClick = { onSave(title, emoji, xp ?: defaultXp, days) }, enabled = titleValid && xpValid) {
+            TextButton(onClick = { onSave(title, emoji, xp ?: defaultXp, days, remindAt) }, enabled = titleValid && xpValid) {
                 Text(if (initial == null) s.add else s.save)
             }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(s.cancel) } },
     )
+    if (pickingTime) {
+        ReminderTimeDialog(remindAt ?: (9 * 60), onDismiss = { pickingTime = false }) {
+            remindAt = it
+            pickingTime = false
+        }
+    }
 }
 
 /** Seven round toggles; none selected = every day. */
@@ -855,6 +918,35 @@ private fun WeekdayPicker(selected: Set<DayOfWeek>, mondayFirst: Boolean, onChan
             ) {
                 Text(s.weekdayShort(day).take(3), fontSize = 12.sp, color = if (on) Color.White else TextMuted, fontWeight = if (on) FontWeight.Bold else null)
             }
+        }
+    }
+}
+
+/** After a crash: offer to share the saved report through any app the user picks. */
+@Composable
+private fun CrashReportCard(report: String, onDismiss: () -> Unit) {
+    val s = LocalStrings.current
+    val context = LocalContext.current
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(Coral.copy(alpha = 0.12f))
+            .border(1.dp, Coral.copy(alpha = 0.45f), RoundedCornerShape(16.dp))
+            .padding(start = 14.dp, end = 6.dp, top = 12.dp, bottom = 4.dp),
+    ) {
+        Text("⚠️ " + s.crashDialogTitle, fontWeight = FontWeight.Bold)
+        Text(s.crashDialogBody, fontSize = 13.sp, color = TextMuted, modifier = Modifier.padding(top = 4.dp, end = 8.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            TextButton(onClick = onDismiss) { Text(s.close, color = TextMuted) }
+            TextButton(onClick = {
+                val send = android.content.Intent(android.content.Intent.ACTION_SEND)
+                    .setType("text/plain")
+                    .putExtra(android.content.Intent.EXTRA_SUBJECT, s.crashSubject)
+                    .putExtra(android.content.Intent.EXTRA_TEXT, report)
+                runCatching { context.startActivity(android.content.Intent.createChooser(send, s.crashSend)) }
+                onDismiss()
+            }) { Text(s.crashSend, color = Coral, fontWeight = FontWeight.Bold) }
         }
     }
 }

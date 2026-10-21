@@ -6,7 +6,11 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import androidx.core.content.edit
 import com.today.app.data.AppSettings
+import com.today.app.data.Quest
+import com.today.app.data.SavedState
+import com.today.app.i18n.Strings
 import com.today.app.data.Streaks
 import com.today.app.data.activeOn
 import com.today.app.data.questsOn
@@ -23,12 +27,47 @@ import java.time.ZonedDateTime
 object ReminderScheduler {
     const val ACTION_QUEST = "com.today.app.action.QUEST_REMINDER"
     const val ACTION_STREAK = "com.today.app.action.STREAK_REMINDER"
+    const val ACTION_QUEST_ITEM = "com.today.app.action.QUEST_ITEM_REMINDER"
+    private const val REQUEST_QUEST_ITEM = 3
 
     fun reschedule(context: Context, settings: AppSettings) {
         val on = settings.notificationsEnabled
         schedule(context, ACTION_QUEST, 1, on && settings.questReminder, settings.questReminderTime)
         schedule(context, ACTION_STREAK, 2, on && settings.streakReminder, settings.streakReminderTime)
+        rescheduleQuestAlarm(context)
     }
+
+    /**
+     * One alarm for the next quest that has its own reminder time (today's still-open ones, else
+     * tomorrow's first). When it fires, every quest that became due since the last firing is announced.
+     */
+    fun rescheduleQuestAlarm(context: Context) {
+        val am = context.getSystemService(AlarmManager::class.java) ?: return
+        val intent = Intent(context, ReminderReceiver::class.java).setAction(ACTION_QUEST_ITEM)
+        val pi = PendingIntent.getBroadcast(context, REQUEST_QUEST_ITEM, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        am.cancel(pi)
+        val saved = TodayStorage(context).load()
+        if (!saved.settings.notificationsEnabled) return
+        val now = ZonedDateTime.now()
+        val minute = now.hour * 60 + now.minute
+        val today = now.toLocalDate()
+        val nextToday = saved.questsOn(today).activeOn(today).filter { !it.done }.mapNotNull { it.remindAt }.filter { it > minute }.minOrNull()
+        val trigger = if (nextToday != null) {
+            nextTrigger(nextToday, now)
+        } else {
+            val tomorrow = today.plusDays(1)
+            // Tomorrow's list is usually today's carried over.
+            val first = saved.questsOn(tomorrow).ifEmpty { saved.questsOn(today) }.activeOn(tomorrow).mapNotNull { it.remindAt }.minOrNull() ?: return
+            nextTrigger(first, tomorrow.atStartOfDay(now.zone).minusSeconds(1))
+        }
+        am.setWindow(AlarmManager.RTC_WAKEUP, trigger, QUEST_WINDOW_MS, pi)
+    }
+
+    private const val QUEST_WINDOW_MS = 5 * 60 * 1000L
+
+    /** Quests due between the last announced minute (exclusive) and [minute] (inclusive). */
+    fun dueQuests(quests: List<Quest>, afterMinute: Int, minute: Int): List<Quest> =
+        quests.filter { q -> !q.done && q.remindAt != null && q.remindAt > afterMinute && q.remindAt <= minute }
 
     private fun schedule(context: Context, action: String, requestCode: Int, enabled: Boolean, minuteOfDay: Int) {
         val am = context.getSystemService(AlarmManager::class.java) ?: return
@@ -71,6 +110,12 @@ class ReminderReceiver : BroadcastReceiver() {
                 "streak=${settings.streakReminder} remaining=$remaining canPost=${Notifier.canPost(context)}",
         )
 
+        if (intent.action == ReminderScheduler.ACTION_QUEST_ITEM) {
+            announceDueQuests(context, saved, s, todayDate)
+            ReminderScheduler.rescheduleQuestAlarm(context)
+            return
+        }
+
         if (settings.notificationsEnabled && remaining > 0) {
             when (intent.action) {
                 ReminderScheduler.ACTION_QUEST -> if (settings.questReminder) {
@@ -89,6 +134,23 @@ class ReminderReceiver : BroadcastReceiver() {
             }
         }
         ReminderScheduler.reschedule(context, settings)
+    }
+}
+
+/** Posts one alert per quest whose own reminder time has come, each only once per day. */
+private fun announceDueQuests(context: Context, saved: SavedState, s: Strings, today: LocalDate) {
+    if (!saved.settings.notificationsEnabled) return
+    val prefs = context.getSharedPreferences("reminder_state", Context.MODE_PRIVATE)
+    val now = java.time.LocalTime.now()
+    val minute = now.hour * 60 + now.minute
+    val last = if (prefs.getString("questItemDate", null) == today.toString()) prefs.getInt("questItemMinute", -1) else -1
+    val due = ReminderScheduler.dueQuests(saved.questsOn(today).activeOn(today), last, minute)
+    due.forEach { q ->
+        Notifier.post(context, s, Notifier.questItemId(q.title), Notifier.CHANNEL_REMINDERS, s.questItemReminderTitle(q.emoji, q.title), s.questItemReminderBody)
+    }
+    prefs.edit {
+        putString("questItemDate", today.toString())
+        putInt("questItemMinute", minute)
     }
 }
 

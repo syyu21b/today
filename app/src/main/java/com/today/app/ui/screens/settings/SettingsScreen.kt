@@ -28,6 +28,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Checkroom
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.PrivacyTip
+import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Info
@@ -60,12 +65,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.today.app.data.AppLanguage
+import com.today.app.data.ThemeMode
 import com.today.app.data.TodayViewModel
 import com.today.app.i18n.LocalStrings
 import com.today.app.ui.components.PixelAvatar
 import com.today.app.ui.screens.PixelProgressBar
+import com.today.app.ui.screens.StatusDialog
+import com.today.app.ui.theme.LocalTodayColors
 import com.today.app.ui.theme.Coral
 import com.today.app.ui.theme.Gold
+import com.today.app.ui.theme.Hairline
 import com.today.app.ui.theme.Mint
 import com.today.app.ui.theme.PixelFont
 import com.today.app.ui.theme.TextMuted
@@ -111,6 +120,8 @@ fun SettingsScreen(
             SettingsPage.QUESTS -> QuestsPage(vm, back, onNavigate = { page = it })
             SettingsPage.DATA -> DataPage(vm, back)
             SettingsPage.ABOUT -> AboutPage(vm, back)
+            SettingsPage.APPEARANCE -> AppearancePage(vm, back)
+            SettingsPage.PRIVACY -> PrivacyPage(vm, back, onNavigate = { page = it })
         }
     }
 }
@@ -144,6 +155,11 @@ private fun SettingsHome(vm: TodayViewModel, onOpenOutfit: () -> Unit, onNavigat
                 Icons.Filled.Notifications, Coral,
                 onClick = { onNavigate(SettingsPage.NOTIFICATIONS) },
             )
+            SettingsDivider()
+            SettingsRow(
+                s.rowAppearance, s.themeName(st.themeMode), Icons.Filled.Palette, Violet,
+                onClick = { onNavigate(SettingsPage.APPEARANCE) },
+            )
         }
         SettingsGroup(s.groupSocial) {
             SettingsRow(
@@ -174,6 +190,11 @@ private fun SettingsHome(vm: TodayViewModel, onOpenOutfit: () -> Unit, onNavigat
             )
             SettingsDivider()
             SettingsRow(
+                s.rowPrivacy, s.privacySummary, Icons.Filled.PrivacyTip, Mint,
+                onClick = { onNavigate(SettingsPage.PRIVACY) },
+            )
+            SettingsDivider()
+            SettingsRow(
                 s.sectionAbout, s.versionSummary(version), Icons.Filled.Info, Slate,
                 onClick = { onNavigate(SettingsPage.ABOUT) },
             )
@@ -187,13 +208,14 @@ private fun ProfileCard(vm: TodayViewModel, onOpenOutfit: () -> Unit, onOpenRewa
     val s = LocalStrings.current
     val c = vm.character
     var editingName by remember { mutableStateOf(false) }
+    var editingStatus by remember { mutableStateOf(false) }
     val xpProgress by animateFloatAsState(c.progress, tween(600), label = "xp")
 
     Column(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(24.dp))
-            .background(Brush.verticalGradient(listOf(Color(0xFF3A2F6B), MaterialTheme.colorScheme.surface)))
+            .background(Brush.verticalGradient(listOf(LocalTodayColors.current.heroTop, MaterialTheme.colorScheme.surface)))
             .padding(18.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -201,7 +223,7 @@ private fun ProfileCard(vm: TodayViewModel, onOpenOutfit: () -> Unit, onOpenRewa
                 Modifier
                     .size(84.dp)
                     .clip(RoundedCornerShape(18.dp))
-                    .background(Color.Black.copy(alpha = 0.2f)),
+                    .background(Hairline.copy(alpha = if (LocalTodayColors.current.isDark) 0.12f else 0.06f)),
                 contentAlignment = Alignment.Center,
             ) {
                 PixelAvatar(c.outfit, Modifier.height(72.dp), mood = vm.mood)
@@ -226,6 +248,36 @@ private fun ProfileCard(vm: TodayViewModel, onOpenOutfit: () -> Unit, onOpenRewa
                 }
             }
         }
+        Spacer(Modifier.height(12.dp))
+        // Status: today's mood + a short message (tap to change)
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(Hairline.copy(alpha = if (LocalTodayColors.current.isDark) 0.08f else 0.05f))
+                .clickable { editingStatus = true }
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(vm.mood.emoji, fontSize = 22.sp)
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    (vm.settings.statusMood?.let { s.moodName(it) } ?: "${s.statusAuto} · ${s.moodName(vm.mood)}"),
+                    fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                )
+                Text(vm.settings.statusMessage.ifBlank { s.statusEmpty }, fontSize = 13.sp, color = TextMuted, maxLines = 2)
+            }
+            Icon(Icons.Filled.Edit, contentDescription = s.editStatus, tint = TextMuted, modifier = Modifier.size(16.dp))
+        }
+        vm.pet?.let { pet ->
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "${pet.species.emoji} ${pet.name} · ${s.petStageName(pet.stage)}",
+                fontSize = 12.sp, color = Violet, fontFamily = PixelFont,
+                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onOpenOutfit).padding(4.dp),
+            )
+        }
         Spacer(Modifier.height(14.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
             Stat("🔥", s.days(vm.streak), s.statStreak)
@@ -242,6 +294,7 @@ private fun ProfileCard(vm: TodayViewModel, onOpenOutfit: () -> Unit, onOpenRewa
         }
     }
 
+    if (editingStatus) StatusDialog(vm, onDismiss = { editingStatus = false })
     if (editingName) {
         var name by remember { mutableStateOf(vm.settings.nickname) }
         AlertDialog(
@@ -286,6 +339,30 @@ private fun LanguagePage(vm: TodayViewModel, onBack: () -> Unit) {
                     iconColor = Blue,
                     onClick = { vm.updateLanguage(lang) },
                     trailing = { RadioButton(selected = vm.settings.language == lang, onClick = { vm.updateLanguage(lang) }) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppearancePage(vm: TodayViewModel, onBack: () -> Unit) {
+    val s = LocalStrings.current
+    SettingsSubPage(s.rowAppearance, onBack) {
+        SettingsGroup(footer = s.appearanceHint) {
+            ThemeMode.entries.forEachIndexed { i, mode ->
+                if (i > 0) SettingsDivider()
+                val select = { vm.updateSettings { it.copy(themeMode = mode) } }
+                SettingsRow(
+                    title = s.themeName(mode),
+                    icon = when (mode) {
+                        ThemeMode.SYSTEM -> Icons.Filled.Smartphone
+                        ThemeMode.DARK -> Icons.Filled.DarkMode
+                        ThemeMode.LIGHT -> Icons.Filled.LightMode
+                    },
+                    iconColor = Violet,
+                    onClick = select,
+                    trailing = { RadioButton(selected = vm.settings.themeMode == mode, onClick = select) },
                 )
             }
         }

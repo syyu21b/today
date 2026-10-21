@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -76,6 +77,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import androidx.core.net.toUri
+import com.today.app.data.FaceFeature
 import com.today.app.data.Mood
 import com.today.app.data.Outfit
 import com.today.app.data.Outfits
@@ -85,6 +87,9 @@ import com.today.app.i18n.LocalStrings
 import com.today.app.i18n.Strings
 import com.today.app.ui.components.Backdrop
 import com.today.app.ui.components.PixelAvatar
+import com.today.app.ui.components.PixelPet
+import com.today.app.ui.theme.Hairline
+import com.today.app.ui.theme.Ink
 import com.today.app.ui.theme.Gold
 import com.today.app.ui.theme.NightSurfaceHigh
 import com.today.app.ui.theme.PixelFont
@@ -180,11 +185,19 @@ fun OutfitScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
                 Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 26.dp)
+                    .offset(x = if (vm.pet != null) (-28).dp else 0.dp)
                     .size(width = 120.dp, height = 14.dp)
                     .clip(CircleShape)
                     .background(Color.Black.copy(alpha = 0.35f)),
             )
-            FloatingAvatar(outfit, vm.mood)
+            FloatingAvatar(outfit, vm.mood, hasPet = vm.pet != null)
+            vm.pet?.let { pet ->
+                PixelPet(
+                    pet.species, pet.stage,
+                    Modifier.align(Alignment.BottomEnd).padding(end = 36.dp, bottom = 22.dp).width(88.dp),
+                    onPet = vm::petThePet,
+                )
+            }
             Text(
                 s.outfitName(outfit.name),
                 fontFamily = PixelFont, color = Gold,
@@ -223,6 +236,9 @@ fun OutfitScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
             AnalyzedPhoto(photo = photo, result = vm.styleResult, analyzing = vm.isAnalyzingStyle, onClose = vm::clearStylePhoto)
         }
 
+        // ---- Pet ----
+        PetCard(vm)
+
         // ---- Manual fine-tune ----
         FineTuneCard(outfit = outfit, extracted = vm.styleResult?.regions?.map { it.color }.orEmpty(), onChange = vm::editOutfit)
 
@@ -236,8 +252,9 @@ fun OutfitScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 row.forEach { preset ->
                     PresetCard(
-                        outfit = preset,
-                        selected = outfit.withoutAccessories() == preset,
+                        // Shown on the player's own body (hair style, skin, accessories).
+                        outfit = preset.withBodyOf(outfit),
+                        selected = preset.withBodyOf(outfit) == outfit,
                         onClick = { vm.applyOutfit(preset) },
                         modifier = Modifier.weight(1f),
                     )
@@ -305,7 +322,7 @@ private fun AnalyzedPhoto(photo: Bitmap, result: StyleResult?, analyzing: Boolea
                                 .size(28.dp)
                                 .clip(RoundedCornerShape(6.dp))
                                 .background(Color(region.color))
-                                .border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(6.dp)),
+                                .border(1.dp, Hairline.copy(alpha = 0.2f), RoundedCornerShape(6.dp)),
                         )
                         Text(s.bodyPart(region.part), fontSize = 10.sp, color = TextMuted)
                     }
@@ -336,7 +353,15 @@ private fun FineTuneCard(outfit: Outfit, extracted: List<Int>, onChange: ((Outfi
             FilterChip(selected = outfit.shortSleeve, onClick = { onChange { it.copy(shortSleeve = !it.shortSleeve) } }, label = { Text(s.chipShortSleeve) })
             FilterChip(selected = outfit.striped, onClick = { onChange { it.copy(striped = !it.striped) } }, label = { Text(s.chipStriped) })
             FilterChip(selected = outfit.shorts, onClick = { onChange { it.copy(shorts = !it.shorts) } }, label = { Text(s.chipShorts) })
-            FilterChip(selected = outfit.longHair, onClick = { onChange { it.copy(longHair = !it.longHair) } }, label = { Text(s.chipLongHair) })
+        }
+        Text(s.hairStyleTitle, fontSize = 13.sp, color = TextMuted)
+        HairStyleChips(outfit.style) { h -> onChange { it.copy(hairStyle = h, longHair = h.long) } }
+        Text(s.featuresTitle, fontSize = 13.sp, color = TextMuted)
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FaceFeature.entries.forEach { f ->
+                val on = f in outfit.features
+                FilterChip(selected = on, onClick = { onChange { it.copy(features = if (on) it.features - f else it.features + f) } }, label = { Text(s.featureName(f)) })
+            }
         }
 
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -355,14 +380,18 @@ private fun FineTuneCard(outfit: Outfit, extracted: List<Int>, onChange: ((Outfi
                             .size(30.dp)
                             .clip(CircleShape)
                             .background(Color(outfit.colorOf(slotItem)))
-                            .border(2.dp, if (isActive) Gold else Color.White.copy(alpha = 0.2f), CircleShape),
+                            .border(2.dp, if (isActive) Gold else Hairline.copy(alpha = 0.2f), CircleShape),
                     )
-                    Text(slotItem.label(s), fontSize = 11.sp, color = if (isActive) Color.White else TextMuted)
+                    Text(slotItem.label(s), fontSize = 11.sp, color = if (isActive) Ink else TextMuted)
                 }
             }
         }
 
-        val choices = (if (activeSlot == Slot.SKIN) Outfits.skinTones else extracted + Outfits.swatches).distinct()
+        val choices = when (activeSlot) {
+            Slot.SKIN -> Outfits.skinTones
+            Slot.HAIR -> extracted + Outfits.hairColors + Outfits.swatches
+            else -> extracted + Outfits.swatches
+        }.distinct()
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             choices.forEach { c ->
                 val selected = outfit.colorOf(activeSlot) == c
@@ -371,7 +400,7 @@ private fun FineTuneCard(outfit: Outfit, extracted: List<Int>, onChange: ((Outfi
                         .size(32.dp)
                         .clip(RoundedCornerShape(8.dp))
                         .background(Color(c))
-                        .border(if (selected) 3.dp else 1.dp, if (selected) Gold else Color.White.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
+                        .border(if (selected) 3.dp else 1.dp, if (selected) Gold else Hairline.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
                         .clickable { onChange { it.withColor(activeSlot, c) } },
                 )
             }
@@ -380,10 +409,11 @@ private fun FineTuneCard(outfit: Outfit, extracted: List<Int>, onChange: ((Outfi
 }
 
 @Composable
-private fun FloatingAvatar(outfit: Outfit, mood: Mood) {
+private fun FloatingAvatar(outfit: Outfit, mood: Mood, hasPet: Boolean) {
     val t = rememberInfiniteTransition(label = "float")
     val dy by t.animateFloat(0f, -8f, infiniteRepeatable(tween(1200), RepeatMode.Reverse), label = "dy")
-    PixelAvatar(outfit, Modifier.height(200.dp).graphicsLayer { translationY = dy.dp.toPx() }, mood = mood)
+    // With a pet beside it, the character steps a little to the left.
+    PixelAvatar(outfit, Modifier.height(200.dp).graphicsLayer { translationY = dy.dp.toPx(); translationX = if (hasPet) -28.dp.toPx() else 0f }, mood = mood)
 }
 
 @Composable

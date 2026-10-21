@@ -48,12 +48,16 @@ import com.today.app.ui.theme.Coral
 import com.today.app.ui.theme.Gold
 import com.today.app.ui.theme.Mint
 import com.today.app.ui.theme.Sky
+import com.today.app.ui.theme.Hairline
+import com.today.app.ui.theme.Ink
 import com.today.app.ui.theme.TextMuted
 import com.today.app.ui.theme.Violet
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
 
+@androidx.compose.runtime.Composable
+@androidx.compose.runtime.ReadOnlyComposable
 private fun statusColor(s: DayStatus): Color? = when (s) {
     DayStatus.EMPTY -> null
     DayStatus.PLANNED -> Violet
@@ -161,7 +165,7 @@ private fun DayCell(
     val weekendColor = when (day.dayOfWeek) {
         DayOfWeek.SUNDAY -> Coral
         DayOfWeek.SATURDAY -> Color(0xFF6FA8FF)
-        else -> Color.White
+        else -> Ink
     }
     Column(
         modifier

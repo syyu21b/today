@@ -8,9 +8,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.clipRect
 import com.today.app.data.Outfit
 
-/** Sprite area used for the face logo: rows 1..11 (head + collar), columns 1..14 (room for long hair). */
-const val FACE_COLS = 14
-const val FACE_ROWS = 11
+/** Grid area used for the face logo: rows 2..23 (head + collar), columns 2..29 (room for long hair). */
+const val FACE_COLS = 28
+const val FACE_ROWS = 22
 
 /**
  * Head-and-collar crop of the pixel avatar in the user's current outfit — the same framing as
@@ -20,9 +20,9 @@ const val FACE_ROWS = 11
 fun PixelFace(outfit: Outfit, modifier: Modifier = Modifier) {
     val style = outfit.toSpriteStyle()
     Canvas(modifier.aspectRatio(FACE_COLS / FACE_ROWS.toFloat())) {
-        val px = size.width / FACE_COLS
+        val cell = size.width / FACE_COLS
         clipRect {
-            drawPixelSprite(Offset(-1 * px, -1 * px), px, style)
+            drawPixelSprite(Offset(-2 * cell, -2 * cell), cell, style)
         }
     }
 }

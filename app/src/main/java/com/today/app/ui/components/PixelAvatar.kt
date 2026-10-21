@@ -29,6 +29,8 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.graphics.Canvas as GraphicsCanvas
+import com.today.app.data.FaceFeature
+import com.today.app.data.HairStyle
 import com.today.app.data.Mood
 import com.today.app.data.Outfit
 import kotlinx.coroutines.delay
@@ -36,235 +38,21 @@ import kotlin.math.PI
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
-/**
- * 16 x 24 human sprite.
- *  k outline  h hair  H hair shine  s skin  S skin shadow  e eye  b blush  m mouth
- *  t shirt  T shirt shade  a accent (collar/belt)  p pants  P pants shade  o shoes
- */
-private val SPRITE = listOf(
-    "................",
-    "....kkkkkkkk....",
-    "...khhHHhhhhk...",
-    "..khhhhhhhhhhk..",
-    "..khhhhhhhhhhk..",
-    "..khhsssssshhk..",
-    "..khssessesshk..",
-    "..khsbssssbshk..",
-    "..kssssmmssssk..",
-    "...kSSSSSSSSk...",
-    "......kssk......",
-    "..kttttaattttk..",
-    ".kttTttaattTttk.",
-    ".ktkTttttttTktk.",
-    ".ktkTttttttTktk.",
-    ".kskTttttttTksk.",
-    "...kaaaaaaaak...",
-    "...kppppppppk...",
-    "...kpppPPpppk...",
-    "...kpppkkpppk...",
-    "...kppPkkPppk...",
-    "...kppPkkPppk...",
-    "..kooookkooook..",
-    "..kkkkkkkkkkkk..",
-)
-
-/** Long-hair overlay for rows 4..11 (' ' = keep the base pixel). */
-private val LONG_HAIR = mapOf(
-    4 to ".kh          hk.",
-    5 to ".kh          hk.",
-    6 to ".kh          hk.",
-    7 to ".kh          hk.",
-    8 to ".kh          hk.",
-    9 to ".khh        hhk.",
-    10 to "..khhh    hhhk..",
-    11 to "..kh        hk..",
-)
-
-/**
- * Accessory art on a finer 32 x 48 grid (half a sprite pixel per cell), drawn over the finished sprite.
- * '.' = transparent. Codes come from the art's own [palette]; k/h/H/s/S fall back to the sprite's
- * outline/hair/skin, so e.g. cat ears match the hair. [behind] cells only show where the sprite is empty.
- */
-private class AccessoryArt(
-    val palette: Map<Char, Color>,
-    val front: Map<Int, String> = emptyMap(),
-    val behind: Map<Int, String> = emptyMap(),
-    /** Twinkle points (x, y on the fine grid), each lighting up in turn. */
-    val sparkles: List<Pair<Int, Int>> = emptyList(),
-    /** Lower [behind] rows sway sideways (capes). */
-    val sway: Boolean = false,
-) {
-    val animated get() = sparkles.isNotEmpty() || sway
-}
-
-private const val ART_W = 32
-
-private val ACCESSORY_ART = mapOf(
-    "cap" to AccessoryArt(
-        palette = mapOf('C' to Color(0xFFE94B5A), 'L' to Color(0xFFFF8F98), 'c' to Color(0xFFB8323F), 'B' to Color(0xFFD83F4E), 'b' to Color(0xFF7E1F2A), 'Y' to Color(0xFFFFE066)),
-        front = mapOf(
-            0 to "..............kkkk..............",
-            1 to "..........kkkkkcckkkkk..........",
-            2 to "........kkCCLLCCCCLLCCkk........",
-            3 to "......kkCCCLCCCYYCCCLCCCkk......",
-            4 to ".....kCCCCLCCCYYYYCCCLCCCCk.....",
-            5 to "....kCCCCCCCCYYYYYYCCCCCCCCk....",
-            6 to "....kCCCCCCCCCYYYYCCCCCCCCCk....",
-            7 to "...kcCCCCCCCCCCYYCCCCCCCCCCck...",
-            8 to "...kcccccccccccccccccccccccck...",
-            9 to "...kBBBBBBBBBBBBBBBBBBBBBBBBk...",
-            10 to "..kBBBBBBBBBBBBBBBBBBBBBBBBBBk..",
-            11 to "..kbbbbbbbbbbbbbbbbbbbbbbbbbbk..",
-        ),
-    ),
-    "glasses" to AccessoryArt(
-        palette = mapOf('F' to Color(0xFFE23D78), 'p' to Color(0x99FF7FAE), 'w' to Color(0xCCFFFFFF)),
-        front = mapOf(
-            10 to "..........FF.FF..FF.FF..........",
-            11 to ".......FFFwppppFFppppwFFF.......",
-            12 to ".........FpppppFFpppppF.........",
-            13 to "..........FpppF..FpppF..........",
-            14 to "...........FpF....FpF...........",
-            15 to "............F......F............",
-        ),
-    ),
-    "headphones" to AccessoryArt(
-        palette = mapOf('d' to Color(0xFF3A3A4A), 'D' to Color(0xFF6A6A80), 'c' to Color(0xFF7C6CF0), 'L' to Color(0xFFB3A8FF), 'S' to Color(0xFF5246B8), 'p' to Color(0xFF2A2A36)),
-        front = mapOf(
-            0 to ".........kkkkkkkkkkkkkk.........",
-            1 to ".......kkDDDDDDDDDDDDDDkk.......",
-            2 to "......kddddddddddddddddddk......",
-            3 to ".....kddk..............kddk.....",
-            4 to "....kddk................kddk....",
-            5 to "....kddk................kddk....",
-            6 to "...kddk..................kddk...",
-            7 to "...kddk..................kddk...",
-            8 to ".kkkkkk..................kkkkkk.",
-            9 to "kLLccpk..................kpccLLk",
-            10 to "kLcccpk..................kpcccLk",
-            11 to "kccccpk..................kpcccck",
-            12 to "kccccpk..................kpcccck",
-            13 to "kccccpk..................kpcccck",
-            14 to "kScccpk..................kpcccSk",
-            15 to "kSSSSpk..................kpSSSSk",
-            16 to ".kkkkkk..................kkkkkk.",
-        ),
-    ),
-    "cape" to AccessoryArt(
-        palette = mapOf('v' to Color(0xFFB0283A), 'V' to Color(0xFF7A1A28), 'y' to Color(0xFFFFD34E), 'Y' to Color(0xFFFFF2A8)),
-        front = mapOf(
-            21 to ".............kkkkkk.............",
-            22 to "....vvvvvvvvvkYyyYkvvvvvvvvv....",
-            23 to "......kkkvvvvkyyyykvvvvkkk......",
-            24 to ".............kkkkkk.............",
-        ),
-        behind = mapOf(
-            20 to "......kVVVVVVVVVVVVVVVVVVk......",
-            21 to ".....kvvvvvvvvvvvvvvvvvvvvk.....",
-            22 to "..kvvvvvvvvvvvvvvvvvvvvvvvvvvk..",
-            23 to ".kvvvvvvvvvvvvvvvvvvvvvvvvvvvvk.",
-            24 to "kvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvk",
-            25 to "kvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvk",
-            26 to "kvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvk",
-            27 to "kvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvk",
-            28 to "kvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvk",
-            29 to "kvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvk",
-            30 to "kvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvk",
-            31 to "kvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvk",
-            32 to "kvvVvvvvvvvvvvvvvvvvvvvvvvvvVvvk",
-            33 to "kvvVvvvvvvvvvvvvvvvvvvvvvvvvVvvk",
-            34 to "kvvVvvvvvvvvvvvvvvvvvvvvvvvvVvvk",
-            35 to "kvvVvvvvvvvvvvvvvvvvvvvvvvvvVvvk",
-            36 to "kvvVvvvvvvvvvvvvvvvvvvvvvvvvVvvk",
-            37 to "kvvVvvvvvvvvvvvvvvvvvvvvvvvvVvvk",
-            38 to "kvvVvvvvvvvvvvvvvvvvvvvvvvvvVvvk",
-            39 to "kvvVvvvvvvvvvvvvvvvvvvvvvvvvVvvk",
-            40 to "kvvVvvvvvvvvvvvvvvvvvvvvvvvvVvvk",
-            41 to "kvVvvvvvvvvvvvvvvvvvvvvvvvvvvVvk",
-            42 to "kVVVvVVVVVVVVVVVVVVVVVVVVVVvVVVk",
-            43 to ".kkkkkkkkkkkkkkkkkkkkkkkkkkkkkk.",
-        ),
-        sway = true,
-    ),
-    "crown" to AccessoryArt(
-        palette = mapOf('y' to Color(0xFFFFD34E), 'Y' to Color(0xFFFFF2A8), 'o' to Color(0xFFC8901E), 'r' to Color(0xFFFF4D6D), 'g' to Color(0xFF3DDCFF)),
-        front = mapOf(
-            0 to "........oY.....YY.....Yo........",
-            1 to "........yy.....yy.....yy........",
-            2 to ".......oYyo...oyyo...oyYo.......",
-            3 to ".......oYyyo.oyyyyo.oyyYo.......",
-            4 to "......oyyyyyoyyyyyyoyyyyyo......",
-            5 to "......oyyyyyyyyyyyyyyyyyyo......",
-            6 to "......oYYYYYYYYYYYYYYYYYYo......",
-            7 to "......oyyrryyyggggyyyrryyo......",
-            8 to "......oyyrryyyggggyyyrryyo......",
-            9 to "......kooooooooooooooooook......",
-        ),
-        sparkles = listOf(9 to 7, 15 to 1, 22 to 7, 16 to 8),
-    ),
-    "sunglasses" to AccessoryArt(
-        palette = mapOf('F' to Color(0xFF101018), 'd' to Color(0xFF1E2436), 'l' to Color(0xFF3A4A6A), 'w' to Color(0xDDFFFFFF)),
-        front = mapOf(
-            10 to "......FFFFFFFFFFFFFFFFFFFF......",
-            11 to "......FFFddwddF..FddwddFFF......",
-            12 to "........FdwdddF..FdwdddF........",
-            13 to "........FlllllF..FlllllF........",
-            14 to ".........FlllF....FlllF.........",
-            15 to "..........FFF......FFF..........",
-        ),
-    ),
-    "catears" to AccessoryArt(
-        palette = mapOf('p' to Color(0xFFF59AA0), 'P' to Color(0xFFFFD0D4)),
-        front = mapOf(
-            0 to "..kk........................kk..",
-            1 to "..kHkk....................kkHk..",
-            2 to "..kHpphkk..............kkhppHk..",
-            3 to "..khppphhkk..........kkhhppphk..",
-            4 to "..khpppPphhk........khhpPppphk..",
-            5 to "...khppPpphhhh....hhhhppPpphk...",
-            6 to "...khhpppphh........hhpppphhk...",
-            7 to "....khhhhh............hhhhhk....",
-        ),
-    ),
-    "halo" to AccessoryArt(
-        palette = mapOf('l' to Color(0xFFFFF3A0), 'L' to Color(0xFFFFC93C), 'Y' to Color(0xFFFFFFFF), 'q' to Color(0x66FFF3A0)),
-        front = mapOf(
-            0 to "........qqLLLLLLLLLLLLqq........",
-            1 to ".....qlLL..............LLlq.....",
-            2 to "......qlllllllYYYYlllllllq......",
-            3 to ".........qqqqqqqqqqqqqq.........",
-        ),
-        sparkles = listOf(11 to 0, 23 to 1, 7 to 1),
-    ),
-)
-
-/** Face overlays per mood, like accessories (' ' keeps the pixel). q = tear. */
-private val MOOD_ART = mapOf(
-    // Mouth corners lifted into a smile.
-    Mood.HAPPY to mapOf(7 to "      m  m      "),
-    // Eyes shut into lines, small mouth.
-    Mood.SLEEPY to mapOf(
-        6 to "     ee  ee     ",
-        8 to "       ms       ",
-    ),
-    // Frown (corners down) and a tear.
-    Mood.SAD to mapOf(
-        7 to "     q mm       ",
-        8 to "      mssm      ",
-    ),
-)
-
-private val Tear = Color(0xFF6EC8FF)
-
-const val SPRITE_W = 16
-const val SPRITE_H = 24
+/** The character is drawn on a 32 x 48 grid (art in CharacterArt.kt). */
+const val SPRITE_W = 32
+const val SPRITE_H = 48
+private const val EYE_BOTTOM = 14
 
 private val Outline = Color(0xFF1B1530)
 private val Eye = Color(0xFF2B2140)
 private val Blush = Color(0xFFF59AA0)
-private val Mouth = Color(0xFFB8505A)
+private val MouthLine = Color(0xFF8E3B46)
+private val MouthInside = Color(0xFFC4505E)
+private val HeartPink = Color(0xFFFF4F8B)
+private val Tear = Color(0xFF6EC8FF)
+private val FreckleTint = Color(0xFF8C5032)
 
-/** Resolved colors + shape flags for one draw call (colors can be animated). */
+/** Resolved colors + shape options for one draw call (colors can be animated). */
 data class SpriteStyle(
     val hair: Color,
     val skin: Color,
@@ -276,7 +64,8 @@ data class SpriteStyle(
     val striped: Boolean,
     val shortSleeve: Boolean,
     val shorts: Boolean,
-    val longHair: Boolean,
+    val hairStyle: HairStyle = HairStyle.SHORT,
+    val features: Set<FaceFeature> = emptySet(),
     /** Accessory ids, drawn in this order (back first). */
     val accessories: List<String> = emptyList(),
     val mood: Mood = Mood.NORMAL,
@@ -284,104 +73,162 @@ data class SpriteStyle(
 
 fun Outfit.toSpriteStyle(mood: Mood = Mood.NORMAL) = SpriteStyle(
     Color(hair), Color(skin), Color(shirt), Color(stripe), Color(accent), Color(pants), Color(shoes),
-    striped, shortSleeve, shorts, longHair,
+    striped, shortSleeve, shorts, style, features,
     listOf(back, head, face).filter { it.isNotEmpty() },
     mood,
 )
 
-/** Which sprite code ends up at (x, y) once the garment options are applied. */
-private fun spriteCode(x: Int, y: Int, style: SpriteStyle, blink: Boolean): Char {
-    var ch = SPRITE[y][x]
-    if (style.longHair) LONG_HAIR[y]?.get(x)?.takeIf { it != ' ' }?.let { ch = it }
-    MOOD_ART[style.mood]?.get(y)?.getOrNull(x)?.takeIf { it != ' ' }?.let { ch = it }
-    if (blink && ch == 'e') ch = 's'
-    // Stripes on every other torso row
-    if (style.striped && (y == 12 || y == 14)) {
-        if (ch == 't') ch = 'r' else if (ch == 'T') ch = 'R'
+/** Everything that decides which code sits in which cell (colors don't), so grids can be cached. */
+private data class GridKey(
+    val hairStyle: HairStyle,
+    val features: Set<FaceFeature>,
+    val striped: Boolean,
+    val shortSleeve: Boolean,
+    val shorts: Boolean,
+    val mood: Mood,
+    val blink: Boolean,
+    val hideAbove: Int,
+)
+
+private val gridCache = HashMap<GridKey, Array<CharArray>>()
+
+private fun Map<Int, String>.paintOnto(g: Array<CharArray>, onlyOver: String? = null) {
+    for ((y, row) in this) {
+        if (y !in g.indices) continue
+        for (x in 0 until SPRITE_W) {
+            val ch = row.getOrNull(x) ?: '.'
+            if (ch == '.') continue
+            if (onlyOver != null && g[y][x] !in onlyOver) continue
+            g[y][x] = ch
+        }
     }
-    // Short sleeves: forearms show skin
-    if (style.shortSleeve && (y == 13 || y == 14) && (x == 2 || x == 13)) ch = 's'
-    // Shorts: lower legs show skin
-    if (style.shorts && (y == 20 || y == 21) && (ch == 'p' || ch == 'P')) ch = if (ch == 'p') 's' else 'S'
-    return ch
+}
+
+/** Builds the code grid: back hair, body (with garment options), front hair, face, features. */
+private fun buildGrid(k: GridKey): Array<CharArray> {
+    val g = Array(SPRITE_H) { CharArray(SPRITE_W) { '.' } }
+    val hair = HAIR_ART.getValue(k.hairStyle)
+    hair.back.paintOnto(g)
+    for (y in 0 until SPRITE_H) for (x in 0 until SPRITE_W) {
+        var ch = BASE_ART[y][x]
+        if (ch == '.') continue
+        if (k.striped && y in STRIPE_ROWS) ch = when (ch) { 't', 'u' -> 'r'; 'T' -> 'R'; else -> ch }
+        if (k.shortSleeve && y in SLEEVE_ROWS && (x in 3..5 || x in 26..28) && ch in "tTu") ch = 's'
+        if (k.shorts && y in SHORTS_ROWS) ch = when (ch) { 'p' -> 's'; 'P' -> 'S'; else -> ch }
+        g[y][x] = ch
+    }
+    hair.front.paintOnto(g)
+    hair.shine.paintOnto(g, onlyOver = "hHd")
+    FACE_ART[k.mood]?.paintOnto(g)
+    for (f in k.features) FEATURE_ART[f]?.paintOnto(g)
+    if (k.blink) {
+        // Open eyes (rows 12..14) close to a line on their lowest row; already-closed eyes stay.
+        for (x in 0 until SPRITE_W) {
+            if (g[EYE_BOTTOM][x] !in "ew") continue
+            g[EYE_BOTTOM][x] = 'e'
+            for (y in EYE_BOTTOM - 2 until EYE_BOTTOM) if (g[y][x] in "ew") g[y][x] = 's'
+        }
+    }
+    for (y in 0 until k.hideAbove.coerceAtMost(SPRITE_H)) g[y].fill('.')
+    return g
+}
+
+private fun SpriteStyle.grid(blink: Boolean): Array<CharArray> {
+    val hide = accessories.maxOfOrNull { ACCESSORY_ART[it]?.hideAbove ?: 0 } ?: 0
+    val key = GridKey(hairStyle, features, striped, shortSleeve, shorts, mood, blink, hide)
+    return synchronized(gridCache) { gridCache.getOrPut(key) { buildGrid(key) } }
 }
 
 /** True when some worn accessory moves, so the avatar needs a running clock. */
 private fun SpriteStyle.hasAnimatedAccessory() = accessories.any { ACCESSORY_ART[it]?.animated == true }
 
-/** Accessory falling into place: [id] drawn [offset] fine-grid cells above its spot. */
+/** Accessory falling into place: [id] drawn [offset] cells above its spot. */
 data class AccessoryDrop(val id: String, val offset: Float)
 
 /**
- * Draws the sprite with its top-left at [topLeft], each sprite pixel being [px] canvas pixels.
+ * Draws the character with its top-left at [topLeft], each grid cell being [cell] canvas pixels.
  * [time] (0..1, looping) drives sparkles and cape sway.
  */
 fun DrawScope.drawPixelSprite(
     topLeft: Offset,
-    px: Float,
+    cell: Float,
     style: SpriteStyle,
     blink: Boolean = false,
     time: Float = 0f,
     drop: AccessoryDrop? = null,
 ) {
     val hairShine = lerp(style.hair, Color.White, 0.35f)
-    val skinShadow = lerp(style.skin, Color.Black, 0.12f)
+    val hairDark = lerp(style.hair, Color.Black, 0.3f)
+    val skinShadow = lerp(style.skin, Color.Black, 0.14f)
+    val freckle = lerp(style.skin, FreckleTint, 0.45f)
     val shirtShade = lerp(style.shirt, Color.Black, 0.25f)
+    val shirtLight = lerp(style.shirt, Color.White, 0.2f)
     val stripeShade = lerp(style.stripe, Color.Black, 0.25f)
+    val accentShade = lerp(style.accent, Color.Black, 0.25f)
     val pantsShade = lerp(style.pants, Color.Black, 0.3f)
+    val shoeLight = lerp(style.shoes, Color.White, 0.3f)
     // overdraw a hair of a pixel to avoid seams between blocks
-    val cell = Size(px + 0.6f, px + 0.6f)
+    val size = Size(cell + 0.6f, cell + 0.6f)
+    val g = style.grid(blink)
     for (y in 0 until SPRITE_H) for (x in 0 until SPRITE_W) {
-        val color = when (spriteCode(x, y, style, blink)) {
+        val color = when (g[y][x]) {
             'k' -> Outline
             'h' -> style.hair
             'H' -> hairShine
+            'd' -> hairDark
             's' -> style.skin
             'S' -> skinShadow
+            'f' -> freckle
             'e' -> Eye
+            'w' -> Color.White
             'b' -> Blush
-            'm' -> Mouth
+            'm' -> MouthLine
+            'M' -> MouthInside
+            'L' -> HeartPink
+            'q' -> Tear
             't' -> style.shirt
             'T' -> shirtShade
+            'u' -> shirtLight
             'r' -> style.stripe
             'R' -> stripeShade
             'a' -> style.accent
+            'A' -> accentShade
             'p' -> style.pants
             'P' -> pantsShade
             'o' -> style.shoes
-            'q' -> Tear
+            'O' -> shoeLight
             else -> null
         } ?: continue
-        drawRect(color, Offset(topLeft.x + x * px, topLeft.y + y * px), cell)
+        drawRect(color, Offset(topLeft.x + x * cell, topLeft.y + y * cell), size)
     }
-    drawAccessories(topLeft, px / 2, style, blink, hairShine, skinShadow, time, drop)
+    drawAccessories(topLeft, cell, style, g, hairShine, skinShadow, time, drop)
 }
 
-/** Second pass: accessories (back first) on the half-pixel grid. */
+/** Second pass: accessories (back first). */
 private fun DrawScope.drawAccessories(
     topLeft: Offset,
-    half: Float,
+    cell: Float,
     style: SpriteStyle,
-    blink: Boolean,
+    grid: Array<CharArray>,
     hairShine: Color,
     skinShadow: Color,
     time: Float,
     drop: AccessoryDrop?,
 ) {
-    val cell = Size(half + 0.6f, half + 0.6f)
+    val size = Size(cell + 0.6f, cell + 0.6f)
     // Translucent cells (glass, glow) must not overlap, or the seams show darker.
-    val exact = Size(half, half)
+    val exact = Size(cell, cell)
     for (id in style.accessories) {
         val art = ACCESSORY_ART[id] ?: continue
-        val top = topLeft.y + if (drop?.id == id) -drop.offset * half else 0f
+        val top = topLeft.y + if (drop?.id == id) -drop.offset * cell else 0f
         // Cape hem swings up to 2 cells, the shoulders stay put.
         val swing = if (art.sway) sin(time * 2 * PI).toFloat() else 0f
         for ((layer, behind) in listOf(art.behind to true, art.front to false)) {
-            for ((y, row) in layer) for (x in 0 until ART_W) {
+            for ((y, row) in layer) for (x in 0 until SPRITE_W) {
                 val dx = if (art.sway && y > 28) (swing * (y - 28) / 8f).roundToInt() else 0
                 val code = row.getOrNull(x - dx) ?: '.'
                 if (code == '.') continue
-                if (behind && spriteCode(x / 2, y / 2, style, blink) != '.') continue
+                if (behind && grid.getOrNull(y)?.getOrNull(x) != '.') continue
                 val color = art.palette[code] ?: when (code) {
                     'k' -> Outline
                     'h' -> style.hair
@@ -390,25 +237,25 @@ private fun DrawScope.drawAccessories(
                     'S' -> skinShadow
                     else -> null
                 } ?: continue
-                drawRect(color, Offset(topLeft.x + x * half, top + y * half), if (color.alpha < 1f) exact else cell)
+                drawRect(color, Offset(topLeft.x + x * cell, top + y * cell), if (color.alpha < 1f) exact else size)
             }
         }
         art.sparkles.forEachIndexed { i, (x, y) ->
             // Each point glints for a quarter of the loop, one after another.
             val local = (time - i.toFloat() / art.sparkles.size + 1f) % 1f
-            if (local < 0.25f) drawSparkle(topLeft.x + x * half, top + y * half, half, sin(local / 0.25f * PI).toFloat())
+            if (local < 0.25f) drawSparkle(topLeft.x + x * cell, top + y * cell, cell, sin(local / 0.25f * PI).toFloat())
         }
     }
 }
 
 /** 4-point twinkle centred on the cell at ([x], [y]); [a] = brightness 0..1. */
-private fun DrawScope.drawSparkle(x: Float, y: Float, half: Float, a: Float) {
-    val size = Size(half, half)
+private fun DrawScope.drawSparkle(x: Float, y: Float, cell: Float, a: Float) {
+    val size = Size(cell, cell)
     drawRect(Color.White.copy(alpha = a), Offset(x, y), size)
     val reach = if (a > 0.6f) 2 else 1
     for (d in 1..reach) {
         val c = SparkleColor.copy(alpha = a * if (d == 1) 0.8f else 0.4f)
-        for ((dx, dy) in listOf(d to 0, -d to 0, 0 to d, 0 to -d)) drawRect(c, Offset(x + dx * half, y + dy * half), size)
+        for ((dx, dy) in listOf(d to 0, -d to 0, 0 to d, 0 to -d)) drawRect(c, Offset(x + dx * cell, y + dy * cell), size)
     }
 }
 
@@ -466,9 +313,9 @@ fun PixelAvatar(
     }
 
     Canvas(modifier.aspectRatio(SPRITE_W / SPRITE_H.toFloat())) {
-        val px = size.width / SPRITE_W
+        val cell = size.width / SPRITE_W
         drawPixelSprite(
-            Offset.Zero, px,
+            Offset.Zero, cell,
             target.copy(hair = hair, skin = skin, shirt = shirt, stripe = stripe, accent = accent, pants = pants, shoes = shoes),
             blink,
             time = if (moving) time.value else 0f,
@@ -478,18 +325,18 @@ fun PixelAvatar(
 }
 
 /**
- * The sprite as a plain bitmap ([pixel] px per sprite pixel), for places without Compose
+ * The character as a plain bitmap ([cell] px per grid cell), for places without Compose
  * such as the home-screen widget.
  */
-fun renderSpriteBitmap(outfit: Outfit, mood: Mood = Mood.NORMAL, pixel: Int = 6): Bitmap {
-    val image = ImageBitmap(SPRITE_W * pixel, SPRITE_H * pixel)
+fun renderSpriteBitmap(outfit: Outfit, mood: Mood = Mood.NORMAL, cell: Int = 3): Bitmap {
+    val image = ImageBitmap(SPRITE_W * cell, SPRITE_H * cell)
     CanvasDrawScope().draw(
         Density(1f),
         LayoutDirection.Ltr,
         GraphicsCanvas(image),
         Size(image.width.toFloat(), image.height.toFloat()),
     ) {
-        drawPixelSprite(Offset.Zero, pixel.toFloat(), outfit.toSpriteStyle(mood))
+        drawPixelSprite(Offset.Zero, cell.toFloat(), outfit.toSpriteStyle(mood))
     }
     return image.asAndroidBitmap()
 }

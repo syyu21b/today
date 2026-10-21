@@ -1,5 +1,6 @@
 package com.today.app.ui.screens.settings
 
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -20,6 +21,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Celebration
@@ -248,9 +252,11 @@ fun DataPage(vm: TodayViewModel, onBack: () -> Unit) {
     val s = LocalStrings.current
     var confirmClear by remember { mutableStateOf(false) }
     var confirmReset by remember { mutableStateOf(false) }
+    var pendingImport by remember { mutableStateOf<Uri?>(null) }
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) vm.exportData(uri)
     }
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> pendingImport = uri }
 
     SettingsSubPage(s.sectionData, onBack) {
         SettingsGroup(s.groupStorage, footer = s.dataDesc) {
@@ -271,6 +277,11 @@ fun DataPage(vm: TodayViewModel, onBack: () -> Unit) {
             SettingsRow(
                 title = s.exportData, subtitle = s.exportDesc, icon = Icons.Filled.FileDownload, iconColor = Teal,
                 onClick = { exportLauncher.launch("today-backup-${LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE)}.json") },
+            )
+            SettingsDivider()
+            SettingsRow(
+                title = s.importData, subtitle = s.importDesc, icon = Icons.Filled.FileUpload, iconColor = Blue,
+                onClick = { importLauncher.launch(arrayOf("application/json", "text/plain", "*/*")) },
             )
         }
 
@@ -305,6 +316,58 @@ fun DataPage(vm: TodayViewModel, onBack: () -> Unit) {
             dismissButton = { TextButton(onClick = { confirmReset = false }) { Text(s.cancel) } },
         )
     }
+    pendingImport?.let { uri -> ImportConfirmDialog(onConfirm = { vm.importData(uri); pendingImport = null }, onDismiss = { pendingImport = null }) }
+}
+
+@Composable
+private fun ImportConfirmDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    val s = LocalStrings.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(s.importConfirmTitle) },
+        text = { Text(s.importConfirmBody) },
+        confirmButton = { TextButton(onClick = onConfirm) { Text(s.importConfirm, color = Coral) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(s.cancel) } },
+    )
+}
+
+// ================================================================ Privacy
+
+@Composable
+fun PrivacyPage(vm: TodayViewModel, onBack: () -> Unit, onNavigate: (SettingsPage) -> Unit) {
+    val s = LocalStrings.current
+    var confirmDelete by remember { mutableStateOf(false) }
+    SettingsSubPage(s.rowPrivacy, onBack) {
+        SettingsGroup(s.privacyPolicyTitle) {
+            Text(s.privacyPolicyBody, fontSize = 13.sp, lineHeight = 20.sp, color = TextMuted, modifier = Modifier.padding(16.dp))
+        }
+        SettingsGroup {
+            SwitchRow(
+                s.crashReportsTitle, vm.settings.crashReports, { v -> vm.updateSettings { it.copy(crashReports = v) } },
+                subtitle = s.crashReportsDesc, icon = Icons.Filled.BugReport, iconColor = Gold,
+            )
+        }
+        SettingsGroup {
+            SettingsRow(
+                title = s.sectionData, subtitle = s.importDesc, icon = Icons.Filled.Storage, iconColor = Teal,
+                onClick = { onNavigate(SettingsPage.DATA) },
+            )
+            SettingsDivider()
+            SettingsRow(
+                title = s.deleteAllTitle, subtitle = s.deleteAllDesc, icon = Icons.Filled.DeleteForever, iconColor = Coral, titleColor = Coral,
+                onClick = { confirmDelete = true },
+            )
+        }
+    }
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text(s.deleteAllTitle) },
+            text = { Text(s.resetBody) },
+            confirmButton = { TextButton(onClick = { vm.resetAll(); confirmDelete = false }) { Text(s.resetConfirm, color = Coral) } },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(s.cancel) } },
+        )
+    }
 }
 
 @Composable
@@ -323,6 +386,7 @@ private val LIBRARIES = listOf(
     "Lottie for Android" to "Apache License 2.0",
     "Google ML Kit (Pose Detection, Selfie Segmentation)" to "ML Kit Terms of Service",
     "Kotlin · kotlinx.coroutines" to "Apache License 2.0",
+    "Galmuri11 font © Lee Minseo (quiple)" to "SIL Open Font License 1.1",
 )
 
 @Composable

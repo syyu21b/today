@@ -18,6 +18,9 @@ data class SavedState(
     /** friendId -> messages; null when nothing was saved (history off or first run). */
     val chats: Map<String, List<ChatMessage>>?,
     val rewards: RewardState = RewardState(),
+    val pet: PetState? = null,
+    /** Mission counters of the last day the app was used. */
+    val missions: MissionDay? = null,
 )
 
 /**
@@ -82,6 +85,8 @@ class TodayStorage(context: Context) {
             friends = friends,
             chats = chats,
             rewards = loadRewards(),
+            pet = prefs.getString("pet", null)?.let { runCatching { petFromJson(JSONObject(it)) }.getOrNull() },
+            missions = prefs.getString("missions", null)?.let { runCatching { missionsFromJson(JSONObject(it)) }.getOrNull() },
         )
     }
 
@@ -96,6 +101,8 @@ class TodayStorage(context: Context) {
             putString("settings", settingsToJson(s.settings).toString())
             putString("friends", JSONArray().apply { s.friends.forEach { put(friendToJson(it)) } }.toString())
             putString("rewards", rewardsToJson(s.rewards).toString())
+            if (s.pet == null) remove("pet") else putString("pet", petToJson(s.pet).toString())
+            if (s.missions == null) remove("missions") else putString("missions", missionsToJson(s.missions).toString())
             if (s.chats == null) {
                 remove("chats")
             } else {
@@ -125,7 +132,39 @@ class TodayStorage(context: Context) {
         .put("friends", JSONArray().apply { s.friends.forEach { put(friendToJson(it)) } })
         .put("rewards", rewardsToJson(s.rewards))
         .put("settings", settingsToJson(s.settings))
+        .apply { s.pet?.let { put("pet", petToJson(it)) } }
         .toString(2)
+
+    /**
+     * Replaces everything with a backup made by [exportJson]. The whole file is checked first,
+     * so a broken or foreign file changes nothing. Afterwards [load] validates each value as usual.
+     * @return false when [json] isn't a Today backup.
+     */
+    fun importJson(json: String): Boolean {
+        val root = runCatching { JSONObject(json) }.getOrNull() ?: return false
+        if (root.optString("app") != "Today") return false
+        val character = root.optJSONObject("character") ?: return false
+        val outfit = runCatching {
+            val byDate = root.optJSONObject("questsByDate") ?: JSONObject()
+            byDate.keys().forEach { questsFromJson(byDate.getJSONArray(it)) }
+            root.optJSONArray("friends")?.let { arr -> List(arr.length()) { friendFromJson(arr.getJSONObject(it)) } }
+            root.optJSONObject("pet")?.let { petFromJson(it) }
+            outfitFromJson(character.getJSONObject("outfit"))
+        }.getOrNull() ?: return false
+        prefs.edit {
+            clear()
+            putInt("level", character.optInt("level", 1))
+            putInt("xp", character.optInt("xp", 0))
+            putString("outfit", outfitToJson(outfit).toString())
+            putString("questsByDate", (root.optJSONObject("questsByDate") ?: JSONObject()).toString())
+            root.optJSONArray("friends")?.let { putString("friends", it.toString()) }
+            root.optJSONObject("rewards")?.let { putString("rewards", it.toString()) }
+            // A restored backup never shows the first-run guide again.
+            putString("settings", (root.optJSONObject("settings") ?: JSONObject()).put("onboardingDone", true).toString())
+            root.optJSONObject("pet")?.let { putString("pet", it.toString()) }
+        }
+        return true
+    }
 
     // ------------------------------------------------------------------ settings
 
@@ -133,11 +172,12 @@ class TodayStorage(context: Context) {
         val d = AppSettings()
         val json = prefs.getString("settings", null)?.let { runCatching { JSONObject(it) }.getOrNull() }
         if (json == null) {
-            // v1.1/v1.2 stored a few separate keys
+            // v1.1/v1.2 stored a few separate keys; nothing at all = a fresh install, which gets the guide.
             return d.copy(
                 nickname = prefs.getString("nickname", null) ?: d.nickname,
                 language = enumOr(prefs.getString("appLanguage", null), d.language),
                 autoCarryOver = prefs.getBoolean("autoCarry", d.autoCarryOver),
+                onboardingDone = prefs.contains("level"),
             )
         }
         return AppSettings(
@@ -160,6 +200,12 @@ class TodayStorage(context: Context) {
             autoReplies = json.optBoolean("autoReplies", d.autoReplies),
             saveChatHistory = json.optBoolean("saveChatHistory", d.saveChatHistory),
             contactsPromptDone = json.optBoolean("contactsPromptDone", d.contactsPromptDone),
+            statusMood = json.optString("statusMood").takeIf { it.isNotEmpty() }?.let { runCatching { Mood.valueOf(it) }.getOrNull() },
+            statusMessage = json.optString("statusMessage").take(MAX_STATUS_MESSAGE),
+            themeMode = enumOr(json.optString("themeMode"), d.themeMode),
+            // Settings saved before the guide existed belong to existing users.
+            onboardingDone = json.optBoolean("onboardingDone", true),
+            crashReports = json.optBoolean("crashReports", d.crashReports),
         )
     }
 
@@ -183,6 +229,11 @@ class TodayStorage(context: Context) {
         .put("autoReplies", s.autoReplies)
         .put("saveChatHistory", s.saveChatHistory)
         .put("contactsPromptDone", s.contactsPromptDone)
+        .put("statusMood", s.statusMood?.name ?: "")
+        .put("statusMessage", s.statusMessage)
+        .put("themeMode", s.themeMode.name)
+        .put("onboardingDone", s.onboardingDone)
+        .put("crashReports", s.crashReports)
 
     private inline fun <reified E : Enum<E>> enumOr(name: String?, default: E): E =
         runCatching { enumValueOf<E>(name ?: "") }.getOrDefault(default)
@@ -206,6 +257,9 @@ class TodayStorage(context: Context) {
             titles = titles,
             equippedTitle = j.optString("equippedTitle", Titles.DEFAULT).takeIf { it in titles } ?: Titles.DEFAULT,
             backdrop = j.optString("backdrop", Backdrops.DEFAULT).takeIf { Backdrops.byId(it) != null } ?: Backdrops.DEFAULT,
+            eventProgress = j.optJSONObject("eventProgress")?.let { o ->
+                o.keys().asSequence().associateWith { o.optInt(it).coerceIn(0, SeasonEvents.GOAL_DAYS) }
+            }.orEmpty(),
         )
     }
 
@@ -219,6 +273,35 @@ class TodayStorage(context: Context) {
         .put("titles", JSONArray(r.titles.sorted()))
         .put("equippedTitle", r.equippedTitle)
         .put("backdrop", r.backdrop)
+        .put("eventProgress", JSONObject().apply { r.eventProgress.forEach { (k, v) -> put(k, v) } })
+
+    // ------------------------------------------------------------------ pet & missions
+
+    private fun petToJson(p: PetState) = JSONObject().put("species", p.species.name).put("name", p.name).put("growth", p.growth)
+
+    private fun petFromJson(o: JSONObject) = PetState(
+        species = PetSpecies.valueOf(o.getString("species")),
+        name = o.optString("name").take(MAX_PET_NAME),
+        growth = o.optInt("growth", 0).coerceAtLeast(0),
+    )
+
+    private fun missionsToJson(m: MissionDay) = JSONObject()
+        .put("date", m.date).put("petted", m.petted).put("chats", m.chats).put("added", m.added)
+        .put("morning", m.morning).put("status", m.status)
+        .put("claimed", JSONArray(m.claimed.map { it.name }.sorted())).put("bonusClaimed", m.bonusClaimed)
+
+    private fun missionsFromJson(o: JSONObject) = MissionDay(
+        date = o.getString("date"),
+        petted = o.optInt("petted").coerceAtLeast(0),
+        chats = o.optInt("chats").coerceAtLeast(0),
+        added = o.optInt("added").coerceAtLeast(0),
+        morning = o.optBoolean("morning"),
+        status = o.optBoolean("status"),
+        claimed = o.optJSONArray("claimed")?.let { arr ->
+            List(arr.length()) { arr.optString(it) }.mapNotNull { runCatching { MissionType.valueOf(it) }.getOrNull() }.toSet()
+        }.orEmpty(),
+        bonusClaimed = o.optBoolean("bonusClaimed"),
+    )
 
     // ------------------------------------------------------------------ quests
 
@@ -227,6 +310,7 @@ class TodayStorage(context: Context) {
             put(
                 JSONObject().put("id", q.id).put("title", q.title).put("emoji", q.emoji).put("xp", q.xp).put("done", q.done)
                     .apply { if (q.days.isNotEmpty()) put("days", JSONArray(q.days.map { it.value }.sorted())) }
+                    .apply { q.remindAt?.let { put("remindAt", it) } }
             )
         }
     }
@@ -236,6 +320,7 @@ class TodayStorage(context: Context) {
         Quest(
             o.getString("id"), o.getString("title"), o.optString("emoji", "⭐"), o.optInt("xp", 20), o.optBoolean("done", false),
             days = o.optJSONArray("days")?.let { arr -> List(arr.length()) { arr.optInt(it) }.filter { it in 1..7 }.map(DayOfWeek::of).toSet() }.orEmpty(),
+            remindAt = if (o.has("remindAt")) o.optInt("remindAt").takeIf { it in 0 until 24 * 60 } else null,
         )
     }
 
@@ -293,6 +378,8 @@ class TodayStorage(context: Context) {
         .put("skin", o.skin).put("stripe", o.stripe).put("striped", o.striped)
         .put("shortSleeve", o.shortSleeve).put("shorts", o.shorts).put("longHair", o.longHair)
         .put("head", o.head).put("face", o.face).put("back", o.back)
+        .put("hairStyle", o.hairStyle?.name ?: "")
+        .put("features", JSONArray(o.features.map { it.name }.sorted()))
 
     private fun outfitFromJson(j: JSONObject): Outfit {
         val accent = j.getInt("accent")
@@ -312,6 +399,10 @@ class TodayStorage(context: Context) {
             head = accessoryOr(j.optString("head"), AccessorySlot.HEAD),
             face = accessoryOr(j.optString("face"), AccessorySlot.FACE),
             back = accessoryOr(j.optString("back"), AccessorySlot.BACK),
+            hairStyle = j.optString("hairStyle").takeIf { it.isNotEmpty() }?.let { runCatching { HairStyle.valueOf(it) }.getOrNull() },
+            features = j.optJSONArray("features")?.let { arr ->
+                List(arr.length()) { arr.optString(it) }.mapNotNull { runCatching { FaceFeature.valueOf(it) }.getOrNull() }.toSet()
+            }.orEmpty(),
         )
     }
 }

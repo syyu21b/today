@@ -185,7 +185,7 @@ fun NotificationsPage(vm: TodayViewModel, onBack: () -> Unit) {
 /** 24-hour dial: digits only, so it reads the same in Korean and English. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ReminderTimeDialog(initialMinutes: Int, onDismiss: () -> Unit, onConfirm: (Int) -> Unit) {
+fun ReminderTimeDialog(initialMinutes: Int, onDismiss: () -> Unit, onConfirm: (Int) -> Unit) {
     val s = LocalStrings.current
     val state = rememberTimePickerState(initialHour = initialMinutes / 60, initialMinute = initialMinutes % 60, is24Hour = true)
     AlertDialog(

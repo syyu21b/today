@@ -58,6 +58,16 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
     var boxResult by mutableStateOf<BoxReward?>(null)
         private set
 
+    // ---------------- Pet & daily missions ----------------
+    var pet by mutableStateOf<PetState?>(null)
+        private set
+    var missionDay by mutableStateOf(MissionDay(LocalDate.now().toString()))
+        private set
+
+    /** Last crash's report, offered once on the next launch (when crash reports are on). */
+    var pendingCrashReport by mutableStateOf<String?>(null)
+        private set
+
     // ---------------- Quests & calendar ----------------
     /** ISO date -> quests. Lists are immutable; every change replaces the list. */
     private val questsByDate = mutableStateMapOf<String, List<Quest>>()
@@ -148,7 +158,8 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         boxResult = null
         levelUpEvent = null
         settings = if (keepLanguage == null) saved.settings
-        else AppSettings(nickname = keepLanguage.strings().defaultNickname, language = keepLanguage)
+        // A full reset starts over with the first-run guide.
+        else AppSettings(nickname = keepLanguage.strings().defaultNickname, language = keepLanguage, onboardingDone = false)
         // The OS can revoke notification permission at any time: reflect that in the switch.
         if (settings.notificationsEnabled && !Notifier.hasPermission(getApplication())) {
             settings = settings.copy(notificationsEnabled = false)
@@ -166,10 +177,14 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         character = character.copy(outfit = sanitizeAccessories(character.outfit))
         refreshTitles(announce = false)
 
+        pet = saved.pet
+        missionDay = saved.missions?.takeIf { it.date == todayDate.toString() } ?: MissionDay(todayDate.toString())
+
         friends.clear()
         friends.addAll(saved.friends)
         loadChats(if (settings.saveChatHistory) saved.chats else null)
 
+        pendingCrashReport = if (settings.crashReports) CrashReporter.pending(getApplication()) else null
         persist()
         ReminderScheduler.reschedule(getApplication(), settings)
     }
@@ -198,6 +213,7 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         val followToday = selectedDate == todayDate
         todayDate = now
         if (followToday) selectedDate = now
+        missionDay = MissionDay(now.toString())
         ensureTodayQuests()
         persist()
     }
@@ -251,8 +267,11 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
     /** Today's scheduled quests (what progress, reminders and mood count). */
     val todayActive: List<Quest> get() = questsFor(todayDate).activeOn(todayDate)
 
-    /** The character's face (same rule as the widget). */
-    val mood: Mood get() = Moods.of(questsByDate, rewards.shieldedDates, todayDate)
+    /** The face today's quests give (same rule as the widget). */
+    val autoMood: Mood get() = Moods.of(questsByDate, rewards.shieldedDates, todayDate)
+
+    /** The character's face: the profile status when one is set, otherwise [autoMood]. */
+    val mood: Mood get() = settings.statusMood ?: autoMood
 
     val totalCompleted: Int get() = questsByDate.values.sumOf { list -> list.count { it.done } }
     val totalQuests: Int get() = questsByDate.values.sumOf { it.size }
@@ -290,6 +309,7 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         val nowDone = !quest.done
         val streakBefore = streak
         setQuests(date, list.map { if (it.id == id) it.copy(done = nowDone) else it })
+        if (nowDone && LocalTime.now().hour < 12) updateMissionDay { it.copy(morning = true) }
         if (nowDone) {
             addXp(quest.xp)
             celebrationTick++
@@ -304,25 +324,68 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** @return null on success, otherwise the (localized) reason it failed. */
-    fun addQuest(date: LocalDate, title: String, emoji: String, xp: Int, days: Set<DayOfWeek> = emptySet()): String? {
+    fun addQuest(
+        date: LocalDate,
+        title: String,
+        emoji: String,
+        xp: Int,
+        days: Set<DayOfWeek> = emptySet(),
+        remindAt: Int? = null,
+    ): String? {
         if (!isEditable(date)) return strings.errAddPast
         val list = questsFor(date)
         if (list.size >= MAX_QUESTS_PER_DAY) return strings.errLimit(MAX_QUESTS_PER_DAY)
         val cleanTitle = title.trim().take(MAX_QUEST_TITLE)
         if (cleanTitle.isEmpty()) return strings.errEmptyTitle
-        setQuests(date, list + Quest(newId(), cleanTitle, emoji.ifBlank { "⭐" }, xp.coerceIn(MIN_QUEST_XP, MAX_QUEST_XP), days = normalizeDays(days)))
+        setQuests(
+            date,
+            list + Quest(newId(), cleanTitle, emoji.ifBlank { "⭐" }, xp.coerceIn(MIN_QUEST_XP, MAX_QUEST_XP), days = normalizeDays(days), remindAt = remindAt),
+        )
+        updateMissionDay { it.copy(added = it.added + 1) }
         persist()
+        remindIfNotificationsOff(remindAt)
         return null
     }
 
-    fun updateQuest(date: LocalDate, id: String, title: String, emoji: String, xp: Int, days: Set<DayOfWeek> = emptySet()): String? {
+    /** Adds a routine pack's quests to [date], skipping ones it already has. */
+    fun applyTemplate(date: LocalDate, template: RoutineTemplate) {
+        if (!isEditable(date)) {
+            showMessage(strings.errAddPast)
+            return
+        }
+        val list = questsFor(date)
+        val added = Templates.questsFrom(listOf(template), list, settings.language, ::newId)
+        if (added.isEmpty()) {
+            showMessage(strings.msgTemplateNone)
+            return
+        }
+        setQuests(date, list + added)
+        updateMissionDay { it.copy(added = it.added + added.size) }
+        persist()
+        showMessage(strings.msgTemplateAdded(strings.templateName(template.id), added.size))
+    }
+
+    /** A quest reminder was set while alerts are off: say where to turn them on. */
+    private fun remindIfNotificationsOff(remindAt: Int?) {
+        if (remindAt != null && !settings.notificationsEnabled) showMessage(strings.msgQuestReminderNeedsNotifications)
+    }
+
+    fun updateQuest(
+        date: LocalDate,
+        id: String,
+        title: String,
+        emoji: String,
+        xp: Int,
+        days: Set<DayOfWeek> = emptySet(),
+        remindAt: Int? = null,
+    ): String? {
         if (!isEditable(date)) return strings.errEditPast
         val list = questsFor(date)
         val old = list.firstOrNull { it.id == id } ?: return strings.errNotFound
         val cleanTitle = title.trim().take(MAX_QUEST_TITLE)
         if (cleanTitle.isEmpty()) return strings.errEmptyTitle
         val newXp = xp.coerceIn(MIN_QUEST_XP, MAX_QUEST_XP)
-        val edited = old.copy(title = cleanTitle, emoji = emoji.ifBlank { "⭐" }, xp = newXp, days = normalizeDays(days))
+        val edited = old.copy(title = cleanTitle, emoji = emoji.ifBlank { "⭐" }, xp = newXp, days = normalizeDays(days), remindAt = remindAt)
         // Moved off this weekday: it rests now, so it can't stay completed.
         val updated = if (old.done && !edited.activeOn(date)) edited.copy(done = false) else edited
         setQuests(date, list.map { if (it.id == id) updated else it })
@@ -331,6 +394,7 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         if (xpDelta != 0) addXp(xpDelta)
         refreshTitles()
         persist()
+        if (remindAt != old.remindAt) remindIfNotificationsOff(remindAt)
         return null
     }
 
@@ -444,6 +508,7 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
             xp += CharacterState.xpNeededFor(level)
         }
         character = character.copy(level = level, xp = xp.coerceAtLeast(0))
+        growPet(delta, announce)
         // Rewards only for levels never reached before: uncheck -> re-check can't farm them.
         val rewarded = level > rewards.rewardedLevel
         if (rewarded) rewards = RewardEngine.grantLevels(rewards, level)
@@ -568,11 +633,136 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         if (announce) Titles.all.lastOrNull { it.id in new }?.let { showMessage(strings.msgNewTitle(it)) }
     }
 
+    // ======================= Pet =======================
+
+    fun adoptPet(species: PetSpecies, name: String) {
+        val clean = name.trim().take(MAX_PET_NAME).ifEmpty { strings.petDefaultName(species) }
+        pet = PetState(species, clean)
+        persist()
+        showMessage(strings.msgPetAdopted(clean))
+    }
+
+    fun renamePet(name: String) {
+        val p = pet ?: return
+        val clean = name.trim().take(MAX_PET_NAME)
+        if (clean.isEmpty() || clean == p.name) return
+        pet = p.copy(name = clean)
+        persist()
+    }
+
+    /** Tapping the pet: hearts in the UI, and it counts for the "pet" mission. */
+    fun petThePet() {
+        if (pet == null) return
+        updateMissionDay { it.copy(petted = it.petted + 1) }
+        persist()
+    }
+
+    /** The pet grows with every XP the player earns (and shrinks back if a quest is unchecked). */
+    private fun growPet(delta: Int, announce: Boolean) {
+        val p = pet ?: return
+        val (next, reached) = Pets.grow(p, delta)
+        pet = next
+        if (announce && reached != null) {
+            showMessage(if (reached == PetStage.BABY) strings.msgPetHatched(next.name) else strings.msgPetGrew(next.name, reached))
+        }
+    }
+
+    // ======================= Daily missions & season events =======================
+
+    private fun updateMissionDay(transform: (MissionDay) -> MissionDay) {
+        val today = todayDate.toString()
+        val current = missionDay.takeIf { it.date == today } ?: MissionDay(today)
+        missionDay = transform(current)
+    }
+
+    val todayMissions: List<MissionType> get() = Missions.forDate(todayDate, hasPet = pet != null)
+
+    fun missionGoal(type: MissionType) = Missions.goal(type, todayActive.size)
+    fun missionProgress(type: MissionType) = Missions.progress(type, missionDay, todayActive.count { it.done }, todayActive.size)
+    fun isMissionDone(type: MissionType) = Missions.isDone(type, missionDay, todayActive.count { it.done }, todayActive.size)
+    fun isMissionClaimed(type: MissionType) = type in missionDay.claimed
+
+    val activeEvent: SeasonEvent? get() = SeasonEvents.active(todayDate)
+    val eventDays: Int get() = activeEvent?.let { rewards.eventProgress[it.key(todayDate)] } ?: 0
+
+    /** Collects a finished mission's XP; the last of the day also gives a box and an event day. */
+    fun claimMission(type: MissionType) {
+        if (type !in todayMissions || isMissionClaimed(type)) return
+        if (!isMissionDone(type)) {
+            showMessage(strings.msgMissionNotDone)
+            return
+        }
+        updateMissionDay { it.copy(claimed = it.claimed + type) }
+        addXp(type.xp)
+        refreshTitles()
+        val allClaimed = todayMissions.all { it in missionDay.claimed }
+        if (allClaimed && !missionDay.bonusClaimed) {
+            updateMissionDay { it.copy(bonusClaimed = true) }
+            rewards = rewards.copy(boxes = rewards.boxes + Missions.BONUS_BOXES)
+            val event = activeEvent
+            if (event != null) {
+                val (next, result) = SeasonEvents.addDay(rewards, event, todayDate)
+                rewards = next
+                showMessage(strings.eventDayResult(event, result))
+            } else {
+                showMessage(strings.msgMissionsAllClear)
+            }
+        } else {
+            showMessage(strings.msgMissionClaimed(type.xp))
+        }
+        persist()
+    }
+
+    // ======================= Profile status =======================
+
+    /** [mood] null = follow the quests again. */
+    fun updateStatus(mood: Mood?, message: String) {
+        val clean = message.trim().take(MAX_STATUS_MESSAGE)
+        if (mood == settings.statusMood && clean == settings.statusMessage) return
+        updateMissionDay { it.copy(status = true) }
+        updateSettings { it.copy(statusMood = mood, statusMessage = clean) }
+        showMessage(strings.msgStatusSaved)
+    }
+
+    // ======================= First-run guide =======================
+
+    fun finishOnboarding(
+        nickname: String,
+        hairStyle: HairStyle,
+        skin: Int,
+        packs: List<RoutineTemplate>,
+        petSpecies: PetSpecies?,
+        petName: String,
+    ) {
+        val clean = nickname.trim().take(MAX_NICKNAME)
+        if (clean.isNotEmpty()) settings = settings.copy(nickname = clean)
+        character = character.copy(outfit = character.outfit.copy(hairStyle = hairStyle, skin = skin))
+        if (packs.isNotEmpty()) {
+            // Today's built-in starter quests make way for the chosen routines.
+            val key = todayDate.toString()
+            val keep = questsByDate[key].orEmpty().filter { it.done }
+            questsByDate[key] = keep + Templates.questsFrom(packs, keep, settings.language, ::newId)
+        }
+        if (petSpecies != null) {
+            pet = PetState(petSpecies, petName.trim().take(MAX_PET_NAME).ifEmpty { strings.petDefaultName(petSpecies) })
+        }
+        settings = settings.copy(onboardingDone = true)
+        persist()
+        showMessage(strings.obWelcomeDone(settings.nickname))
+    }
+
     // ======================= Outfit =======================
 
-    /** Preset or photo style: colors change, worn accessories stay. */
+    /** Preset: its clothes on the current body (accessories, hair style, face details, skin stay). */
     fun applyOutfit(outfit: Outfit) {
-        setOutfit(outfit.withAccessoriesOf(character.outfit))
+        setOutfit(outfit.withBodyOf(character.outfit))
+    }
+
+    /** Photo style: clothes, skin and hair length come from the photo; a chosen hair shape stays if the length fits. */
+    private fun applyPhotoOutfit(outfit: Outfit) {
+        val current = character.outfit
+        val keepStyle = current.hairStyle?.takeIf { it.long == outfit.longHair }
+        setOutfit(outfit.withAccessoriesOf(current).copy(hairStyle = keepStyle, features = current.features))
     }
 
     /** Manual fine-tuning from the wardrobe editor. */
@@ -616,7 +806,7 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
 
                 photoStyleCount++
                 styleResult = result
-                applyOutfit(result.outfit)
+                applyPhotoOutfit(result.outfit)
                 showMessage(strings.styleSummary(result))
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
@@ -701,6 +891,7 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
     fun resetAll() {
         val language = settings.language
         storage.clear()
+        CrashReporter.clear(getApplication())
         clearStylePhoto()
         photoStyleCount = 0
         loadFromStorage(keepLanguage = language)
@@ -718,6 +909,30 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
             }.isSuccess
             showMessage(if (ok) strings.exportDone else strings.exportFailed)
         }
+    }
+
+    /** Reads a backup picked by the user (Storage Access Framework) and replaces everything with it. */
+    fun importData(uri: Uri) {
+        viewModelScope.launch {
+            val text = withContext(Dispatchers.IO) {
+                runCatching {
+                    getApplication<Application>().contentResolver.openInputStream(uri)!!.use { it.readBytes().decodeToString() }
+                }.getOrNull()
+            }
+            if (text == null || !storage.importJson(text)) {
+                showMessage(strings.importFailed)
+                return@launch
+            }
+            clearStylePhoto()
+            loadFromStorage()
+            Notifier.ensureChannels(getApplication(), strings)
+            showMessage(strings.importDone)
+        }
+    }
+
+    fun dismissCrashReport() {
+        pendingCrashReport = null
+        CrashReporter.clear(getApplication())
     }
 
     /** @return the message id, so an [action] press can be matched to it. */
@@ -879,6 +1094,7 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         val list = chats.getOrPut(friendId) { mutableStateListOf() }
         val myId = chatMessageId++
         list += ChatMessage(myId, true, clean, LocalTime.now())
+        updateMissionDay { it.copy(chats = it.chats + 1) }
         persist()
         if (!settings.autoReplies) return
 
@@ -926,7 +1142,7 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
     private fun snapshot() = SavedState(
         character, questsByDate.toMap(), settings, friends.toList(),
         if (settings.saveChatHistory) chats.mapValues { it.value.toList() } else null,
-        rewards,
+        rewards, pet, missionDay,
     )
 
     private var widgetSignature = 0
@@ -934,12 +1150,20 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
     private fun persist() {
         storage.save(snapshot())
         // Redraw the home-screen widget only when something it shows changed (chats save often).
-        val signature = listOf(todayDate, questsFor(todayDate), character, rewards.shieldedDates, settings.language).hashCode()
+        val signature = listOf(todayDate, questsFor(todayDate), character, rewards.shieldedDates, settings.language, settings.statusMood).hashCode()
         if (signature != widgetSignature) {
             widgetSignature = signature
             TodayWidget.updateAll(getApplication())
         }
+        // Quest reminder alarm: only re-armed when a reminder time or a quest's state changes.
+        val reminders = listOf(todayDate, settings.notificationsEnabled, questsFor(todayDate).map { Triple(it.title, it.remindAt, it.done) }).hashCode()
+        if (reminders != reminderSignature) {
+            reminderSignature = reminders
+            ReminderScheduler.rescheduleQuestAlarm(getApplication())
+        }
     }
+
+    private var reminderSignature = 0
 
     override fun onCleared() {
         analyzer.close()

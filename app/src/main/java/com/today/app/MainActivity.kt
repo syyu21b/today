@@ -32,6 +32,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.Surface
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
@@ -39,6 +40,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,6 +49,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -58,11 +61,13 @@ import com.today.app.notify.Notifier
 import com.today.app.ui.components.IntroSplash
 import com.today.app.ui.screens.CommunityScreen
 import com.today.app.ui.screens.HomeScreen
+import com.today.app.ui.screens.OnboardingScreen
 import com.today.app.ui.screens.OutfitScreen
 import com.today.app.ui.screens.StatsScreen
 import com.today.app.ui.screens.settings.SettingsScreen
 import com.today.app.ui.theme.NightSurface
 import com.today.app.ui.theme.TodayTheme
+import com.today.app.ui.theme.isDarkTheme
 
 class MainActivity : ComponentActivity() {
     private val vm: TodayViewModel by viewModels()
@@ -75,11 +80,20 @@ class MainActivity : ComponentActivity() {
         val freshLaunch = savedInstanceState == null
         if (freshLaunch) handleNotificationIntent(intent)
         setContent {
-            TodayTheme {
+            val dark = isDarkTheme(vm.settings.themeMode)
+            // Status / navigation bar icons follow the app theme, not only the phone's.
+            SideEffect {
+                WindowCompat.getInsetsController(window, window.decorView).apply {
+                    isAppearanceLightStatusBars = !dark
+                    isAppearanceLightNavigationBars = !dark
+                }
+            }
+            TodayTheme(vm.settings.themeMode) {
                 // Intro only on a real cold start, not after rotation / process recreation.
                 var showIntro by rememberSaveable { mutableStateOf(freshLaunch) }
                 Box(Modifier.fillMaxSize()) {
-                    TodayApp(vm) // composed underneath so it's ready when the intro fades out
+                    // composed underneath so it's ready when the intro fades out
+                    TodayApp(vm)
                     AnimatedVisibility(visible = showIntro, enter = EnterTransition.None, exit = fadeOut(tween(400))) {
                         IntroSplash(vm.character.outfit, onFinished = { showIntro = false })
                     }
@@ -88,10 +102,33 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * True while a picker / share sheet we opened is on top. Swapping the launcher alias then would
+     * kill our task (and the picker with it), so the icon waits for a real trip to the background.
+     */
+    private var openedExternalScreen = false
+
+    @Deprecated("Called by the Activity Result API")
+    override fun startActivityForResult(intent: Intent, requestCode: Int, options: Bundle?) {
+        openedExternalScreen = true
+        @Suppress("DEPRECATION")
+        super.startActivityForResult(intent, requestCode, options)
+    }
+
+    override fun startActivity(intent: Intent, options: Bundle?) {
+        openedExternalScreen = true
+        super.startActivity(intent, options)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        openedExternalScreen = false
+    }
+
     /** Leaving the app is the safe moment to swap the launcher icon to the current outfit. */
     override fun onStop() {
         super.onStop()
-        AppIconManager.sync(applicationContext, vm.character.outfit)
+        if (!openedExternalScreen) AppIconManager.sync(applicationContext, vm.character.outfit)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -134,7 +171,10 @@ private enum class Tab(val icon: ImageVector) {
 fun TodayApp(vm: TodayViewModel = viewModel()) {
     // Every screen reads its text from LocalStrings, so switching language re-renders all of it.
     CompositionLocalProvider(LocalStrings provides vm.strings) {
-        TodayScaffold(vm)
+        Crossfade(targetState = vm.settings.onboardingDone, label = "onboarding") { done ->
+            if (done) TodayScaffold(vm)
+            else Surface(color = MaterialTheme.colorScheme.background, contentColor = MaterialTheme.colorScheme.onBackground) { OnboardingScreen(vm) }
+        }
     }
 }
 

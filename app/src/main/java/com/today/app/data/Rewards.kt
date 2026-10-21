@@ -8,15 +8,19 @@ import kotlin.random.Random
 enum class AccessorySlot { HEAD, FACE, BACK }
 
 /** How special an item is; [boxWeight] = relative chance among box-only items. Colors live in the UI. */
-enum class Rarity(val boxWeight: Int) { COMMON(6), RARE(4), EPIC(2), LEGENDARY(1) }
+enum class Rarity(val boxWeight: Int) { COMMON(6), RARE(4), EPIC(2), LEGENDARY(1), LIMITED(0) }
 
-/** Wearable item drawn over the sprite. [unlockLevel] null = only from reward boxes. */
+/**
+ * Wearable item drawn over the sprite. [unlockLevel] null = only from reward boxes, unless it
+ * belongs to a season [event] (then it comes from that event's missions).
+ */
 data class Accessory(
     val id: String,
     val slot: AccessorySlot,
     val emoji: String,
     val unlockLevel: Int? = null,
     val rarity: Rarity = Rarity.COMMON,
+    val event: String? = null,
 )
 
 object Accessories {
@@ -29,8 +33,14 @@ object Accessories {
         Accessory("sunglasses", AccessorySlot.FACE, "🕶️", rarity = Rarity.RARE),
         Accessory("catears", AccessorySlot.HEAD, "🐱", rarity = Rarity.EPIC),
         Accessory("halo", AccessorySlot.HEAD, "😇", rarity = Rarity.LEGENDARY),
+        // Season event items (see SeasonEvents)
+        Accessory("partyhat", AccessorySlot.HEAD, "🥳", rarity = Rarity.LIMITED, event = "newyear"),
+        Accessory("flowercrown", AccessorySlot.HEAD, "🌸", rarity = Rarity.LIMITED, event = "spring"),
+        Accessory("strawhat", AccessorySlot.HEAD, "👒", rarity = Rarity.LIMITED, event = "summer"),
+        Accessory("witchhat", AccessorySlot.HEAD, "🎃", rarity = Rarity.LIMITED, event = "halloween"),
+        Accessory("santahat", AccessorySlot.HEAD, "🎅", rarity = Rarity.LIMITED, event = "christmas"),
     )
-    val boxOnly = all.filter { it.unlockLevel == null }
+    val boxOnly = all.filter { it.unlockLevel == null && it.event == null }
 
     /** A box-only item, rarer ones less often. */
     fun rollBoxItem(random: Random): Accessory {
@@ -114,6 +124,8 @@ data class RewardState(
     val titles: Set<String> = setOf(Titles.DEFAULT),
     val equippedTitle: String = Titles.DEFAULT,
     val backdrop: String = Backdrops.DEFAULT,
+    /** Season event key ("halloween-2026") -> days with every daily mission cleared. */
+    val eventProgress: Map<String, Int> = emptyMap(),
 )
 
 /** What came out of a reward box. */
