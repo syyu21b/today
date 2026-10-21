@@ -103,4 +103,21 @@ class RewardsTest {
         assertEquals(Outfits.presets[2], ocean.withoutAccessories())
         assertEquals("ocean", AppIconManager.iconKeyFor(ocean))
     }
+
+    @Test
+    fun rarerBoxItemsComeOutLessOften() {
+        val random = Random(1)
+        val counts = List(9000) { Accessories.rollBoxItem(random) }.groupingBy { it.rarity }.eachCount()
+        // Box-only items: rare (4) > epic (2) > legendary (1)
+        assertTrue(counts.getValue(Rarity.RARE) > counts.getValue(Rarity.EPIC))
+        assertTrue(counts.getValue(Rarity.EPIC) > counts.getValue(Rarity.LEGENDARY))
+        assertTrue(counts.getValue(Rarity.LEGENDARY) > 0)
+    }
+
+    @Test
+    fun backdropsUnlockOncePerLevel() {
+        assertEquals(listOf("sky"), Backdrops.unlockedAt(3).map { it.id })
+        assertTrue(Backdrops.unlockedAt(1).isEmpty()) // the default is never announced
+        assertEquals(Backdrops.all.size, Backdrops.all.map { it.unlockLevel }.toSet().size)
+    }
 }

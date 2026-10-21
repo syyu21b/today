@@ -12,6 +12,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -21,7 +22,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -32,6 +35,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,19 +44,30 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.today.app.data.Accessories
 import com.today.app.data.Accessory
+import com.today.app.data.AccessorySlot
+import com.today.app.data.BackdropDef
+import com.today.app.data.Backdrops
+import com.today.app.data.Outfit
+import com.today.app.data.Rarity
 import com.today.app.data.BoxReward
 import com.today.app.data.LevelUpEvent
 import com.today.app.data.RewardEngine
@@ -60,6 +75,7 @@ import com.today.app.data.TitleDef
 import com.today.app.data.Titles
 import com.today.app.data.TodayViewModel
 import com.today.app.i18n.LocalStrings
+import com.today.app.ui.components.Backdrop
 import com.today.app.ui.components.CelebrationOverlay
 import com.today.app.ui.components.PixelAvatar
 import com.today.app.ui.theme.Gold
@@ -76,6 +92,14 @@ fun Modifier.silhouette(): Modifier = this
     .drawWithContent {
         drawContent()
         drawRect(Color(0xFF4A4466), blendMode = BlendMode.SrcAtop)
+    }
+
+val Rarity.color: Color
+    get() = when (this) {
+        Rarity.COMMON -> Color(0xFFB4BCCC)
+        Rarity.RARE -> Color(0xFF4FA8FF)
+        Rarity.EPIC -> Color(0xFFB26BFF)
+        Rarity.LEGENDARY -> Color(0xFFFFB238)
     }
 
 /** Small rounded pill used on the character card (shields, title). */
@@ -206,6 +230,7 @@ fun LevelUpDialog(vm: TodayViewModel, event: LevelUpEvent) {
                     Spacer(Modifier.height(10.dp))
                     Text(s.levelRewards, color = Sky, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
                     Accessories.unlockedAt(event.level).forEach { Text(s.newUnlock(it), color = Mint, textAlign = TextAlign.Center) }
+                    Backdrops.unlockedAt(event.level).forEach { Text(s.newBackdrop(it), color = Mint, textAlign = TextAlign.Center) }
                 }
                 Accessories.nextLevelUnlock(vm.rewards.rewardedLevel)?.let { next ->
                     Spacer(Modifier.height(12.dp))
@@ -279,7 +304,12 @@ private fun RewardVisual(vm: TodayViewModel, reward: BoxReward) {
         is BoxReward.Item -> {
             val acc = Accessories.byId(reward.id)
             if (acc != null && !reward.duplicate) {
-                PixelAvatar(vm.character.outfit.withAccessory(acc.slot, acc.id), Modifier.height(110.dp), animateColors = false)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    RarityGlow(acc.rarity) {
+                        PixelAvatar(vm.character.outfit.withAccessory(acc.slot, acc.id), Modifier.height(110.dp), animateColors = false, dropIn = acc.id)
+                    }
+                    RarityLabel(acc.rarity, fontSize = 13)
+                }
             } else {
                 Text(acc?.emoji ?: "✨", fontSize = 64.sp)
             }
@@ -290,11 +320,86 @@ private fun RewardVisual(vm: TodayViewModel, reward: BoxReward) {
     }
 }
 
+/** Pulsing light in the rarity color behind a reveal; epic and legendary also get turning rays. */
+@Composable
+private fun RarityGlow(rarity: Rarity, content: @Composable () -> Unit) {
+    val t = rememberInfiniteTransition(label = "glow")
+    val pulse by t.animateFloat(0.55f, 1f, infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "pulse")
+    val spin by t.animateFloat(0f, 360f, infiniteRepeatable(tween(6000, easing = androidx.compose.animation.core.LinearEasing)), label = "spin")
+    val color = rarity.color
+    Box(
+        Modifier
+            .width(170.dp)
+            .height(130.dp)
+            .drawBehind {
+                if (rarity >= Rarity.EPIC) {
+                    rotate(spin) {
+                        repeat(8) { i ->
+                            rotate(i * 45f) {
+                                drawRect(
+                                    color.copy(alpha = 0.18f * pulse),
+                                    topLeft = androidx.compose.ui.geometry.Offset(center.x - 6.dp.toPx(), 0f),
+                                    size = androidx.compose.ui.geometry.Size(12.dp.toPx(), center.y),
+                                )
+                            }
+                        }
+                    }
+                }
+                drawCircle(
+                    Brush.radialGradient(listOf(color.copy(alpha = 0.55f * pulse), Color.Transparent), center, size.minDimension * 0.6f),
+                    radius = size.minDimension * 0.6f,
+                )
+            },
+        contentAlignment = Alignment.Center,
+    ) { content() }
+}
+
+@Composable
+fun RarityLabel(rarity: Rarity, fontSize: Int = 9) {
+    Text(
+        LocalStrings.current.rarityName(rarity),
+        color = rarity.color,
+        fontSize = fontSize.sp,
+        fontWeight = FontWeight.Bold,
+        maxLines = 1,
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(rarity.color.copy(alpha = 0.16f))
+            .padding(horizontal = 6.dp, vertical = 1.dp),
+    )
+}
+
+/**
+ * Tile preview: head and face items zoom in on the head so the detail is visible,
+ * the cape shows the whole body.
+ */
+@Composable
+private fun AccessoryPreview(outfit: Outfit, slot: AccessorySlot, modifier: Modifier, dropIn: String?) {
+    if (slot == AccessorySlot.BACK) {
+        PixelAvatar(outfit, modifier.fillMaxHeight(), animateColors = false, dropIn = dropIn)
+        return
+    }
+    BoxWithConstraints(modifier.fillMaxWidth().aspectRatio(1f).clipToBounds()) {
+        val h = maxHeight * 1.6f
+        PixelAvatar(
+            outfit,
+            Modifier
+                .wrapContentSize(Alignment.TopCenter, unbounded = true)
+                .requiredSize(h * (2f / 3f), h),
+            animateColors = false,
+            dropIn = dropIn,
+        )
+    }
+}
+
 /** Wardrobe card: every accessory, locked ones as silhouettes with how to get them. */
 @Composable
 fun AccessoriesCard(vm: TodayViewModel) {
     val s = LocalStrings.current
+    val haptic = LocalHapticFeedback.current
     val outfit = vm.character.outfit
+    // The item just put on plays its drop-in on its own tile.
+    var dropped by remember { mutableStateOf<String?>(null) }
     Column(
         Modifier
             .fillMaxWidth()
@@ -309,12 +414,30 @@ fun AccessoriesCard(vm: TodayViewModel) {
         Accessories.all.chunked(4).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 row.forEach { acc ->
+                    val unlocked = vm.isUnlocked(acc)
+                    val worn = outfit.accessoryIn(acc.slot) == acc.id
                     AccessoryTile(
                         acc = acc,
-                        unlocked = vm.isUnlocked(acc),
-                        worn = outfit.accessoryIn(acc.slot) == acc.id,
-                        preview = { m -> PixelAvatar(outfit.withAccessory(acc.slot, acc.id), m, animateColors = false) },
-                        onClick = { vm.toggleAccessory(acc) },
+                        unlocked = unlocked,
+                        worn = worn,
+                        preview = { m ->
+                            val drop = dropped == acc.id
+                            key(drop) {
+                                AccessoryPreview(outfit.withAccessory(acc.slot, acc.id), acc.slot, m, dropIn = acc.id.takeIf { drop })
+                            }
+                        },
+                        onClick = {
+                            val wearing = unlocked && !worn
+                            haptic.performHapticFeedback(
+                                when {
+                                    !unlocked -> HapticFeedbackType.Reject
+                                    wearing -> HapticFeedbackType.Confirm
+                                    else -> HapticFeedbackType.SegmentTick
+                                },
+                            )
+                            dropped = acc.id.takeIf { wearing }
+                            vm.toggleAccessory(acc)
+                        },
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -337,21 +460,75 @@ private fun AccessoryTile(
     Column(
         modifier
             .clip(RoundedCornerShape(14.dp))
-            .background(if (worn) Gold.copy(alpha = 0.12f) else Color.Transparent)
-            .border(2.dp, if (worn) Gold else Color.White.copy(alpha = 0.08f), RoundedCornerShape(14.dp))
+            .background(if (worn) Gold.copy(alpha = 0.12f) else acc.rarity.color.copy(alpha = 0.06f))
+            .border(2.dp, if (worn) Gold else acc.rarity.color.copy(alpha = if (unlocked) 0.45f else 0.18f), RoundedCornerShape(14.dp))
             .clickable(onClick = onClick)
             .padding(6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(Modifier.fillMaxWidth().aspectRatio(1f), contentAlignment = Alignment.Center) {
-            preview(if (unlocked) Modifier.fillMaxHeight() else Modifier.fillMaxHeight().silhouette())
+            preview(if (unlocked) Modifier else Modifier.silhouette())
             if (!unlocked) Text("🔒", fontSize = 16.sp)
         }
+        RarityLabel(acc.rarity)
         Text(
             if (unlocked) s.accessoryName(acc.id) else s.accessoryLock(acc),
             fontSize = 11.sp, maxLines = 1,
             color = if (worn) Gold else if (unlocked) Color.White else TextMuted,
             fontWeight = if (worn) FontWeight.Bold else null,
+        )
+    }
+}
+
+/** Wardrobe card: pick the scene behind the character; later ones open with levels. */
+@Composable
+fun BackdropCard(vm: TodayViewModel) {
+    val s = LocalStrings.current
+    val haptic = LocalHapticFeedback.current
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(s.backdropTitle, style = MaterialTheme.typography.titleMedium)
+        Text(s.backdropHint, color = TextMuted, fontSize = 12.sp)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Backdrops.all.forEach { b ->
+                BackdropTile(b, unlocked = vm.isUnlocked(b), selected = vm.backdrop == b.id, modifier = Modifier.weight(1f)) {
+                    haptic.performHapticFeedback(if (vm.isUnlocked(b)) HapticFeedbackType.SegmentTick else HapticFeedbackType.Reject)
+                    vm.selectBackdrop(b)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BackdropTile(b: BackdropDef, unlocked: Boolean, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val s = LocalStrings.current
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Backdrop(
+            b.id,
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(0.8f)
+                .clip(RoundedCornerShape(12.dp))
+                .border(if (selected) 3.dp else 1.dp, if (selected) Gold else Color.White.copy(alpha = 0.1f), RoundedCornerShape(12.dp))
+                .clickable(onClick = onClick)
+                .alpha(if (unlocked) 1f else 0.45f),
+            animated = false,
+        ) {
+            if (!unlocked) Text("🔒", fontSize = 16.sp)
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            if (unlocked) s.backdropName(b.id) else "LV ${b.unlockLevel}",
+            fontSize = 11.sp, maxLines = 1,
+            color = if (selected) Gold else if (unlocked) Color.White else TextMuted,
+            fontWeight = if (selected) FontWeight.Bold else null,
         )
     }
 }

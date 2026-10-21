@@ -531,6 +531,21 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         showMessage(strings.msgExchanged)
     }
 
+    fun isUnlocked(b: BackdropDef) = rewards.rewardedLevel >= b.unlockLevel
+
+    /** The chosen scene, or the default if it isn't unlocked (e.g. restored from an older backup). */
+    val backdrop: String get() = Backdrops.byId(rewards.backdrop)?.takeIf(::isUnlocked)?.id ?: Backdrops.DEFAULT
+
+    fun selectBackdrop(b: BackdropDef) {
+        if (!isUnlocked(b)) {
+            showMessage(strings.msgBackdropLocked(b))
+            return
+        }
+        if (b.id == rewards.backdrop) return
+        rewards = rewards.copy(backdrop = b.id)
+        persist()
+    }
+
     fun equipTitle(id: String) {
         if (id !in rewards.titles || id == rewards.equippedTitle) return
         rewards = rewards.copy(equippedTitle = id)

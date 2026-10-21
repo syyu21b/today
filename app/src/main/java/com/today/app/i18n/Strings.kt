@@ -3,6 +3,8 @@ package com.today.app.i18n
 import androidx.compose.runtime.staticCompositionLocalOf
 import com.today.app.data.Accessories
 import com.today.app.data.Accessory
+import com.today.app.data.BackdropDef
+import com.today.app.data.Rarity
 import com.today.app.data.AppLanguage
 import com.today.app.data.BodyPart
 import com.today.app.data.BoxReward
@@ -360,6 +362,12 @@ interface Strings {
     fun accessoryName(id: String): String
     fun accessoryLock(acc: Accessory): String
     fun msgAccessoryLocked(acc: Accessory): String
+    fun rarityName(r: Rarity): String
+    val backdropTitle: String
+    val backdropHint: String
+    fun backdropName(id: String): String
+    fun newBackdrop(b: BackdropDef): String
+    fun msgBackdropLocked(b: BackdropDef): String
     val rewardsTitle: String
     val statShields: String
     val statBoxes: String
@@ -786,7 +794,7 @@ object KoStrings : Strings {
         BoxReward.Shield -> "🛡 스트릭 보호권 +1"
         is BoxReward.Item ->
             if (r.duplicate) "이미 가진 ${accessoryLabel(r.id)} → ✨ 별조각 +${RewardEngine.DUPLICATE_STARDUST}"
-            else "희귀 아이템 ${accessoryLabel(r.id)} 획득! 옷장에서 착용해 보세요"
+            else "새 아이템 ${accessoryLabel(r.id)} 획득! 옷장에서 착용해 보세요"
         is BoxReward.Title ->
             if (r.duplicate) "이미 가진 칭호 「${titleName(r.id)}」 → ✨ 별조각 +${RewardEngine.DUPLICATE_STARDUST}"
             else "희귀 칭호 「${titleLabel(r.id)}」 획득!"
@@ -905,6 +913,23 @@ object KoStrings : Strings {
     override val msgWidgetUnsupported = "이 런처는 바로 추가를 지원하지 않아요. 홈 화면을 길게 눌러 위젯에서 추가해 주세요"
     override fun msgAccessoryLocked(acc: Accessory) =
         acc.unlockLevel?.let { "🔒 ${accessoryName(acc.id)}: LV ${it}에 해금돼요" } ?: "🔒 ${accessoryName(acc.id)}: 보상 상자에서 얻을 수 있어요"
+    override fun rarityName(r: Rarity) = when (r) {
+        Rarity.COMMON -> "일반"
+        Rarity.RARE -> "희귀"
+        Rarity.EPIC -> "영웅"
+        Rarity.LEGENDARY -> "전설"
+    }
+    override val backdropTitle = "배경"
+    override val backdropHint = "레벨이 오르면 새 배경이 열려요. 홈 캐릭터 카드와 옷장에 함께 적용돼요"
+    override fun backdropName(id: String) = when (id) {
+        "sky" -> "맑은 하늘"
+        "sunset" -> "노을"
+        "night" -> "별밤"
+        "space" -> "우주"
+        else -> "기본"
+    }
+    override fun newBackdrop(b: BackdropDef) = "🖼 새 배경 해금: ${b.emoji} ${backdropName(b.id)}"
+    override fun msgBackdropLocked(b: BackdropDef) = "🔒 ${backdropName(b.id)}: LV ${b.unlockLevel}에 해금돼요"
 }
 
 object EnStrings : Strings {
@@ -1250,7 +1275,7 @@ object EnStrings : Strings {
         BoxReward.Shield -> "🛡 Streak shield +1"
         is BoxReward.Item ->
             if (r.duplicate) "Already have ${accessoryLabel(r.id)} → ✨ Stardust +${RewardEngine.DUPLICATE_STARDUST}"
-            else "Rare item: ${accessoryLabel(r.id)}! Try it on in the wardrobe"
+            else "New item: ${accessoryLabel(r.id)}! Try it on in the wardrobe"
         is BoxReward.Title ->
             if (r.duplicate) "Already have the ${titleName(r.id)} title → ✨ Stardust +${RewardEngine.DUPLICATE_STARDUST}"
             else "Rare title: ${titleLabel(r.id)}!"
@@ -1373,6 +1398,23 @@ object EnStrings : Strings {
     override val msgWidgetUnsupported = "This launcher can't add it directly. Long-press the home screen and add it from Widgets"
     override fun msgAccessoryLocked(acc: Accessory) =
         acc.unlockLevel?.let { "🔒 ${accessoryName(acc.id)} unlocks at LV $it" } ?: "🔒 ${accessoryName(acc.id)} comes from reward boxes"
+    override fun rarityName(r: Rarity) = when (r) {
+        Rarity.COMMON -> "Common"
+        Rarity.RARE -> "Rare"
+        Rarity.EPIC -> "Epic"
+        Rarity.LEGENDARY -> "Legendary"
+    }
+    override val backdropTitle = "Backgrounds"
+    override val backdropHint = "New backgrounds open as you level up. They show on the home character card and in the wardrobe"
+    override fun backdropName(id: String) = when (id) {
+        "sky" -> "Clear Sky"
+        "sunset" -> "Sunset"
+        "night" -> "Starry Night"
+        "space" -> "Space"
+        else -> "Default"
+    }
+    override fun newBackdrop(b: BackdropDef) = "🖼 New background: ${b.emoji} ${backdropName(b.id)}"
+    override fun msgBackdropLocked(b: BackdropDef) = "🔒 ${backdropName(b.id)}: unlocks at LV ${b.unlockLevel}"
 
     private fun quests(n: Int) = if (n == 1) "quest" else "quests"
 }

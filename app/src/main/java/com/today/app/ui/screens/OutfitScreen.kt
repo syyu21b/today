@@ -83,6 +83,7 @@ import com.today.app.data.StyleResult
 import com.today.app.data.TodayViewModel
 import com.today.app.i18n.LocalStrings
 import com.today.app.i18n.Strings
+import com.today.app.ui.components.Backdrop
 import com.today.app.ui.components.PixelAvatar
 import com.today.app.ui.theme.Gold
 import com.today.app.ui.theme.NightSurfaceHigh
@@ -168,13 +169,12 @@ fun OutfitScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
         Text(s.outfitIntro, color = TextMuted, fontSize = 14.sp)
 
         // ---- Avatar stage ----
-        Box(
+        Backdrop(
+            vm.backdrop,
             Modifier
                 .fillMaxWidth()
                 .height(260.dp)
-                .clip(RoundedCornerShape(24.dp))
-                .background(Brush.verticalGradient(listOf(Color(0xFF3A2F6B), Color(0xFF1A1628)))),
-            contentAlignment = Alignment.Center,
+                .clip(RoundedCornerShape(24.dp)),
         ) {
             Box(
                 Modifier
@@ -228,6 +228,7 @@ fun OutfitScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
 
         // ---- Accessories (level / reward-box unlocks) ----
         AccessoriesCard(vm)
+        BackdropCard(vm)
 
         // ---- Presets ----
         Text(s.presetsTitle, style = MaterialTheme.typography.titleLarge)

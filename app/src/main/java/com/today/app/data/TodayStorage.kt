@@ -205,6 +205,7 @@ class TodayStorage(context: Context) {
             items = strings("items").filter { Accessories.byId(it) != null }.toSet(),
             titles = titles,
             equippedTitle = j.optString("equippedTitle", Titles.DEFAULT).takeIf { it in titles } ?: Titles.DEFAULT,
+            backdrop = j.optString("backdrop", Backdrops.DEFAULT).takeIf { Backdrops.byId(it) != null } ?: Backdrops.DEFAULT,
         )
     }
 
@@ -217,6 +218,7 @@ class TodayStorage(context: Context) {
         .put("items", JSONArray(r.items.sorted()))
         .put("titles", JSONArray(r.titles.sorted()))
         .put("equippedTitle", r.equippedTitle)
+        .put("backdrop", r.backdrop)
 
     // ------------------------------------------------------------------ quests
 

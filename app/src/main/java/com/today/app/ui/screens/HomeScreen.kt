@@ -101,6 +101,7 @@ import com.today.app.data.Mood
 import com.today.app.data.Quest
 import com.today.app.data.TodayViewModel
 import com.today.app.i18n.LocalStrings
+import com.today.app.ui.components.Backdrop
 import com.today.app.ui.components.CelebrationOverlay
 import com.today.app.ui.components.PixelAvatar
 import com.today.app.ui.components.WeekCalendar
@@ -205,6 +206,7 @@ fun HomeScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
                     shields = vm.rewards.shields,
                     titleId = vm.rewards.equippedTitle,
                     mood = vm.mood,
+                    backdrop = vm.backdrop,
                     onShield = { showShield = true },
                     onTitle = { showTitles = true },
                 )
@@ -346,6 +348,7 @@ private fun CharacterCard(
     shields: Int,
     titleId: String,
     mood: Mood,
+    backdrop: String,
     onShield: () -> Unit,
     onTitle: () -> Unit,
 ) {
@@ -356,12 +359,11 @@ private fun CharacterCard(
         shape = RoundedCornerShape(20.dp),
     ) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(
+            Backdrop(
+                backdrop,
                 Modifier
                     .size(110.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(Brush.verticalGradient(listOf(Color(0xFF3A2F6B), Color(0xFF1F1B2E)))),
-                contentAlignment = Alignment.Center,
+                    .clip(RoundedCornerShape(16.dp)),
             ) {
                 PixelAvatar(c.outfit, Modifier.height(92.dp), mood = mood)
                 // Mood badge in the corner; the face itself changes too.

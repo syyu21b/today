@@ -2,6 +2,12 @@ package com.today.app.ui.components
 
 import android.graphics.Bitmap
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.aspectRatio
@@ -26,6 +32,9 @@ import androidx.compose.ui.graphics.Canvas as GraphicsCanvas
 import com.today.app.data.Mood
 import com.today.app.data.Outfit
 import kotlinx.coroutines.delay
+import kotlin.math.PI
+import kotlin.math.roundToInt
+import kotlin.math.sin
 
 /**
  * 16 x 24 human sprite.
@@ -80,7 +89,13 @@ private class AccessoryArt(
     val palette: Map<Char, Color>,
     val front: Map<Int, String> = emptyMap(),
     val behind: Map<Int, String> = emptyMap(),
-)
+    /** Twinkle points (x, y on the fine grid), each lighting up in turn. */
+    val sparkles: List<Pair<Int, Int>> = emptyList(),
+    /** Lower [behind] rows sway sideways (capes). */
+    val sway: Boolean = false,
+) {
+    val animated get() = sparkles.isNotEmpty() || sway
+}
 
 private const val ART_W = 32
 
@@ -169,6 +184,7 @@ private val ACCESSORY_ART = mapOf(
             42 to "kVVVvVVVVVVVVVVVVVVVVVVVVVVvVVVk",
             43 to ".kkkkkkkkkkkkkkkkkkkkkkkkkkkkkk.",
         ),
+        sway = true,
     ),
     "crown" to AccessoryArt(
         palette = mapOf('y' to Color(0xFFFFD34E), 'Y' to Color(0xFFFFF2A8), 'o' to Color(0xFFC8901E), 'r' to Color(0xFFFF4D6D), 'g' to Color(0xFF3DDCFF)),
@@ -184,6 +200,7 @@ private val ACCESSORY_ART = mapOf(
             8 to "......oyyrryyyggggyyyrryyo......",
             9 to "......kooooooooooooooooook......",
         ),
+        sparkles = listOf(9 to 7, 15 to 1, 22 to 7, 16 to 8),
     ),
     "sunglasses" to AccessoryArt(
         palette = mapOf('F' to Color(0xFF101018), 'd' to Color(0xFF1E2436), 'l' to Color(0xFF3A4A6A), 'w' to Color(0xDDFFFFFF)),
@@ -217,6 +234,7 @@ private val ACCESSORY_ART = mapOf(
             2 to "......qlllllllYYYYlllllllq......",
             3 to ".........qqqqqqqqqqqqqq.........",
         ),
+        sparkles = listOf(11 to 0, 23 to 1, 7 to 1),
     ),
 )
 
@@ -288,8 +306,24 @@ private fun spriteCode(x: Int, y: Int, style: SpriteStyle, blink: Boolean): Char
     return ch
 }
 
-/** Draws the sprite with its top-left at [topLeft], each sprite pixel being [px] canvas pixels. */
-fun DrawScope.drawPixelSprite(topLeft: Offset, px: Float, style: SpriteStyle, blink: Boolean = false) {
+/** True when some worn accessory moves, so the avatar needs a running clock. */
+private fun SpriteStyle.hasAnimatedAccessory() = accessories.any { ACCESSORY_ART[it]?.animated == true }
+
+/** Accessory falling into place: [id] drawn [offset] fine-grid cells above its spot. */
+data class AccessoryDrop(val id: String, val offset: Float)
+
+/**
+ * Draws the sprite with its top-left at [topLeft], each sprite pixel being [px] canvas pixels.
+ * [time] (0..1, looping) drives sparkles and cape sway.
+ */
+fun DrawScope.drawPixelSprite(
+    topLeft: Offset,
+    px: Float,
+    style: SpriteStyle,
+    blink: Boolean = false,
+    time: Float = 0f,
+    drop: AccessoryDrop? = null,
+) {
     val hairShine = lerp(style.hair, Color.White, 0.35f)
     val skinShadow = lerp(style.skin, Color.Black, 0.12f)
     val shirtShade = lerp(style.shirt, Color.Black, 0.25f)
@@ -320,19 +354,32 @@ fun DrawScope.drawPixelSprite(topLeft: Offset, px: Float, style: SpriteStyle, bl
         } ?: continue
         drawRect(color, Offset(topLeft.x + x * px, topLeft.y + y * px), cell)
     }
-    drawAccessories(topLeft, px / 2, style, blink, hairShine, skinShadow)
+    drawAccessories(topLeft, px / 2, style, blink, hairShine, skinShadow, time, drop)
 }
 
 /** Second pass: accessories (back first) on the half-pixel grid. */
-private fun DrawScope.drawAccessories(topLeft: Offset, half: Float, style: SpriteStyle, blink: Boolean, hairShine: Color, skinShadow: Color) {
+private fun DrawScope.drawAccessories(
+    topLeft: Offset,
+    half: Float,
+    style: SpriteStyle,
+    blink: Boolean,
+    hairShine: Color,
+    skinShadow: Color,
+    time: Float,
+    drop: AccessoryDrop?,
+) {
     val cell = Size(half + 0.6f, half + 0.6f)
     // Translucent cells (glass, glow) must not overlap, or the seams show darker.
     val exact = Size(half, half)
     for (id in style.accessories) {
         val art = ACCESSORY_ART[id] ?: continue
+        val top = topLeft.y + if (drop?.id == id) -drop.offset * half else 0f
+        // Cape hem swings up to 2 cells, the shoulders stay put.
+        val swing = if (art.sway) sin(time * 2 * PI).toFloat() else 0f
         for ((layer, behind) in listOf(art.behind to true, art.front to false)) {
             for ((y, row) in layer) for (x in 0 until ART_W) {
-                val code = row[x]
+                val dx = if (art.sway && y > 28) (swing * (y - 28) / 8f).roundToInt() else 0
+                val code = row.getOrNull(x - dx) ?: '.'
                 if (code == '.') continue
                 if (behind && spriteCode(x / 2, y / 2, style, blink) != '.') continue
                 val color = art.palette[code] ?: when (code) {
@@ -343,15 +390,43 @@ private fun DrawScope.drawAccessories(topLeft: Offset, half: Float, style: Sprit
                     'S' -> skinShadow
                     else -> null
                 } ?: continue
-                drawRect(color, Offset(topLeft.x + x * half, topLeft.y + y * half), if (color.alpha < 1f) exact else cell)
+                drawRect(color, Offset(topLeft.x + x * half, top + y * half), if (color.alpha < 1f) exact else cell)
             }
+        }
+        art.sparkles.forEachIndexed { i, (x, y) ->
+            // Each point glints for a quarter of the loop, one after another.
+            val local = (time - i.toFloat() / art.sparkles.size + 1f) % 1f
+            if (local < 0.25f) drawSparkle(topLeft.x + x * half, top + y * half, half, sin(local / 0.25f * PI).toFloat())
         }
     }
 }
 
-/** Stand-alone avatar with smooth color transitions and idle blinking. */
+/** 4-point twinkle centred on the cell at ([x], [y]); [a] = brightness 0..1. */
+private fun DrawScope.drawSparkle(x: Float, y: Float, half: Float, a: Float) {
+    val size = Size(half, half)
+    drawRect(Color.White.copy(alpha = a), Offset(x, y), size)
+    val reach = if (a > 0.6f) 2 else 1
+    for (d in 1..reach) {
+        val c = SparkleColor.copy(alpha = a * if (d == 1) 0.8f else 0.4f)
+        for ((dx, dy) in listOf(d to 0, -d to 0, 0 to d, 0 to -d)) drawRect(c, Offset(x + dx * half, y + dy * half), size)
+    }
+}
+
+private val SparkleColor = Color(0xFFFFF6C8)
+private const val DROP_FROM = 14f
+
+/**
+ * Stand-alone avatar with smooth color transitions and idle blinking.
+ * With [animateColors], an accessory put on falls into place; [dropIn] plays that fall once on first show.
+ */
 @Composable
-fun PixelAvatar(outfit: Outfit, modifier: Modifier = Modifier, animateColors: Boolean = true, mood: Mood = Mood.NORMAL) {
+fun PixelAvatar(
+    outfit: Outfit,
+    modifier: Modifier = Modifier,
+    animateColors: Boolean = true,
+    mood: Mood = Mood.NORMAL,
+    dropIn: String? = null,
+) {
     val target = outfit.toSpriteStyle(mood)
     val spec = tween<Color>(durationMillis = if (animateColors) 700 else 0)
     val hair by animateColorAsState(target.hair, spec, label = "hair")
@@ -372,12 +447,32 @@ fun PixelAvatar(outfit: Outfit, modifier: Modifier = Modifier, animateColors: Bo
         }
     }
 
+    // Sparkles / cape sway clock; only read (and so only redrawn) when something moves.
+    val clock = rememberInfiniteTransition(label = "accessories")
+    val time = clock.animateFloat(0f, 1f, infiniteRepeatable(tween(2400, easing = LinearEasing)), label = "time")
+    val moving = target.hasAnimatedAccessory()
+
+    val drop = remember { Animatable(if (dropIn != null) DROP_FROM else 0f) }
+    var dropId by remember { mutableStateOf(dropIn.orEmpty()) }
+    var worn by remember { mutableStateOf(target.accessories) }
+    LaunchedEffect(target.accessories) {
+        val added = target.accessories.firstOrNull { it !in worn }
+        worn = target.accessories
+        if (added != null && animateColors) {
+            dropId = added
+            drop.snapTo(DROP_FROM)
+        }
+        if (dropId.isNotEmpty()) drop.animateTo(0f, spring(dampingRatio = 0.4f, stiffness = 420f))
+    }
+
     Canvas(modifier.aspectRatio(SPRITE_W / SPRITE_H.toFloat())) {
         val px = size.width / SPRITE_W
         drawPixelSprite(
             Offset.Zero, px,
             target.copy(hair = hair, skin = skin, shirt = shirt, stripe = stripe, accent = accent, pants = pants, shoes = shoes),
             blink,
+            time = if (moving) time.value else 0f,
+            drop = if (dropId.isNotEmpty() && drop.value != 0f) AccessoryDrop(dropId, drop.value) else null,
         )
     }
 }

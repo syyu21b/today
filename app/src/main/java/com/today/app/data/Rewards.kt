@@ -7,21 +7,36 @@ import kotlin.random.Random
 
 enum class AccessorySlot { HEAD, FACE, BACK }
 
+/** How special an item is; [boxWeight] = relative chance among box-only items. Colors live in the UI. */
+enum class Rarity(val boxWeight: Int) { COMMON(6), RARE(4), EPIC(2), LEGENDARY(1) }
+
 /** Wearable item drawn over the sprite. [unlockLevel] null = only from reward boxes. */
-data class Accessory(val id: String, val slot: AccessorySlot, val emoji: String, val unlockLevel: Int? = null)
+data class Accessory(
+    val id: String,
+    val slot: AccessorySlot,
+    val emoji: String,
+    val unlockLevel: Int? = null,
+    val rarity: Rarity = Rarity.COMMON,
+)
 
 object Accessories {
     val all = listOf(
         Accessory("cap", AccessorySlot.HEAD, "🧢", 2),
         Accessory("glasses", AccessorySlot.FACE, "👓", 3),
-        Accessory("headphones", AccessorySlot.HEAD, "🎧", 5),
-        Accessory("cape", AccessorySlot.BACK, "🦸", 7),
-        Accessory("crown", AccessorySlot.HEAD, "👑", 10),
-        Accessory("sunglasses", AccessorySlot.FACE, "🕶️"),
-        Accessory("catears", AccessorySlot.HEAD, "🐱"),
-        Accessory("halo", AccessorySlot.HEAD, "😇"),
+        Accessory("headphones", AccessorySlot.HEAD, "🎧", 5, Rarity.RARE),
+        Accessory("cape", AccessorySlot.BACK, "🦸", 7, Rarity.EPIC),
+        Accessory("crown", AccessorySlot.HEAD, "👑", 10, Rarity.LEGENDARY),
+        Accessory("sunglasses", AccessorySlot.FACE, "🕶️", rarity = Rarity.RARE),
+        Accessory("catears", AccessorySlot.HEAD, "🐱", rarity = Rarity.EPIC),
+        Accessory("halo", AccessorySlot.HEAD, "😇", rarity = Rarity.LEGENDARY),
     )
     val boxOnly = all.filter { it.unlockLevel == null }
+
+    /** A box-only item, rarer ones less often. */
+    fun rollBoxItem(random: Random): Accessory {
+        var roll = random.nextInt(boxOnly.sumOf { it.rarity.boxWeight })
+        return boxOnly.first { roll -= it.rarity.boxWeight; roll < 0 }
+    }
 
     fun byId(id: String) = all.firstOrNull { it.id == id }
     fun unlockedAt(level: Int) = all.filter { it.unlockLevel == level }
@@ -29,6 +44,26 @@ object Accessories {
     /** The next level-unlock the player hasn't reached yet (for the "next reward" preview). */
     fun nextLevelUnlock(reachedLevel: Int) =
         all.filter { (it.unlockLevel ?: 0) > reachedLevel }.minByOrNull { it.unlockLevel!! }
+}
+
+// ======================= Backdrops =======================
+
+/** Scene behind the character (home card + wardrobe stage), unlocked by level. Drawn in Backdrop.kt. */
+data class BackdropDef(val id: String, val emoji: String, val unlockLevel: Int)
+
+object Backdrops {
+    const val DEFAULT = "default"
+
+    val all = listOf(
+        BackdropDef(DEFAULT, "🟪", 1),
+        BackdropDef("sky", "☁️", 3),
+        BackdropDef("sunset", "🌇", 5),
+        BackdropDef("night", "🌙", 7),
+        BackdropDef("space", "🪐", 10),
+    )
+
+    fun byId(id: String) = all.firstOrNull { it.id == id }
+    fun unlockedAt(level: Int) = all.filter { it.unlockLevel == level && it.unlockLevel > 1 }
 }
 
 // ======================= Titles =======================
@@ -78,6 +113,7 @@ data class RewardState(
     /** Titles owned (kept even if a quest is unchecked later). */
     val titles: Set<String> = setOf(Titles.DEFAULT),
     val equippedTitle: String = Titles.DEFAULT,
+    val backdrop: String = Backdrops.DEFAULT,
 )
 
 /** What came out of a reward box. */
@@ -111,7 +147,7 @@ object RewardEngine {
         return when {
             roll < 35 -> s.copy(shields = s.shields + 1) to BoxReward.Shield
             roll < 65 -> {
-                val id = Accessories.boxOnly.random(random).id
+                val id = Accessories.rollBoxItem(random).id
                 if (id in s.items) s.copy(stardust = s.stardust + DUPLICATE_STARDUST) to BoxReward.Item(id, duplicate = true)
                 else s.copy(items = s.items + id) to BoxReward.Item(id, duplicate = false)
             }
