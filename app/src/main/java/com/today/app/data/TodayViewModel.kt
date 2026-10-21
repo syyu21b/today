@@ -64,6 +64,12 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
     var missionDay by mutableStateOf(MissionDay(LocalDate.now().toString()))
         private set
 
+    /** Character creator: open over everything, and its five save slots. */
+    var creatorOpen by mutableStateOf(false)
+        private set
+    var looks by mutableStateOf(List<Outfit?>(LOOK_SLOTS) { null })
+        private set
+
     /** Last crash's report, offered once on the next launch (when crash reports are on). */
     var pendingCrashReport by mutableStateOf<String?>(null)
         private set
@@ -178,6 +184,7 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         refreshTitles(announce = false)
 
         pet = saved.pet
+        looks = saved.looks
         missionDay = saved.missions?.takeIf { it.date == todayDate.toString() } ?: MissionDay(todayDate.toString())
 
         friends.clear()
@@ -751,6 +758,30 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         showMessage(strings.obWelcomeDone(settings.nickname))
     }
 
+    // ======================= Character creator =======================
+
+    fun openCreator() {
+        creatorOpen = true
+    }
+
+    fun closeCreator() {
+        creatorOpen = false
+    }
+
+    /** "외형 결정": the creator's draft becomes the character (locked accessories are taken off). */
+    fun applyLook(outfit: Outfit) {
+        setOutfit(sanitizeAccessories(outfit))
+        creatorOpen = false
+        showMessage(strings.msgLookApplied)
+    }
+
+    fun saveLook(slot: Int, outfit: Outfit) {
+        if (slot !in looks.indices) return
+        looks = looks.toMutableList().also { it[slot] = outfit }
+        persist()
+        showMessage(strings.msgLookSaved(slot + 1))
+    }
+
     // ======================= Outfit =======================
 
     /** Preset: its clothes on the current body (accessories, hair style, face details, skin stay). */
@@ -1142,7 +1173,7 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
     private fun snapshot() = SavedState(
         character, questsByDate.toMap(), settings, friends.toList(),
         if (settings.saveChatHistory) chats.mapValues { it.value.toList() } else null,
-        rewards, pet, missionDay,
+        rewards, pet, missionDay, looks,
     )
 
     private var widgetSignature = 0

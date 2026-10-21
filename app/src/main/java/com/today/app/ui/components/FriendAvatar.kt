@@ -1,5 +1,6 @@
 package com.today.app.ui.components
 
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
@@ -38,8 +39,7 @@ fun FriendAvatar(friend: Friend, size: Dp, storyRing: Boolean = false, dimmed: B
                 .background(Brush.verticalGradient(listOf(Color(0xFF3A2F6B), Color(0xFF241F38)))),
             contentAlignment = Alignment.TopCenter,
         ) {
-            // Zoom in on the head/upper body
-            PixelAvatar(friend.outfit, Modifier.height(size * 1.3f).offset(y = size * 0.08f), animateColors = false)
+            AvatarHead(friend.outfit, Modifier.fillMaxSize().offset(y = size * 0.06f))
         }
         if (friend.online && !dimmed) {
             Box(

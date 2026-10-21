@@ -76,8 +76,6 @@ fun OnboardingScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
     val s = LocalStrings.current
     var step by rememberSaveable { mutableIntStateOf(0) }
     var nickname by rememberSaveable { mutableStateOf("") }
-    var hair by rememberSaveable { mutableStateOf(vm.character.outfit.style) }
-    var skin by rememberSaveable { mutableIntStateOf(vm.character.outfit.skin) }
     var packs by rememberSaveable { mutableStateOf(listOf<String>()) }
     var species by rememberSaveable { mutableStateOf<PetSpecies?>(PetSpecies.DOG) }
     var petName by rememberSaveable { mutableStateOf("") }
@@ -86,7 +84,7 @@ fun OnboardingScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
     }
     BackHandler(enabled = step > 0) { step-- }
 
-    val outfit = vm.character.outfit.copy(hairStyle = hair, skin = skin)
+    val outfit = vm.character.outfit
     val chosen = packs.mapNotNull(Templates::byId)
     val questCount = Templates.questsFrom(chosen, emptyList(), vm.settings.language) { "" }.size
 
@@ -134,7 +132,7 @@ fun OnboardingScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
             ) {
                 when (current) {
                     0 -> WelcomeStep(outfit)
-                    1 -> ProfileStep(nickname, { nickname = it }, outfit, hair, { hair = it }, skin, { skin = it })
+                    1 -> ProfileStep(nickname, { nickname = it }, outfit, onCustomize = vm::openCreator)
                     2 -> GoalsStep(packs, { id -> packs = if (id in packs) packs - id else packs + id }, questCount)
                     3 -> PetStep(species, { species = it }, petName, { petName = it })
                     else -> ReadyStep(outfit, species, nickname.ifBlank { vm.settings.nickname }, vm.backdrop)
@@ -147,7 +145,7 @@ fun OnboardingScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
         Button(
             onClick = {
                 if (step < STEPS - 1) step++
-                else vm.finishOnboarding(nickname, hair, skin, chosen, species, petName)
+                else vm.finishOnboarding(nickname, outfit.style, outfit.skin, chosen, species, petName)
             },
             modifier = Modifier.fillMaxWidth().height(54.dp),
         ) {
@@ -197,17 +195,15 @@ private fun ProfileStep(
     nickname: String,
     onNickname: (String) -> Unit,
     outfit: com.today.app.data.Outfit,
-    hair: HairStyle,
-    onHair: (HairStyle) -> Unit,
-    skin: Int,
-    onSkin: (Int) -> Unit,
+    onCustomize: () -> Unit,
 ) {
     val s = LocalStrings.current
     Text(s.obProfileTitle, style = MaterialTheme.typography.titleLarge)
     Text(s.obProfileHint, color = TextMuted, fontSize = 14.sp)
-    Backdrop("default", Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(24.dp))) {
-        PixelAvatar(outfit, Modifier.height(170.dp))
+    Backdrop("default", Modifier.fillMaxWidth().height(240.dp).clip(RoundedCornerShape(24.dp)).clickable(onClick = onCustomize)) {
+        PixelAvatar(outfit, Modifier.height(228.dp).padding(top = 8.dp))
     }
+    Button(onClick = onCustomize, modifier = Modifier.fillMaxWidth().height(50.dp)) { Text("✨ " + s.creatorOpen, fontSize = 16.sp) }
     OutlinedTextField(
         value = nickname,
         onValueChange = { onNickname(it.take(TodayViewModel.MAX_NICKNAME)) },
@@ -216,21 +212,6 @@ private fun ProfileStep(
         placeholder = { Text(s.defaultNickname) },
         modifier = Modifier.fillMaxWidth(),
     )
-    Text(s.hairStyleTitle, style = MaterialTheme.typography.titleMedium)
-    HairStyleChips(hair, onHair)
-    Text(s.slotSkin, style = MaterialTheme.typography.titleMedium)
-    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Outfits.skinTones.forEach { c ->
-            Box(
-                Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(Color(c))
-                    .border(if (c == skin) 3.dp else 1.dp, if (c == skin) Gold else Hairline.copy(alpha = 0.2f), CircleShape)
-                    .clickable { onSkin(c) },
-            )
-        }
-    }
 }
 
 /** Hair styles as chips (shared by the guide and the wardrobe editor). */

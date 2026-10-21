@@ -43,6 +43,18 @@ enum class HairStyle(val long: Boolean) {
 /** Optional face details, e.g. for an older-looking character. */
 enum class FaceFeature { FRECKLES, MUSTACHE, BEARD, WRINKLES }
 
+// Character creator options (art in assets/character_art.json, drawn by CharacterView).
+enum class BodyType { SLIM, BROAD }
+enum class FaceShape { OVAL, ROUND, SHARP, SQUARE }
+enum class EyeStyle { ALMOND, ROUND, SHARP, GENTLE }
+enum class BrowStyle { NATURAL, ARCHED, STRAIGHT, THICK }
+enum class TopStyle { TEE, KNIT, HOODIE, JACKET, DRESS }
+enum class BottomStyle { PANTS, SHORTS, SKIRT }
+enum class ShoeStyle { SNEAKERS, BOOTS }
+
+const val DEFAULT_EYE_COLOR = 0xFF6B4FD0.toInt()
+const val DEFAULT_LIP_COLOR = 0xFFE8707E.toInt()
+
 /**
  * Everything needed to paint the pixel avatar: colors (ARGB ints) + garment shape flags.
  * [name] is a language-neutral key for presets ("ocean") / photo styles ("photo:3"),
@@ -68,8 +80,22 @@ data class Outfit(
     /** Chosen hair shape; null = follow [longHair] (presets and photo styles). */
     val hairStyle: HairStyle? = null,
     val features: Set<FaceFeature> = emptySet(),
+    // Character creator
+    val body: BodyType = BodyType.SLIM,
+    val faceShape: FaceShape = FaceShape.OVAL,
+    val eyeStyle: EyeStyle = EyeStyle.ALMOND,
+    val browStyle: BrowStyle = BrowStyle.NATURAL,
+    val eyeColor: Int = DEFAULT_EYE_COLOR,
+    val lipColor: Int = DEFAULT_LIP_COLOR,
+    /** Stronger cheek blush (makeup). */
+    val blush: Boolean = false,
+    val topStyle: TopStyle = TopStyle.TEE,
+    /** null = follow [shorts] (presets and photo styles). */
+    val bottomStyle: BottomStyle? = null,
+    val shoeStyle: ShoeStyle = ShoeStyle.SNEAKERS,
 ) {
     val style: HairStyle get() = hairStyle ?: if (longHair) HairStyle.LONG else HairStyle.SHORT
+    val bottom: BottomStyle get() = bottomStyle ?: if (shorts) BottomStyle.SHORTS else BottomStyle.PANTS
 
     fun accessoryIn(slot: AccessorySlot) = when (slot) {
         AccessorySlot.HEAD -> head
@@ -88,8 +114,12 @@ data class Outfit(
     /** Presets and photo styles keep whatever the character is already wearing. */
     fun withAccessoriesOf(other: Outfit) = copy(head = other.head, face = other.face, back = other.back)
 
-    /** Clothes from this outfit on [other]'s body: accessories, hair style, face details and skin stay. */
-    fun withBodyOf(other: Outfit) = withAccessoriesOf(other).copy(hairStyle = other.hairStyle, features = other.features, skin = other.skin)
+    /** Clothes from this outfit on [other]'s body: accessories, hair, face and skin stay. */
+    fun withBodyOf(other: Outfit) = withAccessoriesOf(other).copy(
+        hairStyle = other.hairStyle, features = other.features, skin = other.skin,
+        body = other.body, faceShape = other.faceShape, eyeStyle = other.eyeStyle, browStyle = other.browStyle,
+        eyeColor = other.eyeColor, lipColor = other.lipColor, blush = other.blush,
+    )
 }
 
 data class CharacterState(
@@ -254,6 +284,10 @@ object Outfits {
     ).map { it.toInt() }
 
     val skinTones = listOf(0xFFFFEDE0, 0xFFFBE0CC, 0xFFF5C9A3, 0xFFE8B98F, 0xFFE0A985, 0xFFC68A5E, 0xFF8D5A3B, 0xFF5C3A24).map { it.toInt() }
+
+    /** Eye and lip colours offered in the character creator. */
+    val eyeColors = listOf(0xFF6B4FD0, 0xFF3E6FB8, 0xFF2E9BDA, 0xFF3F8F4E, 0xFF7BD389, 0xFF8A5A2B, 0xFF3B2A20, 0xFFD9A441, 0xFFE94B5A, 0xFF9E9EA8).map { it.toInt() }
+    val lipColors = listOf(0xFFE8707E, 0xFFD94F6A, 0xFFFF8FA3, 0xFFC97A7A, 0xFFB8505A, 0xFFE0A985).map { it.toInt() }
 
     /** Extra hair colours offered with the hair slot (grey and white for older characters). */
     val hairColors = listOf(0xFF111111, 0xFF3B2A20, 0xFF7A4E2D, 0xFFB4462E, 0xFFD9A441, 0xFFF2D58A, 0xFF9E9E9E, 0xFFD8D8E0, 0xFFF4F4F8).map { it.toInt() }

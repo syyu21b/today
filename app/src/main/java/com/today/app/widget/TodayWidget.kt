@@ -18,7 +18,8 @@ import com.today.app.data.TodayStorage
 import com.today.app.data.activeOn
 import com.today.app.data.questsOn
 import com.today.app.i18n.strings
-import com.today.app.ui.components.renderSpriteBitmap
+import com.today.app.ui.components.HeadBox
+import com.today.app.ui.components.renderAvatarBitmap
 import java.time.LocalDate
 import java.time.ZonedDateTime
 import kotlin.math.roundToInt
@@ -59,7 +60,7 @@ object TodayWidget {
         val mood = saved.settings.statusMood ?: Moods.of(byDate, saved.rewards.shieldedDates, today)
 
         val views = RemoteViews(context.packageName, R.layout.widget_today)
-        views.setImageViewBitmap(R.id.widget_avatar, renderSpriteBitmap(saved.character.outfit, mood))
+        views.setImageViewBitmap(R.id.widget_avatar, renderAvatarBitmap(context, saved.character.outfit, mood, width = 192, box = HeadBox.FACE))
         views.setTextViewText(R.id.widget_level, "LV ${saved.character.level} · 🔥 ${s.days(streak)}")
         views.setProgressBar(R.id.widget_bar, 100, percent, false)
         views.setTextViewText(R.id.widget_percent, if (active.isEmpty()) "–" else "$percent%")

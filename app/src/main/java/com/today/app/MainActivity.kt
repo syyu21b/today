@@ -1,5 +1,6 @@
 package com.today.app
 
+import com.today.app.ui.screens.CharacterCreatorScreen
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -175,6 +176,7 @@ fun TodayApp(vm: TodayViewModel = viewModel()) {
             if (done) TodayScaffold(vm)
             else Surface(color = MaterialTheme.colorScheme.background, contentColor = MaterialTheme.colorScheme.onBackground) { OnboardingScreen(vm) }
         }
+        if (vm.creatorOpen) CharacterCreatorScreen(vm)
     }
 }
 

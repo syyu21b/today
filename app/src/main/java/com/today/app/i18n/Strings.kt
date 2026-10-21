@@ -537,7 +537,7 @@ object KoStrings : Strings, FeatureStrings by KoFeatureStrings {
     }
 
     override val outfitTitle = "옷장"
-    override val outfitIntro = "전신 사진을 찍거나 고르면 머리·상의·하의·신발을 인식해서 도트 의상으로 만들어요. 바꾼 스타일은 퀘스트와 프로필 캐릭터에도 바로 적용돼요."
+    override val outfitIntro = "전신 사진을 찍거나 고르면 머리·상의·하의·신발을 인식해서 캐릭터 의상으로 만들어요. 얼굴·눈·헤어·메이크업은 캐릭터 꾸미기에서 바꿀 수 있어요. 바꾼 스타일은 퀘스트와 프로필 캐릭터에도 바로 적용돼요."
     override val takePhoto = "사진 찍기"
     override val fromGallery = "앨범에서"
     override val photoTip = "💡 정면 전신 사진 · 밝은 곳 · 단순한 배경일수록 정확해요"
@@ -546,7 +546,7 @@ object KoStrings : Strings, FeatureStrings by KoFeatureStrings {
     override val closePhoto = "사진 닫기"
     override val analyzedPhoto = "분석한 사진"
     override val analyzeLoading = "사진 불러오는 중…"
-    override val analyzeSteps = listOf("사람 찾는 중…", "머리·상의·하의 영역 나누는 중…", "옷 색감 추출 중…", "도트 의상 생성 중…")
+    override val analyzeSteps = listOf("사람 찾는 중…", "머리·상의·하의 영역 나누는 중…", "옷 색감 추출 중…", "의상 생성 중…")
     override val fineTuneTitle = "세부 조정"
     override val fineTuneHint = "인식 결과가 조금 다르면 여기서 바로 고칠 수 있어요"
     override val chipShortSleeve = "반팔"
@@ -1030,7 +1030,7 @@ object EnStrings : Strings, FeatureStrings by EnFeatureStrings {
     }
 
     override val outfitTitle = "Wardrobe"
-    override val outfitIntro = "Take or pick a full-body photo and we'll detect hair, top, bottom and shoes to make a pixel outfit. Changes apply to your quest and profile character right away."
+    override val outfitIntro = "Take or pick a full-body photo and we'll detect hair, top, bottom and shoes to dress your character. Face, eyes, hair and makeup live in Customize character. Changes apply to your quest and profile character right away."
     override val takePhoto = "Take photo"
     override val fromGallery = "From gallery"
     override val photoTip = "💡 Front-facing full-body shots, good light and a plain background work best"
@@ -1039,7 +1039,7 @@ object EnStrings : Strings, FeatureStrings by EnFeatureStrings {
     override val closePhoto = "Close photo"
     override val analyzedPhoto = "Analyzed photo"
     override val analyzeLoading = "Loading photo…"
-    override val analyzeSteps = listOf("Finding the person…", "Splitting hair, top and bottom…", "Extracting outfit colors…", "Building pixel outfit…")
+    override val analyzeSteps = listOf("Finding the person…", "Splitting hair, top and bottom…", "Extracting outfit colors…", "Building the outfit…")
     override val fineTuneTitle = "Fine-tune"
     override val fineTuneHint = "If the result is a bit off, fix it right here"
     override val chipShortSleeve = "Short sleeves"

@@ -161,4 +161,26 @@ class FeaturesTest {
         assertEquals("로", josa("물", "으로", "로"))
         assertEquals("이", josa("Buddy", "이", "가"))
     }
+
+    // ---------------- character creator ----------------
+
+    @Test
+    fun looksChangeTheFaceButKeepTheClothes() {
+        val me = Outfits.presets[1].copy(head = "cap", topStyle = TopStyle.JACKET)
+        Looks.presets.forEach { look ->
+            val o = look.applyTo(me)
+            assertTrue(look.matches(o))
+            assertEquals(me.shirt, o.shirt)
+            assertEquals("cap", o.head)
+            assertEquals(TopStyle.JACKET, o.topStyle)
+            assertEquals(look.hairStyle.long, o.longHair)
+        }
+        val r = Looks.random(me, kotlin.random.Random(3))
+        assertEquals(me.shirt, r.shirt)
+        assertEquals(r.style.long, r.longHair)
+        // Presets put on a look keep the face (body type, eyes...) too.
+        val styled = Looks.presets[7].applyTo(me)
+        assertEquals(styled.body, Outfits.presets[3].withBodyOf(styled).body)
+        assertEquals(styled.eyeStyle, Outfits.presets[3].withBodyOf(styled).eyeStyle)
+    }
 }

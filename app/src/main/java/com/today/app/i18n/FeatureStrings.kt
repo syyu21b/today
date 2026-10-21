@@ -1,6 +1,13 @@
 package com.today.app.i18n
 
+import com.today.app.data.BodyType
+import com.today.app.data.BottomStyle
+import com.today.app.data.BrowStyle
+import com.today.app.data.EyeStyle
 import com.today.app.data.FaceFeature
+import com.today.app.data.FaceShape
+import com.today.app.data.ShoeStyle
+import com.today.app.data.TopStyle
 import com.today.app.data.HairStyle
 import com.today.app.data.MissionType
 import com.today.app.data.Mood
@@ -131,6 +138,49 @@ interface FeatureStrings {
     val crashSubject: String
     val deleteAllTitle: String
     val deleteAllDesc: String
+
+    // ---- character creator ----
+    val creatorTitle: String
+    val creatorOpen: String
+    val creatorBack: String
+    val creatorConfirm: String
+    val creatorRandom: String
+    val creatorReset: String
+    fun creatorTab(i: Int): String
+    val creatorPresetHint: String
+    val creatorSlots: String
+    val creatorSave: String
+    val creatorLoad: String
+    val creatorEmptySlot: String
+    val creatorExpression: String
+    val creatorZoomFace: String
+    val creatorZoomBody: String
+    val creatorDiscardTitle: String
+    val creatorDiscardBody: String
+    val creatorDiscard: String
+    val msgLookApplied: String
+    fun msgLookSaved(n: Int): String
+    fun msgLookLoaded(n: Int): String
+    val msgSlotEmpty: String
+    fun bodyName(b: BodyType): String
+    fun faceShapeName(f: FaceShape): String
+    fun eyeStyleName(e: EyeStyle): String
+    fun browName(b: BrowStyle): String
+    fun topStyleName(t: TopStyle): String
+    fun bottomStyleName(b: BottomStyle): String
+    fun shoeStyleName(s: ShoeStyle): String
+    val secSkin: String
+    val secEyeColor: String
+    val secBrows: String
+    val secLip: String
+    val secBlush: String
+    val secTop: String
+    val secBottom: String
+    val secShoes: String
+    val secColors: String
+    val secOutfitPresets: String
+    val sleeveShort: String
+    val sleeveLong: String
 }
 
 /** Picks 이/가, 을/를, 은/는, 와/과, (으)로 by whether [word] ends in a final consonant. */
@@ -353,6 +403,48 @@ object KoFeatureStrings : FeatureStrings {
     override val crashSubject = "Today 오류 리포트"
     override val deleteAllTitle = "모든 데이터 삭제"
     override val deleteAllDesc = "퀘스트, 캐릭터, 펫, 친구, 대화, 오류 기록까지 기기에서 지워요"
+
+    override val creatorTitle = "캐릭터 생성"
+    override val creatorOpen = "캐릭터 꾸미기"
+    override val creatorBack = "돌아가기"
+    override val creatorConfirm = "외형 결정"
+    override val creatorRandom = "무작위 외형"
+    override val creatorReset = "전체 초기화"
+    override fun creatorTab(i: Int) = listOf("프리셋", "체형", "얼굴", "눈", "헤어", "메이크업", "의상").getOrElse(i) { "" }
+    override val creatorPresetHint = "얼굴, 눈, 피부, 머리 등 모든 것이 포함된 외형"
+    override val creatorSlots = "커스터마이징 저장 / 불러오기"
+    override val creatorSave = "저장"
+    override val creatorLoad = "불러오기"
+    override val creatorEmptySlot = "빈 슬롯"
+    override val creatorExpression = "표정"
+    override val creatorZoomFace = "얼굴 확대"
+    override val creatorZoomBody = "전신 보기"
+    override val creatorDiscardTitle = "변경한 외형을 버릴까요?"
+    override val creatorDiscardBody = "외형 결정을 누르지 않으면 바꾼 내용이 적용되지 않아요."
+    override val creatorDiscard = "버리기"
+    override val msgLookApplied = "✨ 새 외형을 결정했어요"
+    override fun msgLookSaved(n: Int) = "슬롯 ${n}에 저장했어요"
+    override fun msgLookLoaded(n: Int) = "슬롯 ${n}의 외형을 불러왔어요"
+    override val msgSlotEmpty = "빈 슬롯이에요. 먼저 저장해 주세요"
+    override fun bodyName(b: BodyType) = when (b) { BodyType.SLIM -> "슬림형"; BodyType.BROAD -> "건장형" }
+    override fun faceShapeName(f: FaceShape) = when (f) { FaceShape.OVAL -> "계란형"; FaceShape.ROUND -> "둥근형"; FaceShape.SHARP -> "갸름형"; FaceShape.SQUARE -> "각진형" }
+    override fun eyeStyleName(e: EyeStyle) = when (e) { EyeStyle.ALMOND -> "아몬드"; EyeStyle.ROUND -> "동글"; EyeStyle.SHARP -> "날렵"; EyeStyle.GENTLE -> "순한" }
+    override fun browName(b: BrowStyle) = when (b) { BrowStyle.NATURAL -> "자연"; BrowStyle.ARCHED -> "아치"; BrowStyle.STRAIGHT -> "일자"; BrowStyle.THICK -> "진한" }
+    override fun topStyleName(t: TopStyle) = when (t) { TopStyle.TEE -> "티셔츠"; TopStyle.KNIT -> "니트"; TopStyle.HOODIE -> "후드티"; TopStyle.JACKET -> "재킷"; TopStyle.DRESS -> "원피스" }
+    override fun bottomStyleName(b: BottomStyle) = when (b) { BottomStyle.PANTS -> "긴바지"; BottomStyle.SHORTS -> "반바지"; BottomStyle.SKIRT -> "치마" }
+    override fun shoeStyleName(s: ShoeStyle) = when (s) { ShoeStyle.SNEAKERS -> "운동화"; ShoeStyle.BOOTS -> "부츠" }
+    override val secSkin = "피부색"
+    override val secEyeColor = "눈동자 색"
+    override val secBrows = "눈썹"
+    override val secLip = "립 컬러"
+    override val secBlush = "진한 볼터치"
+    override val secTop = "상의"
+    override val secBottom = "하의"
+    override val secShoes = "신발"
+    override val secColors = "색상"
+    override val secOutfitPresets = "추천 코디"
+    override val sleeveShort = "반팔"
+    override val sleeveLong = "긴팔"
 }
 
 object EnFeatureStrings : FeatureStrings {
@@ -565,4 +657,46 @@ object EnFeatureStrings : FeatureStrings {
     override val crashSubject = "Today crash report"
     override val deleteAllTitle = "Delete all data"
     override val deleteAllDesc = "Removes quests, character, pet, friends, chats and crash logs from this device"
+
+    override val creatorTitle = "Character Creation"
+    override val creatorOpen = "Customize character"
+    override val creatorBack = "Back"
+    override val creatorConfirm = "Confirm Look"
+    override val creatorRandom = "Randomize"
+    override val creatorReset = "Reset All"
+    override fun creatorTab(i: Int) = listOf("Presets", "Body", "Face", "Eyes", "Hair", "Makeup", "Outfit").getOrElse(i) { "" }
+    override val creatorPresetHint = "Complete looks: face, eyes, skin, hair and more"
+    override val creatorSlots = "Save / load customization"
+    override val creatorSave = "Save"
+    override val creatorLoad = "Load"
+    override val creatorEmptySlot = "Empty slot"
+    override val creatorExpression = "Expression"
+    override val creatorZoomFace = "Zoom face"
+    override val creatorZoomBody = "Full body"
+    override val creatorDiscardTitle = "Discard your changes?"
+    override val creatorDiscardBody = "Changes only apply after you tap Confirm Look."
+    override val creatorDiscard = "Discard"
+    override val msgLookApplied = "✨ New look confirmed"
+    override fun msgLookSaved(n: Int) = "Saved to slot $n"
+    override fun msgLookLoaded(n: Int) = "Loaded the look in slot $n"
+    override val msgSlotEmpty = "That slot is empty. Save a look first"
+    override fun bodyName(b: BodyType) = when (b) { BodyType.SLIM -> "Slim"; BodyType.BROAD -> "Broad" }
+    override fun faceShapeName(f: FaceShape) = when (f) { FaceShape.OVAL -> "Oval"; FaceShape.ROUND -> "Round"; FaceShape.SHARP -> "Slender"; FaceShape.SQUARE -> "Square" }
+    override fun eyeStyleName(e: EyeStyle) = when (e) { EyeStyle.ALMOND -> "Almond"; EyeStyle.ROUND -> "Round"; EyeStyle.SHARP -> "Sharp"; EyeStyle.GENTLE -> "Gentle" }
+    override fun browName(b: BrowStyle) = when (b) { BrowStyle.NATURAL -> "Natural"; BrowStyle.ARCHED -> "Arched"; BrowStyle.STRAIGHT -> "Straight"; BrowStyle.THICK -> "Bold" }
+    override fun topStyleName(t: TopStyle) = when (t) { TopStyle.TEE -> "T-shirt"; TopStyle.KNIT -> "Knit"; TopStyle.HOODIE -> "Hoodie"; TopStyle.JACKET -> "Jacket"; TopStyle.DRESS -> "Dress" }
+    override fun bottomStyleName(b: BottomStyle) = when (b) { BottomStyle.PANTS -> "Pants"; BottomStyle.SHORTS -> "Shorts"; BottomStyle.SKIRT -> "Skirt" }
+    override fun shoeStyleName(s: ShoeStyle) = when (s) { ShoeStyle.SNEAKERS -> "Sneakers"; ShoeStyle.BOOTS -> "Boots" }
+    override val secSkin = "Skin tone"
+    override val secEyeColor = "Eye color"
+    override val secBrows = "Brows"
+    override val secLip = "Lip color"
+    override val secBlush = "Strong blush"
+    override val secTop = "Top"
+    override val secBottom = "Bottom"
+    override val secShoes = "Shoes"
+    override val secColors = "Colors"
+    override val secOutfitPresets = "Suggested outfits"
+    override val sleeveShort = "Short sleeve"
+    override val sleeveLong = "Long sleeve"
 }

@@ -1,5 +1,7 @@
 package com.today.app.ui.screens
 
+import com.today.app.ui.components.HeadBox
+import com.today.app.ui.components.AvatarHead
 import android.icu.text.BreakIterator
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
@@ -387,13 +389,14 @@ private fun CharacterCard(
                     .size(width = 124.dp, height = 116.dp)
                     .clip(RoundedCornerShape(16.dp)),
             ) {
-                PixelAvatar(
+                AvatarHead(
                     c.outfit,
                     Modifier
-                        .height(96.dp)
-                        .align(if (pet != null) Alignment.CenterStart else Alignment.Center)
-                        .padding(start = if (pet != null) 10.dp else 0.dp),
+                        .height(116.dp)
+                        .align(if (pet != null) Alignment.BottomStart else Alignment.BottomCenter)
+                        .padding(start = if (pet != null) 4.dp else 0.dp),
                     mood = mood,
+                    box = HeadBox.BUST,
                 )
                 if (pet != null) {
                     PixelPet(pet.species, pet.stage, Modifier.width(54.dp).align(Alignment.BottomEnd).padding(end = 4.dp, bottom = 6.dp), onPet = onPet)

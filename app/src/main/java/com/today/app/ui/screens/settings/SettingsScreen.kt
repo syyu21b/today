@@ -1,5 +1,8 @@
 package com.today.app.ui.screens.settings
 
+import com.today.app.ui.components.Backdrop
+import com.today.app.ui.components.HeadBox
+import com.today.app.ui.components.AvatarHead
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateFloatAsState
@@ -219,14 +222,15 @@ private fun ProfileCard(vm: TodayViewModel, onOpenOutfit: () -> Unit, onOpenRewa
             .padding(18.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
+            // Same scene as the home card and wardrobe.
+            Backdrop(
+                vm.backdrop,
                 Modifier
                     .size(84.dp)
                     .clip(RoundedCornerShape(18.dp))
-                    .background(Hairline.copy(alpha = if (LocalTodayColors.current.isDark) 0.12f else 0.06f)),
-                contentAlignment = Alignment.Center,
+                    .clickable(onClick = onOpenOutfit),
             ) {
-                PixelAvatar(c.outfit, Modifier.height(72.dp), mood = vm.mood)
+                AvatarHead(c.outfit, Modifier.fillMaxSize(), mood = vm.mood, box = HeadBox.HAT)
             }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {

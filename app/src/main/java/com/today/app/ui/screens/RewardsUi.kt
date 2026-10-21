@@ -1,5 +1,7 @@
 package com.today.app.ui.screens
 
+import com.today.app.ui.components.HeadBox
+import com.today.app.ui.components.AvatarHead
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
@@ -382,16 +384,8 @@ private fun AccessoryPreview(outfit: Outfit, slot: AccessorySlot, modifier: Modi
         PixelAvatar(outfit, modifier.fillMaxHeight(), animateColors = false, dropIn = dropIn)
         return
     }
-    BoxWithConstraints(modifier.fillMaxWidth().aspectRatio(1f).clipToBounds()) {
-        val h = maxHeight * 1.6f
-        PixelAvatar(
-            outfit,
-            Modifier
-                .wrapContentSize(Alignment.TopCenter, unbounded = true)
-                .requiredSize(h * (2f / 3f), h),
-            animateColors = false,
-            dropIn = dropIn,
-        )
+    Box(modifier.fillMaxWidth().aspectRatio(1f).clipToBounds(), contentAlignment = Alignment.Center) {
+        AvatarHead(outfit, Modifier.fillMaxHeight(), box = if (slot == AccessorySlot.HEAD) HeadBox.HAT else HeadBox.FACE, dropIn = dropIn)
     }
 }
 

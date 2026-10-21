@@ -1,5 +1,6 @@
 package com.today.app.ui.components
 
+import android.content.Context
 import android.graphics.Bitmap
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
@@ -19,251 +20,186 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.graphics.Canvas as GraphicsCanvas
 import com.today.app.data.FaceFeature
-import com.today.app.data.HairStyle
 import com.today.app.data.Mood
 import com.today.app.data.Outfit
+import com.today.app.data.TopStyle
 import kotlinx.coroutines.delay
 import kotlin.math.PI
-import kotlin.math.roundToInt
 import kotlin.math.sin
 
-/** The character is drawn on a 32 x 48 grid (art in CharacterArt.kt). */
-const val SPRITE_W = 32
-const val SPRITE_H = 48
-private const val EYE_BOTTOM = 14
+/** Width : height of the full-body character. */
+const val AVATAR_ASPECT = CharacterArt.W / CharacterArt.H
 
-private val Outline = Color(0xFF1B1530)
-private val Eye = Color(0xFF2B2140)
-private val Blush = Color(0xFFF59AA0)
-private val MouthLine = Color(0xFF8E3B46)
-private val MouthInside = Color(0xFFC4505E)
-private val HeartPink = Color(0xFFFF4F8B)
-private val Tear = Color(0xFF6EC8FF)
-private val FreckleTint = Color(0xFF8C5032)
+/** Crops of the art box (art coordinates) used for portraits. */
+enum class HeadBox(val rect: Rect) {
+    /** Face and hair, square. */
+    FACE(Rect(42f, 4f, 158f, 120f)),
+    /** Head with room for tall hats. */
+    HAT(Rect(28f, -45f, 172f, 147f)),
+    /** Head and upper body. */
+    BUST(Rect(22f, -22f, 178f, 228f)),
+    /** Close-up of the eyes and brows. */
+    EYES(Rect(62f, 60f, 138f, 106f)),
+}
 
-/** Resolved colors + shape options for one draw call (colors can be animated). */
-data class SpriteStyle(
-    val hair: Color,
-    val skin: Color,
-    val shirt: Color,
-    val stripe: Color,
-    val accent: Color,
-    val pants: Color,
-    val shoes: Color,
-    val striped: Boolean,
-    val shortSleeve: Boolean,
-    val shorts: Boolean,
-    val hairStyle: HairStyle = HairStyle.SHORT,
-    val features: Set<FaceFeature> = emptySet(),
-    /** Accessory ids, drawn in this order (back first). */
-    val accessories: List<String> = emptyList(),
-    val mood: Mood = Mood.NORMAL,
-)
+private val Ink = Color(0xFF281622)
+private val White = Color.White
 
-fun Outfit.toSpriteStyle(mood: Mood = Mood.NORMAL) = SpriteStyle(
-    Color(hair), Color(skin), Color(shirt), Color(stripe), Color(accent), Color(pants), Color(shoes),
-    striped, shortSleeve, shorts, style, features,
-    listOf(back, head, face).filter { it.isNotEmpty() },
-    mood,
-)
+private fun mix(a: Color, b: Color, t: Float) = lerp(a, b, t)
 
-/** Everything that decides which code sits in which cell (colors don't), so grids can be cached. */
-private data class GridKey(
-    val hairStyle: HairStyle,
-    val features: Set<FaceFeature>,
-    val striped: Boolean,
-    val shortSleeve: Boolean,
-    val shorts: Boolean,
-    val mood: Mood,
-    val blink: Boolean,
-    val hideAbove: Int,
-)
+/** Every colour role the art uses, derived from the outfit. */
+private class Palette(skin: Color, hair: Color, top: Color, stripe: Color, acc: Color, bottom: Color, shoes: Color, iris: Color, lip: Color) {
+    val roles: Map<String, Color> = mapOf(
+        "skin" to skin, "skinL" to mix(skin, White, 0.18f), "skinS" to mix(skin, Color(0xFFC46E6E), 0.28f), "skinD" to mix(skin, Color(0xFF783C3C), 0.5f),
+        "line" to mix(skin, Ink, 0.65f),
+        "hair" to hair, "hairS" to mix(hair, Ink, 0.35f), "hairD" to mix(hair, Ink, 0.6f), "hairL" to mix(hair, White, 0.35f),
+        "iris" to iris, "irisD" to mix(iris, Ink, 0.6f), "irisL" to mix(iris, White, 0.55f), "pupil" to mix(iris, Ink, 0.85f),
+        "white" to White, "eyeLine" to Color(0xFF2A1A26), "lip" to lip, "lipLine" to mix(lip, Ink, 0.45f), "blush" to Color(0xFFFF7A8C),
+        "top" to top, "topS" to mix(top, Ink, 0.3f), "topL" to mix(top, White, 0.15f), "stripe" to stripe,
+        "bottom" to bottom, "bottomS" to mix(bottom, Ink, 0.3f),
+        "shoes" to shoes, "shoesL" to mix(shoes, White, 0.25f), "shoesS" to mix(shoes, Ink, 0.35f), "sole" to Color(0xFFEDEDF2),
+        "acc" to acc, "accS" to mix(acc, Ink, 0.3f),
+    )
 
-private val gridCache = HashMap<GridKey, Array<CharArray>>()
+    fun color(p: Paint): Color = when (p) {
+        is Paint.Role -> roles[p.name] ?: Color.Magenta
+        is Paint.Fixed -> p.color
+        is Paint.Linear -> color(p.a)
+        is Paint.Radial -> color(p.base)
+    }
 
-private fun Map<Int, String>.paintOnto(g: Array<CharArray>, onlyOver: String? = null) {
-    for ((y, row) in this) {
-        if (y !in g.indices) continue
-        for (x in 0 until SPRITE_W) {
-            val ch = row.getOrNull(x) ?: '.'
-            if (ch == '.') continue
-            if (onlyOver != null && g[y][x] !in onlyOver) continue
-            g[y][x] = ch
-        }
+    companion object {
+        fun of(o: Outfit) = Palette(Color(o.skin), Color(o.hair), Color(o.shirt), Color(o.stripe), Color(o.accent), Color(o.pants), Color(o.shoes), Color(o.eyeColor), Color(o.lipColor))
     }
 }
 
-/** Builds the code grid: back hair, body (with garment options), front hair, face, features. */
-private fun buildGrid(k: GridKey): Array<CharArray> {
-    val g = Array(SPRITE_H) { CharArray(SPRITE_W) { '.' } }
-    val hair = HAIR_ART.getValue(k.hairStyle)
-    hair.back.paintOnto(g)
-    for (y in 0 until SPRITE_H) for (x in 0 until SPRITE_W) {
-        var ch = BASE_ART[y][x]
-        if (ch == '.') continue
-        if (k.striped && y in STRIPE_ROWS) ch = when (ch) { 't', 'u' -> 'r'; 'T' -> 'R'; else -> ch }
-        if (k.shortSleeve && y in SLEEVE_ROWS && (x in 3..5 || x in 26..28) && ch in "tTu") ch = 's'
-        if (k.shorts && y in SHORTS_ROWS) ch = when (ch) { 'p' -> 's'; 'P' -> 'S'; else -> ch }
-        g[y][x] = ch
-    }
-    hair.front.paintOnto(g)
-    hair.shine.paintOnto(g, onlyOver = "hHd")
-    FACE_ART[k.mood]?.paintOnto(g)
-    for (f in k.features) FEATURE_ART[f]?.paintOnto(g)
-    if (k.blink) {
-        // Open eyes (rows 12..14) close to a line on their lowest row; already-closed eyes stay.
-        for (x in 0 until SPRITE_W) {
-            if (g[EYE_BOTTOM][x] !in "ew") continue
-            g[EYE_BOTTOM][x] = 'e'
-            for (y in EYE_BOTTOM - 2 until EYE_BOTTOM) if (g[y][x] in "ew") g[y][x] = 's'
-        }
-    }
-    for (y in 0 until k.hideAbove.coerceAtMost(SPRITE_H)) g[y].fill('.')
-    return g
-}
+private fun moodKey(m: Mood) = m.name.lowercase()
+private val OPEN_EYES = setOf(Mood.NORMAL, Mood.SAD, Mood.EXCITED, Mood.LOVE, Mood.ANGRY, Mood.SICK)
 
-private fun SpriteStyle.grid(blink: Boolean): Array<CharArray> {
-    val hide = accessories.maxOfOrNull { ACCESSORY_ART[it]?.hideAbove ?: 0 } ?: 0
-    val key = GridKey(hairStyle, features, striped, shortSleeve, shorts, mood, blink, hide)
-    return synchronized(gridCache) { gridCache.getOrPut(key) { buildGrid(key) } }
-}
-
-/** True when some worn accessory moves, so the avatar needs a running clock. */
-private fun SpriteStyle.hasAnimatedAccessory() = accessories.any { ACCESSORY_ART[it]?.animated == true }
-
-/** Accessory falling into place: [id] drawn [offset] cells above its spot. */
+/** Accessory falling into place: [id] drawn [offset] art units above its spot. */
 data class AccessoryDrop(val id: String, val offset: Float)
 
+/** Part keys in drawing order. Accessory parts are tagged so a drop-in can move them. */
+private fun partKeys(o: Outfit, mood: Mood, blink: Boolean): List<Pair<String, String?>> {
+    val bt = o.body.name
+    val accs = listOf(o.back, o.head, o.face).filter { it.isNotEmpty() }
+    val top = o.topStyle.name.lowercase()
+    val sleeve = if (o.topStyle == TopStyle.TEE && o.shortSleeve) "short" else "long"
+    val keys = ArrayList<Pair<String, String?>>()
+    keys += "hairBack.${o.style.name.lowercase()}" to null
+    accs.forEach { keys += "accBack.$it" to it }
+    keys += "body.$bt" to null
+    keys += "arms.$bt" to null
+    if (o.topStyle != TopStyle.DRESS) keys += "bottom.$bt.${o.bottom.name.lowercase()}" to null
+    keys += "shoes.$bt.${o.shoeStyle.name.lowercase()}" to null
+    keys += "top.$bt.$top.$sleeve" to null
+    if (o.striped) keys += "stripes.$bt.$top.$sleeve" to null
+    keys += "head.${o.faceShape.name.lowercase()}" to null
+    keys += "blush.${if (o.blush) 1 else 0}" to null
+    keys += "nose" to null
+    for (f in FaceFeature.entries) {
+        if (f !in o.features || (f == FaceFeature.MUSTACHE && FaceFeature.BEARD in o.features)) continue
+        keys += "feature.${f.name.lowercase()}" to null
+    }
+    keys += "mouth.${moodKey(mood)}" to null
+    keys += "eyes.$bt.${o.eyeStyle.name.lowercase()}.${if (blink && mood in OPEN_EYES) "blink" else moodKey(mood)}" to null
+    keys += "hairFront.${o.style.name.lowercase()}" to null
+    keys += "brows.${o.browStyle.name.lowercase()}.${moodKey(mood)}" to null
+    accs.forEach { keys += "accFront.$it" to it }
+    return keys
+}
+
+private fun DrawScope.drawLayer(l: ArtLayer, pal: Palette) {
+    fun brush(p: Paint): Brush = when (p) {
+        is Paint.Linear -> Brush.linearGradient(listOf(pal.color(p.a), pal.color(p.b)), p.start, p.end)
+        is Paint.Radial -> {
+            val c = pal.color(p.base)
+            Brush.radialGradient(listOf(c.copy(alpha = p.alpha), c.copy(alpha = 0f)), p.center, p.radius)
+        }
+        else -> Brush.linearGradient(listOf(pal.color(p), pal.color(p)))
+    }
+    val draw: DrawScope.() -> Unit = {
+        l.fill?.let { f ->
+            if (f is Paint.Linear || f is Paint.Radial) drawPath(l.path, brush(f), alpha = l.alpha)
+            else drawPath(l.path, pal.color(f), alpha = l.alpha)
+        }
+        l.stroke?.let { s ->
+            drawPath(l.path, pal.color(s), alpha = l.alpha, style = Stroke(l.width, cap = StrokeCap.Round, join = StrokeJoin.Round))
+        }
+    }
+    val clip = l.clip
+    if (clip != null) clipPath(clip) { draw() } else draw()
+}
+
 /**
- * Draws the character with its top-left at [topLeft], each grid cell being [cell] canvas pixels.
- * [time] (0..1, looping) drives sparkles and cape sway.
+ * Draws the character so the art box [box] (art coordinates) fills this draw scope.
+ * [time] (0..1, looping) makes crowns and halos glint.
  */
-fun DrawScope.drawPixelSprite(
-    topLeft: Offset,
-    cell: Float,
-    style: SpriteStyle,
-    blink: Boolean = false,
+private fun DrawScope.drawCharacter(
+    parts: Map<String, List<ArtLayer>>,
+    outfit: Outfit,
+    pal: Palette,
+    mood: Mood,
+    blink: Boolean,
+    box: Rect = Rect(0f, CharacterArt.TOP, CharacterArt.W, CharacterArt.TOP + CharacterArt.H),
     time: Float = 0f,
     drop: AccessoryDrop? = null,
 ) {
-    val hairShine = lerp(style.hair, Color.White, 0.35f)
-    val hairDark = lerp(style.hair, Color.Black, 0.3f)
-    val skinShadow = lerp(style.skin, Color.Black, 0.14f)
-    val freckle = lerp(style.skin, FreckleTint, 0.45f)
-    val shirtShade = lerp(style.shirt, Color.Black, 0.25f)
-    val shirtLight = lerp(style.shirt, Color.White, 0.2f)
-    val stripeShade = lerp(style.stripe, Color.Black, 0.25f)
-    val accentShade = lerp(style.accent, Color.Black, 0.25f)
-    val pantsShade = lerp(style.pants, Color.Black, 0.3f)
-    val shoeLight = lerp(style.shoes, Color.White, 0.3f)
-    // overdraw a hair of a pixel to avoid seams between blocks
-    val size = Size(cell + 0.6f, cell + 0.6f)
-    val g = style.grid(blink)
-    for (y in 0 until SPRITE_H) for (x in 0 until SPRITE_W) {
-        val color = when (g[y][x]) {
-            'k' -> Outline
-            'h' -> style.hair
-            'H' -> hairShine
-            'd' -> hairDark
-            's' -> style.skin
-            'S' -> skinShadow
-            'f' -> freckle
-            'e' -> Eye
-            'w' -> Color.White
-            'b' -> Blush
-            'm' -> MouthLine
-            'M' -> MouthInside
-            'L' -> HeartPink
-            'q' -> Tear
-            't' -> style.shirt
-            'T' -> shirtShade
-            'u' -> shirtLight
-            'r' -> style.stripe
-            'R' -> stripeShade
-            'a' -> style.accent
-            'A' -> accentShade
-            'p' -> style.pants
-            'P' -> pantsShade
-            'o' -> style.shoes
-            'O' -> shoeLight
-            else -> null
-        } ?: continue
-        drawRect(color, Offset(topLeft.x + x * cell, topLeft.y + y * cell), size)
-    }
-    drawAccessories(topLeft, cell, style, g, hairShine, skinShadow, time, drop)
-}
-
-/** Second pass: accessories (back first). */
-private fun DrawScope.drawAccessories(
-    topLeft: Offset,
-    cell: Float,
-    style: SpriteStyle,
-    grid: Array<CharArray>,
-    hairShine: Color,
-    skinShadow: Color,
-    time: Float,
-    drop: AccessoryDrop?,
-) {
-    val size = Size(cell + 0.6f, cell + 0.6f)
-    // Translucent cells (glass, glow) must not overlap, or the seams show darker.
-    val exact = Size(cell, cell)
-    for (id in style.accessories) {
-        val art = ACCESSORY_ART[id] ?: continue
-        val top = topLeft.y + if (drop?.id == id) -drop.offset * cell else 0f
-        // Cape hem swings up to 2 cells, the shoulders stay put.
-        val swing = if (art.sway) sin(time * 2 * PI).toFloat() else 0f
-        for ((layer, behind) in listOf(art.behind to true, art.front to false)) {
-            for ((y, row) in layer) for (x in 0 until SPRITE_W) {
-                val dx = if (art.sway && y > 28) (swing * (y - 28) / 8f).roundToInt() else 0
-                val code = row.getOrNull(x - dx) ?: '.'
-                if (code == '.') continue
-                if (behind && grid.getOrNull(y)?.getOrNull(x) != '.') continue
-                val color = art.palette[code] ?: when (code) {
-                    'k' -> Outline
-                    'h' -> style.hair
-                    'H' -> hairShine
-                    's' -> style.skin
-                    'S' -> skinShadow
-                    else -> null
-                } ?: continue
-                drawRect(color, Offset(topLeft.x + x * cell, top + y * cell), if (color.alpha < 1f) exact else size)
+    val k = size.width / box.width
+    clipRect {
+        scale(k, k, pivot = Offset.Zero) {
+            translate(-box.left, -box.top) {
+                for ((key, accId) in partKeys(outfit, mood, blink)) {
+                    val layers = parts[key] ?: continue
+                    val dy = if (drop != null && accId == drop.id) -drop.offset else 0f
+                    translate(0f, dy) { layers.forEach { drawLayer(it, pal) } }
+                }
+                if (outfit.head == "crown" || outfit.head == "halo") drawGlints(if (outfit.head == "crown") CROWN_GLINTS else HALO_GLINTS, time)
             }
         }
-        art.sparkles.forEachIndexed { i, (x, y) ->
-            // Each point glints for a quarter of the loop, one after another.
-            val local = (time - i.toFloat() / art.sparkles.size + 1f) % 1f
-            if (local < 0.25f) drawSparkle(topLeft.x + x * cell, top + y * cell, cell, sin(local / 0.25f * PI).toFloat())
-        }
     }
 }
 
-/** 4-point twinkle centred on the cell at ([x], [y]); [a] = brightness 0..1. */
-private fun DrawScope.drawSparkle(x: Float, y: Float, cell: Float, a: Float) {
-    val size = Size(cell, cell)
-    drawRect(Color.White.copy(alpha = a), Offset(x, y), size)
-    val reach = if (a > 0.6f) 2 else 1
-    for (d in 1..reach) {
-        val c = SparkleColor.copy(alpha = a * if (d == 1) 0.8f else 0.4f)
-        for ((dx, dy) in listOf(d to 0, -d to 0, 0 to d, 0 to -d)) drawRect(c, Offset(x + dx * cell, y + dy * cell), size)
+private val CROWN_GLINTS = listOf(Offset(76f, 0f), Offset(100f, -8f), Offset(124f, 0f))
+private val HALO_GLINTS = listOf(Offset(76f, -8f), Offset(124f, -5f), Offset(100f, -12f))
+
+private fun DrawScope.drawGlints(points: List<Offset>, time: Float) {
+    points.forEachIndexed { i, p ->
+        val local = (time - i.toFloat() / points.size + 1f) % 1f
+        if (local > 0.3f) return@forEachIndexed
+        val a = sin(local / 0.3f * PI).toFloat()
+        val r = 4f * a
+        drawLine(Color.White.copy(alpha = a), Offset(p.x - r, p.y), Offset(p.x + r, p.y), strokeWidth = 1.2f, cap = StrokeCap.Round)
+        drawLine(Color.White.copy(alpha = a), Offset(p.x, p.y - r), Offset(p.x, p.y + r), strokeWidth = 1.2f, cap = StrokeCap.Round)
+        drawCircle(Color(0xFFFFF6C8).copy(alpha = a), 1.4f * a, p)
     }
 }
 
-private val SparkleColor = Color(0xFFFFF6C8)
-private const val DROP_FROM = 14f
+private const val DROP_FROM = 40f
 
 /**
- * Stand-alone avatar with smooth color transitions and idle blinking.
+ * The character, full body, with smooth colour changes, idle blinking and glints.
  * With [animateColors], an accessory put on falls into place; [dropIn] plays that fall once on first show.
  */
 @Composable
@@ -274,69 +210,95 @@ fun PixelAvatar(
     mood: Mood = Mood.NORMAL,
     dropIn: String? = null,
 ) {
-    val target = outfit.toSpriteStyle(mood)
-    val spec = tween<Color>(durationMillis = if (animateColors) 700 else 0)
-    val hair by animateColorAsState(target.hair, spec, label = "hair")
-    val skin by animateColorAsState(target.skin, spec, label = "skin")
-    val shirt by animateColorAsState(target.shirt, spec, label = "shirt")
-    val stripe by animateColorAsState(target.stripe, spec, label = "stripe")
-    val accent by animateColorAsState(target.accent, spec, label = "accent")
-    val pants by animateColorAsState(target.pants, spec, label = "pants")
-    val shoes by animateColorAsState(target.shoes, spec, label = "shoes")
+    CharacterCanvas(outfit, modifier.aspectRatio(AVATAR_ASPECT), animateColors, mood, dropIn) { FULL }
+}
+
+private val FULL = Rect(0f, CharacterArt.TOP, CharacterArt.W, CharacterArt.TOP + CharacterArt.H)
+
+/** [box]'s centre and height, widened / narrowed to [aspect] (width / height). */
+private fun fit(centerX: Float, centerY: Float, height: Float, aspect: Float) =
+    Rect(centerX - height * aspect / 2, centerY - height / 2, centerX + height * aspect / 2, centerY + height / 2)
+
+/**
+ * Character creator stage: the whole body at [zoom] 0, the face at 1 (smoothly in between),
+ * fitted to whatever shape the stage has.
+ */
+@Composable
+fun CharacterStage(outfit: Outfit, modifier: Modifier = Modifier, mood: Mood = Mood.NORMAL, zoom: Float = 0f) {
+    CharacterCanvas(outfit, modifier, animateColors = true, mood = mood, dropIn = null) { size ->
+        val aspect = size.width / size.height
+        val h = 570f + (175f - 570f) * zoom
+        val cy = (CharacterArt.TOP + CharacterArt.H / 2 - 6f) + (55f - (CharacterArt.TOP + CharacterArt.H / 2 - 6f)) * zoom
+        fit(100f, cy, h, aspect)
+    }
+}
+
+/** Portrait crop of the character ([box]), e.g. for tiles and profile pictures. */
+@Composable
+fun AvatarHead(outfit: Outfit, modifier: Modifier = Modifier, mood: Mood = Mood.NORMAL, box: HeadBox = HeadBox.FACE, dropIn: String? = null) {
+    CharacterCanvas(outfit, modifier.aspectRatio(box.rect.width / box.rect.height), animateColors = false, mood, dropIn) { box.rect }
+}
+
+@Composable
+private fun CharacterCanvas(outfit: Outfit, modifier: Modifier, animateColors: Boolean, mood: Mood, dropIn: String?, boxFor: (Size) -> Rect) {
+    val context = LocalContext.current
+    val parts = remember { CharacterArt.parts(context.applicationContext) }
+    val spec = tween<Color>(durationMillis = if (animateColors) 600 else 0)
+    val hair by animateColorAsState(Color(outfit.hair), spec, label = "hair")
+    val skin by animateColorAsState(Color(outfit.skin), spec, label = "skin")
+    val top by animateColorAsState(Color(outfit.shirt), spec, label = "top")
+    val stripe by animateColorAsState(Color(outfit.stripe), spec, label = "stripe")
+    val acc by animateColorAsState(Color(outfit.accent), spec, label = "acc")
+    val bottom by animateColorAsState(Color(outfit.pants), spec, label = "bottom")
+    val shoes by animateColorAsState(Color(outfit.shoes), spec, label = "shoes")
+    val iris by animateColorAsState(Color(outfit.eyeColor), spec, label = "iris")
+    val lip by animateColorAsState(Color(outfit.lipColor), spec, label = "lip")
 
     var blink by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         while (true) {
-            delay(2800)
+            delay(3200)
             blink = true
-            delay(140)
+            delay(130)
             blink = false
         }
     }
+    val glinting = outfit.head == "crown" || outfit.head == "halo"
+    val clock = rememberInfiniteTransition(label = "glint")
+    val time = clock.animateFloat(0f, 1f, infiniteRepeatable(tween(2600, easing = LinearEasing)), label = "time")
 
-    // Sparkles / cape sway clock; only read (and so only redrawn) when something moves.
-    val clock = rememberInfiniteTransition(label = "accessories")
-    val time = clock.animateFloat(0f, 1f, infiniteRepeatable(tween(2400, easing = LinearEasing)), label = "time")
-    val moving = target.hasAnimatedAccessory()
-
+    val worn = listOf(outfit.back, outfit.head, outfit.face).filter { it.isNotEmpty() }
     val drop = remember { Animatable(if (dropIn != null) DROP_FROM else 0f) }
     var dropId by remember { mutableStateOf(dropIn.orEmpty()) }
-    var worn by remember { mutableStateOf(target.accessories) }
-    LaunchedEffect(target.accessories) {
-        val added = target.accessories.firstOrNull { it !in worn }
-        worn = target.accessories
+    var lastWorn by remember { mutableStateOf(worn) }
+    LaunchedEffect(worn) {
+        val added = worn.firstOrNull { it !in lastWorn }
+        lastWorn = worn
         if (added != null && animateColors) {
             dropId = added
             drop.snapTo(DROP_FROM)
         }
-        if (dropId.isNotEmpty()) drop.animateTo(0f, spring(dampingRatio = 0.4f, stiffness = 420f))
+        if (dropId.isNotEmpty()) drop.animateTo(0f, spring(dampingRatio = 0.45f, stiffness = 380f))
     }
 
-    Canvas(modifier.aspectRatio(SPRITE_W / SPRITE_H.toFloat())) {
-        val cell = size.width / SPRITE_W
-        drawPixelSprite(
-            Offset.Zero, cell,
-            target.copy(hair = hair, skin = skin, shirt = shirt, stripe = stripe, accent = accent, pants = pants, shoes = shoes),
-            blink,
-            time = if (moving) time.value else 0f,
+    Canvas(modifier) {
+        val pal = Palette(skin, hair, top, stripe, acc, bottom, shoes, iris, lip)
+        drawCharacter(
+            parts, outfit, pal, mood, blink,
+            box = boxFor(size),
+            time = if (glinting) time.value else 0f,
             drop = if (dropId.isNotEmpty() && drop.value != 0f) AccessoryDrop(dropId, drop.value) else null,
         )
     }
 }
 
-/**
- * The character as a plain bitmap ([cell] px per grid cell), for places without Compose
- * such as the home-screen widget.
- */
-fun renderSpriteBitmap(outfit: Outfit, mood: Mood = Mood.NORMAL, cell: Int = 3): Bitmap {
-    val image = ImageBitmap(SPRITE_W * cell, SPRITE_H * cell)
-    CanvasDrawScope().draw(
-        Density(1f),
-        LayoutDirection.Ltr,
-        GraphicsCanvas(image),
-        Size(image.width.toFloat(), image.height.toFloat()),
-    ) {
-        drawPixelSprite(Offset.Zero, cell.toFloat(), outfit.toSpriteStyle(mood))
+/** The character as a plain bitmap [width] px wide, for places without Compose (home-screen widget). */
+fun renderAvatarBitmap(context: Context, outfit: Outfit, mood: Mood = Mood.NORMAL, width: Int = 160, box: HeadBox? = null): Bitmap {
+    val rect = box?.rect ?: Rect(0f, CharacterArt.TOP, CharacterArt.W, CharacterArt.TOP + CharacterArt.H)
+    val height = (width * rect.height / rect.width).toInt()
+    val image = ImageBitmap(width, height)
+    CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, GraphicsCanvas(image), Size(width.toFloat(), height.toFloat())) {
+        drawCharacter(CharacterArt.parts(context.applicationContext), outfit, Palette.of(outfit), mood, blink = false, box = rect)
     }
     return image.asAndroidBitmap()
 }

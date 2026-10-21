@@ -21,7 +21,11 @@ data class SavedState(
     val pet: PetState? = null,
     /** Mission counters of the last day the app was used. */
     val missions: MissionDay? = null,
+    /** Character creator save slots (null = empty). */
+    val looks: List<Outfit?> = List(LOOK_SLOTS) { null },
 )
+
+const val LOOK_SLOTS = 5
 
 /**
  * [date]'s quests as the app will show them: the saved list, or - if the app hasn't been opened
@@ -87,6 +91,12 @@ class TodayStorage(context: Context) {
             rewards = loadRewards(),
             pet = prefs.getString("pet", null)?.let { runCatching { petFromJson(JSONObject(it)) }.getOrNull() },
             missions = prefs.getString("missions", null)?.let { runCatching { missionsFromJson(JSONObject(it)) }.getOrNull() },
+            looks = prefs.getString("looks", null)?.let { json ->
+                runCatching {
+                    val arr = JSONArray(json)
+                    List(LOOK_SLOTS) { i -> arr.optJSONObject(i)?.let { runCatching { outfitFromJson(it) }.getOrNull() } }
+                }.getOrNull()
+            } ?: List(LOOK_SLOTS) { null },
         )
     }
 
@@ -103,6 +113,7 @@ class TodayStorage(context: Context) {
             putString("rewards", rewardsToJson(s.rewards).toString())
             if (s.pet == null) remove("pet") else putString("pet", petToJson(s.pet).toString())
             if (s.missions == null) remove("missions") else putString("missions", missionsToJson(s.missions).toString())
+            putString("looks", JSONArray().apply { s.looks.forEach { put(it?.let(::outfitToJson) ?: JSONObject.NULL) } }.toString())
             if (s.chats == null) {
                 remove("chats")
             } else {
@@ -380,6 +391,9 @@ class TodayStorage(context: Context) {
         .put("head", o.head).put("face", o.face).put("back", o.back)
         .put("hairStyle", o.hairStyle?.name ?: "")
         .put("features", JSONArray(o.features.map { it.name }.sorted()))
+        .put("body", o.body.name).put("faceShape", o.faceShape.name).put("eyeStyle", o.eyeStyle.name).put("browStyle", o.browStyle.name)
+        .put("eyeColor", o.eyeColor).put("lipColor", o.lipColor).put("blush", o.blush)
+        .put("topStyle", o.topStyle.name).put("bottomStyle", o.bottomStyle?.name ?: "").put("shoeStyle", o.shoeStyle.name)
 
     private fun outfitFromJson(j: JSONObject): Outfit {
         val accent = j.getInt("accent")
@@ -403,6 +417,16 @@ class TodayStorage(context: Context) {
             features = j.optJSONArray("features")?.let { arr ->
                 List(arr.length()) { arr.optString(it) }.mapNotNull { runCatching { FaceFeature.valueOf(it) }.getOrNull() }.toSet()
             }.orEmpty(),
+            body = enumOr(j.optString("body"), BodyType.SLIM),
+            faceShape = enumOr(j.optString("faceShape"), FaceShape.OVAL),
+            eyeStyle = enumOr(j.optString("eyeStyle"), EyeStyle.ALMOND),
+            browStyle = enumOr(j.optString("browStyle"), BrowStyle.NATURAL),
+            eyeColor = j.optInt("eyeColor", DEFAULT_EYE_COLOR),
+            lipColor = j.optInt("lipColor", DEFAULT_LIP_COLOR),
+            blush = j.optBoolean("blush", false),
+            topStyle = enumOr(j.optString("topStyle"), TopStyle.TEE),
+            bottomStyle = j.optString("bottomStyle").takeIf { it.isNotEmpty() }?.let { runCatching { BottomStyle.valueOf(it) }.getOrNull() },
+            shoeStyle = enumOr(j.optString("shoeStyle"), ShoeStyle.SNEAKERS),
         )
     }
 }

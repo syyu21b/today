@@ -172,6 +172,17 @@ fun OutfitScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
     ) {
         Text(s.outfitTitle, style = MaterialTheme.typography.headlineMedium)
         Text(s.outfitIntro, color = TextMuted, fontSize = 14.sp)
+        // RPG-style creator: face, eyes, hair, makeup, clothes.
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(54.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(Brush.horizontalGradient(listOf(Color(0xFF223457), Color(0xFF3A2F6B))))
+                .border(1.dp, Color(0xFFD9B77A), RoundedCornerShape(14.dp))
+                .clickable(onClick = vm::openCreator),
+            contentAlignment = Alignment.Center,
+        ) { Text("✨ " + s.creatorOpen, color = Color(0xFFD9B77A), fontWeight = FontWeight.Bold, fontSize = 16.sp) }
 
         // ---- Avatar stage ----
         Backdrop(
@@ -413,7 +424,7 @@ private fun FloatingAvatar(outfit: Outfit, mood: Mood, hasPet: Boolean) {
     val t = rememberInfiniteTransition(label = "float")
     val dy by t.animateFloat(0f, -8f, infiniteRepeatable(tween(1200), RepeatMode.Reverse), label = "dy")
     // With a pet beside it, the character steps a little to the left.
-    PixelAvatar(outfit, Modifier.height(200.dp).graphicsLayer { translationY = dy.dp.toPx(); translationX = if (hasPet) -28.dp.toPx() else 0f }, mood = mood)
+    PixelAvatar(outfit, Modifier.height(236.dp).graphicsLayer { translationY = dy.dp.toPx(); translationX = if (hasPet) -28.dp.toPx() else 0f }, mood = mood)
 }
 
 @Composable

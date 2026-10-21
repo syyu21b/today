@@ -1,5 +1,7 @@
 package com.today.app.ui.screens
 
+import com.today.app.ui.components.HeadBox
+import com.today.app.ui.components.AvatarHead
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -154,7 +156,7 @@ fun EventBanner(vm: TodayViewModel) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(56.dp).clip(RoundedCornerShape(12.dp)).background(Coral.copy(alpha = 0.15f)), contentAlignment = Alignment.TopCenter) {
-            HeadCrop(vm.character.outfit.withAccessory(item.slot, item.id), 56.dp)
+            AvatarHead(vm.character.outfit.withAccessory(item.slot, item.id), Modifier.fillMaxHeight(), box = HeadBox.HAT)
         }
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
@@ -228,20 +230,8 @@ fun StatusDialog(vm: TodayViewModel, onDismiss: () -> Unit) {
 @Composable
 private fun PixelAvatarFace(vm: TodayViewModel, mood: Mood) {
     Box(Modifier.size(34.dp).clip(RoundedCornerShape(8.dp)), contentAlignment = Alignment.TopCenter) {
-        HeadCrop(vm.character.outfit.withoutAccessories(), 34.dp, mood)
+        AvatarHead(vm.character.outfit.withoutAccessories(), Modifier.fillMaxHeight(), mood = mood)
     }
-}
-
-/** The character drawn big enough that only the head fills a [box]-sized square (top-aligned). */
-@Composable
-fun HeadCrop(outfit: Outfit, box: Dp, mood: Mood = Mood.NORMAL) {
-    val h = box * 2f
-    PixelAvatar(
-        outfit,
-        Modifier.wrapContentSize(Alignment.TopCenter, unbounded = true).requiredSize(h * (2f / 3f), h),
-        animateColors = false,
-        mood = mood,
-    )
 }
 
 /** Speech bubble with the status message (tap to edit). */
