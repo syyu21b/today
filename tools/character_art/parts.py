@@ -1,7 +1,7 @@
 """Character parts as layers. Genders: F / M.
 
 Body proportions follow figure-drawing landmarks for a ~6.2-heads stylised adult (webtoon style):
-head = 1 unit (crown 40 to chin ~113 after the head is scaled in warp.py, H = 72.9 art units),
+head = 1 unit (H = 72.9 art units; the drawn head is now smaller, crown ~53 to chin ~113, see warp.py),
 shoulders 1.45 H, chest 2 H, waist 2.6 H (F, higher) / 2.7 H (M), hips 3.2 H, crotch 3.42 H,
 knees 4.72 H, ankles 5.92 H, soles 6.2 H. Elbows sit at the waist, wrists at the crotch, fingertips at
 mid-thigh. Women: narrower shoulders (~1.6 head widths), a defined waist, hips wider than the chest.

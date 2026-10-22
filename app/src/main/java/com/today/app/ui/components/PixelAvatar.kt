@@ -60,13 +60,13 @@ const val AVATAR_ASPECT = CharacterArt.W / CharacterArt.H
 /** Crops of the art box (art coordinates) used for portraits; they grow and shrink with the head-size slider. */
 enum class HeadBox(val rect: Rect) {
     /** Whole face and hair with a little air around it, square (also fits a circle). */
-    FACE(Rect(45f, 21f, 155f, 131f)),
+    FACE(Rect(51f, 34f, 149f, 132f)),
     /** Head with room for tall hats. */
-    HAT(Rect(36f, -24f, 164f, 132f)),
+    HAT(Rect(44f, -6f, 156f, 132f)),
     /** Head and upper body, down to the waist. */
     BUST(Rect(8f, 14f, 192f, 262f)),
     /** Close-up of the eyes and brows. */
-    EYES(Rect(69f, 70f, 131f, 103f)),
+    EYES(Rect(72f, 72f, 128f, 102f)),
 }
 
 private val Ink = Color(0xFF281622)
@@ -324,8 +324,8 @@ private class DoubleBuffer {
         rasterize(size, images[next], block).also { images[next] = it; next = 1 - next }
 }
 
-private val CROWN_GLINTS = listOf(Offset(81f, 21f), Offset(100f, 15f), Offset(119f, 21f))
-private val HALO_GLINTS = listOf(Offset(81f, 15f), Offset(119f, 17f), Offset(100f, 12f))
+private val CROWN_GLINTS = listOf(Offset(83.8f, 38.4f), Offset(100f, 32.7f), Offset(116.2f, 38.4f))
+private val HALO_GLINTS = listOf(Offset(83.8f, 32.7f), Offset(116.2f, 34.6f), Offset(100f, 29.8f))
 
 private fun DrawScope.drawGlints(points: List<Offset>, time: Float) {
     points.forEachIndexed { i, p ->
@@ -370,8 +370,8 @@ private fun fit(centerX: Float, centerY: Float, height: Float, aspect: Float) =
 fun CharacterStage(outfit: Outfit, modifier: Modifier = Modifier, mood: Mood = Mood.NORMAL, zoom: Float = 0f) {
     CharacterCanvas(outfit, modifier, animateColors = true, mood = mood, dropIn = null, portrait = false) { size ->
         val aspect = size.width / size.height
-        val h = 580f + (140f - 580f) * zoom
-        val cy = (CharacterArt.TOP + CharacterArt.H / 2 - 6f) + (76f - (CharacterArt.TOP + CharacterArt.H / 2 - 6f)) * zoom
+        val h = 580f + (122f - 580f) * zoom
+        val cy = (CharacterArt.TOP + CharacterArt.H / 2 - 6f) + (83f - (CharacterArt.TOP + CharacterArt.H / 2 - 6f)) * zoom
         fit(100f, cy, h, aspect)
     }
 }

@@ -10,7 +10,7 @@ from render import roles, layers, CHROME, D
 
 RES = os.path.join(D, "..", "..", "app", "src", "main", "res", "drawable")
 # Head and shoulders of the 200 x 545 art, mapped onto the 108 x 108 adaptive canvas.
-CROP_X, CROP_Y, CROP = 46.0, 26.0, 108.0
+CROP_X, CROP_Y, CROP = 49.0, 32.0, 102.0
 INSET = 16.0  # keeps the head inside the 66dp safe zone
 SCALE = (108 - 2 * INSET) / CROP
 
