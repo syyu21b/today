@@ -60,6 +60,7 @@ import com.today.app.data.Templates
 import com.today.app.data.TodayViewModel
 import com.today.app.data.MAX_QUESTS_PER_DAY
 import com.today.app.i18n.LocalStrings
+import com.today.app.ui.components.AvatarWithPet
 import com.today.app.ui.components.Backdrop
 import com.today.app.ui.components.PixelAvatar
 import com.today.app.ui.components.PixelPet
@@ -182,10 +183,7 @@ private fun ColumnScope.WelcomeStep(outfit: com.today.app.data.Outfit) {
         "sky",
         Modifier.fillMaxWidth().height(280.dp).clip(RoundedCornerShape(28.dp)),
     ) {
-        Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.padding(top = 30.dp)) {
-            PixelAvatar(outfit, Modifier.height(200.dp))
-            PixelPet(PetSpecies.DOG, PetStage.BABY, Modifier.width(90.dp).padding(bottom = 6.dp))
-        }
+        AvatarWithPet(outfit, PetSpecies.DOG, PetStage.BABY, height = 200.dp, modifier = Modifier.padding(top = 30.dp))
     }
     Text(s.obWelcomeTitle, style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
     Text(s.obWelcomeBody, color = TextMuted, textAlign = TextAlign.Center, fontSize = 16.sp, modifier = Modifier.fillMaxWidth())
@@ -271,10 +269,7 @@ private fun PetStep(species: PetSpecies?, onSpecies: (PetSpecies) -> Unit, name:
 private fun ReadyStep(outfit: com.today.app.data.Outfit, species: PetSpecies?, nickname: String, backdrop: String) {
     val s = LocalStrings.current
     Backdrop(if (backdrop == "default") "sunset" else backdrop, Modifier.fillMaxWidth().height(260.dp).clip(RoundedCornerShape(28.dp))) {
-        Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 18.dp)) {
-            PixelAvatar(outfit, Modifier.height(190.dp), mood = com.today.app.data.Mood.EXCITED)
-            if (species != null) PixelPet(species, PetStage.EGG, Modifier.width(80.dp))
-        }
+        AvatarWithPet(outfit, species, PetStage.EGG, height = 200.dp, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 18.dp), mood = com.today.app.data.Mood.EXCITED)
     }
     Text(s.obReadyTitle, style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
     Text(s.obReadyBody(nickname), color = TextMuted, textAlign = TextAlign.Center, fontSize = 16.sp, modifier = Modifier.fillMaxWidth())

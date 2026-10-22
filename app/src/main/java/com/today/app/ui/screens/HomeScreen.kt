@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -394,12 +395,13 @@ private fun CharacterCard(
                     Modifier
                         .height(116.dp)
                         .align(if (pet != null) Alignment.BottomStart else Alignment.BottomCenter)
-                        .padding(start = if (pet != null) 4.dp else 0.dp),
+                        .offset(x = if (pet != null) (-6).dp else 0.dp),
                     mood = mood,
                     box = HeadBox.BUST,
                 )
                 if (pet != null) {
-                    PixelPet(pet.species, pet.stage, Modifier.width(54.dp).align(Alignment.BottomEnd).padding(end = 4.dp, bottom = 6.dp), onPet = onPet)
+                    // Snuggled against the character's side rather than off in the corner.
+                    PixelPet(pet.species, pet.stage, Modifier.width(62.dp).align(Alignment.BottomEnd).offset(x = (-8).dp, y = (-4).dp), onPet = onPet)
                 }
                 // Mood badge in the corner; the face itself changes too.
                 Text(mood.emoji, fontSize = 16.sp, modifier = Modifier.align(Alignment.TopEnd).padding(6.dp))

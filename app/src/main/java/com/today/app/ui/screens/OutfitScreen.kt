@@ -80,11 +80,14 @@ import androidx.core.net.toUri
 import com.today.app.data.FaceFeature
 import com.today.app.data.Mood
 import com.today.app.data.Outfit
+import com.today.app.data.PetSpecies
+import com.today.app.data.PetStage
 import com.today.app.data.Outfits
 import com.today.app.data.StyleResult
 import com.today.app.data.TodayViewModel
 import com.today.app.i18n.LocalStrings
 import com.today.app.i18n.Strings
+import com.today.app.ui.components.AvatarWithPet
 import com.today.app.ui.components.Backdrop
 import com.today.app.ui.components.PixelAvatar
 import com.today.app.ui.components.PixelPet
@@ -195,20 +198,12 @@ fun OutfitScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
             Box(
                 Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 26.dp)
-                    .offset(x = if (vm.pet != null) (-28).dp else 0.dp)
-                    .size(width = 120.dp, height = 14.dp)
+                    .padding(bottom = 18.dp)
+                    .size(width = if (vm.pet != null) 150.dp else 110.dp, height = 14.dp)
                     .clip(CircleShape)
                     .background(Color.Black.copy(alpha = 0.35f)),
             )
-            FloatingAvatar(outfit, vm.mood, hasPet = vm.pet != null)
-            vm.pet?.let { pet ->
-                PixelPet(
-                    pet.species, pet.stage,
-                    Modifier.align(Alignment.BottomEnd).padding(end = 36.dp, bottom = 22.dp).width(88.dp),
-                    onPet = vm::petThePet,
-                )
-            }
+            FloatingAvatar(outfit, vm.mood, vm.pet?.species, vm.pet?.stage, onPet = vm::petThePet, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp))
             Text(
                 s.outfitName(outfit.name),
                 fontFamily = PixelFont, color = Gold,
@@ -420,11 +415,14 @@ private fun FineTuneCard(outfit: Outfit, extracted: List<Int>, onChange: ((Outfi
 }
 
 @Composable
-private fun FloatingAvatar(outfit: Outfit, mood: Mood, hasPet: Boolean) {
+private fun FloatingAvatar(outfit: Outfit, mood: Mood, species: PetSpecies?, stage: PetStage?, onPet: () -> Unit, modifier: Modifier) {
     val t = rememberInfiniteTransition(label = "float")
-    val dy by t.animateFloat(0f, -8f, infiniteRepeatable(tween(1200), RepeatMode.Reverse), label = "dy")
-    // With a pet beside it, the character steps a little to the left.
-    PixelAvatar(outfit, Modifier.height(236.dp).graphicsLayer { translationY = dy.dp.toPx(); translationX = if (hasPet) -28.dp.toPx() else 0f }, mood = mood)
+    val dy by t.animateFloat(0f, -6f, infiniteRepeatable(tween(1200), RepeatMode.Reverse), label = "dy")
+    // The pet stands right next to the character's feet.
+    AvatarWithPet(
+        outfit, species, stage ?: PetStage.EGG, height = 228.dp, modifier = modifier, mood = mood,
+        avatarModifier = Modifier.graphicsLayer { translationY = dy.dp.toPx() }, onPet = onPet,
+    )
 }
 
 @Composable
