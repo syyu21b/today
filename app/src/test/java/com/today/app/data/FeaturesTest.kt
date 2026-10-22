@@ -183,4 +183,35 @@ class FeaturesTest {
         assertEquals(styled.body, Outfits.presets[3].withBodyOf(styled).body)
         assertEquals(styled.eyeStyle, Outfits.presets[3].withBodyOf(styled).eyeStyle)
     }
+
+    @Test
+    fun fineTuneSlidersClampDropZeroAndSurvivePresets() {
+        val me = Outfits.presets[0]
+        val tuned = me.withTune(Tune.JAW, 3f).withTune(Tune.EYE_SIZE, -0.4f)
+        assertEquals(1f, tuned.tuned(Tune.JAW))
+        assertEquals(-0.4f, tuned.tuned(Tune.EYE_SIZE))
+        // Back to (almost) zero = untouched again, so the creator sees no change.
+        assertEquals(me, tuned.withTune(Tune.JAW, 0.01f).withTune(Tune.EYE_SIZE, 0f))
+        // Outfit presets keep the sliders, face presets reset them.
+        assertEquals(tuned.tune, Outfits.presets[2].withBodyOf(tuned).tune)
+        assertTrue(Looks.presets[1].applyTo(tuned).tune.isEmpty())
+        assertTrue(Looks.random(me, kotlin.random.Random(1)).tune.values.all { it in -1f..1f })
+        // Every slider has a label in both languages and each art morph is named once.
+        Tune.entries.forEach { assertTrue(KoStrings.tuneName(it).isNotEmpty() && EnStrings.tuneName(it).isNotEmpty()) }
+        assertEquals(Tune.entries.mapNotNull { it.art }.size, Tune.entries.mapNotNull { it.art }.toSet().size)
+    }
+
+    @Test
+    fun friendsGetAStableFaceUnlessTheyChoseOne() {
+        val plain = Outfits.presets[2]
+        val a = Looks.forFriend(plain, "f1")
+        assertEquals(a, Looks.forFriend(plain, "f1"))
+        assertEquals(plain.shirt, a.shirt)
+        assertEquals(plain.hair, a.hair)
+        assertEquals(plain.longHair, a.style.long)
+        // Different friends don't all look alike.
+        assertTrue(DummyData.friends.map { it.outfit.faceShape to it.outfit.eyeStyle }.toSet().size > 2)
+        val chosen = plain.copy(eyeStyle = EyeStyle.ROUND)
+        assertEquals(chosen, Looks.forFriend(chosen, "f1"))
+    }
 }

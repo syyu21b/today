@@ -348,7 +348,7 @@ class TodayStorage(context: Context) {
         name = o.getString("name"),
         nameEn = o.optString("nameEn", o.getString("name")),
         handle = o.optString("handle"),
-        outfit = outfitFromJson(o.getJSONObject("outfit")),
+        outfit = Looks.forFriend(outfitFromJson(o.getJSONObject("outfit")), o.getString("id")),
         online = o.optBoolean("online"),
         level = o.optInt("level", 1),
         source = enumOr(o.optString("source"), FriendSource.MANUAL),
@@ -394,6 +394,7 @@ class TodayStorage(context: Context) {
         .put("body", o.body.name).put("faceShape", o.faceShape.name).put("eyeStyle", o.eyeStyle.name).put("browStyle", o.browStyle.name)
         .put("eyeColor", o.eyeColor).put("lipColor", o.lipColor).put("blush", o.blush)
         .put("topStyle", o.topStyle.name).put("bottomStyle", o.bottomStyle?.name ?: "").put("shoeStyle", o.shoeStyle.name)
+        .put("tune", JSONObject().apply { o.tune.forEach { (k, v) -> put(k.name, v.toDouble()) } })
 
     private fun outfitFromJson(j: JSONObject): Outfit {
         val accent = j.getInt("accent")
@@ -427,6 +428,13 @@ class TodayStorage(context: Context) {
             topStyle = enumOr(j.optString("topStyle"), TopStyle.TEE),
             bottomStyle = j.optString("bottomStyle").takeIf { it.isNotEmpty() }?.let { runCatching { BottomStyle.valueOf(it) }.getOrNull() },
             shoeStyle = enumOr(j.optString("shoeStyle"), ShoeStyle.SNEAKERS),
+            tune = j.optJSONObject("tune")?.let { t ->
+                t.keys().asSequence().mapNotNull { k ->
+                    val key = runCatching { Tune.valueOf(k) }.getOrNull() ?: return@mapNotNull null
+                    val v = t.optDouble(k, 0.0).toFloat().coerceIn(-1f, 1f)
+                    if (v.isNaN() || v == 0f) null else key to v
+                }.toMap()
+            }.orEmpty(),
         )
     }
 }

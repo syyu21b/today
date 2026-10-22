@@ -1046,7 +1046,7 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
         name = name,
         nameEn = name,
         handle = handle,
-        outfit = Outfits.presets.random(),
+        outfit = Looks.forFriend(Outfits.presets.random(), id),
         online = (0..2).random() > 0,
         level = (1..15).random(),
         source = source,

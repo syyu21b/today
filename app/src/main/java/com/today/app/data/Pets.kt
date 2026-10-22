@@ -1,6 +1,6 @@
 package com.today.app.data
 
-/** The pets on offer, most commonly kept first. Art lives in PetArt.kt, names in Strings. */
+/** The pets on offer, most commonly kept first. Art lives in assets/pet_art.json (tools/character_art/pets.py), names in Strings. */
 enum class PetSpecies(val emoji: String) {
     DOG("🐶"), CAT("🐱"), FISH("🐠"), HAMSTER("🐹"), PARROT("🦜"), HEDGEHOG("🦔"), LIZARD("🦎"),
 }

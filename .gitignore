@@ -9,3 +9,7 @@
 .externalNativeBuild/
 .cxx/
 .kotlin/
+
+# Character art tool previews
+tools/character_art/*.png
+tools/character_art/__pycache__/

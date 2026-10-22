@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -39,7 +38,7 @@ fun FriendAvatar(friend: Friend, size: Dp, storyRing: Boolean = false, dimmed: B
                 .background(Brush.verticalGradient(listOf(Color(0xFF3A2F6B), Color(0xFF241F38)))),
             contentAlignment = Alignment.TopCenter,
         ) {
-            AvatarHead(friend.outfit, Modifier.fillMaxSize().offset(y = size * 0.06f))
+            AvatarHead(friend.outfit, Modifier.fillMaxSize())
         }
         if (friend.online && !dimmed) {
             Box(

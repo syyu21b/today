@@ -67,8 +67,10 @@ def ell(cx, cy, rx, ry):
 
 class L:
     """One layer: fill (role / #hex / gradient spec), optional stroke, opacity."""
-    def __init__(self, d, fill=None, stroke=None, width=0.0, alpha=1.0, clip=None):
+    def __init__(self, d, fill=None, stroke=None, width=0.0, alpha=1.0, clip=None, region=None):
         self.d, self.fill, self.stroke, self.width, self.alpha, self.clip = d, fill, stroke, width, alpha, clip
+        # Which body region the layer belongs to (warp.py): head / torso / armR / armL / legR / legL; None = by part.
+        self.region = region
 
 
 def smooth(pts, closed=True, t=1.0):

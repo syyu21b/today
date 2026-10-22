@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Density
@@ -44,6 +45,7 @@ import com.today.app.data.FaceFeature
 import com.today.app.data.Mood
 import com.today.app.data.Outfit
 import com.today.app.data.TopStyle
+import com.today.app.data.Tune
 import kotlinx.coroutines.delay
 import kotlin.math.PI
 import kotlin.math.sin
@@ -51,16 +53,16 @@ import kotlin.math.sin
 /** Width : height of the full-body character. */
 const val AVATAR_ASPECT = CharacterArt.W / CharacterArt.H
 
-/** Crops of the art box (art coordinates) used for portraits. */
+/** Crops of the art box (art coordinates) used for portraits; they grow and shrink with the head-size slider. */
 enum class HeadBox(val rect: Rect) {
-    /** Face and hair, square. */
-    FACE(Rect(42f, 4f, 158f, 120f)),
+    /** Whole face and hair with a little air around it, square (also fits a circle). */
+    FACE(Rect(36f, 10f, 164f, 138f)),
     /** Head with room for tall hats. */
-    HAT(Rect(28f, -45f, 172f, 147f)),
+    HAT(Rect(28f, -38f, 172f, 154f)),
     /** Head and upper body. */
-    BUST(Rect(22f, -22f, 178f, 228f)),
+    BUST(Rect(22f, -15f, 178f, 235f)),
     /** Close-up of the eyes and brows. */
-    EYES(Rect(62f, 60f, 138f, 106f)),
+    EYES(Rect(60f, 68f, 140f, 116f)),
 }
 
 private val Ink = Color(0xFF281622)
@@ -100,35 +102,74 @@ private val OPEN_EYES = setOf(Mood.NORMAL, Mood.SAD, Mood.EXCITED, Mood.LOVE, Mo
 /** Accessory falling into place: [id] drawn [offset] art units above its spot. */
 data class AccessoryDrop(val id: String, val offset: Float)
 
-/** Part keys in drawing order. Accessory parts are tagged so a drop-in can move them. */
-private fun partKeys(o: Outfit, mood: Mood, blink: Boolean): List<Pair<String, String?>> {
+/** Features the sliders move as a whole, around their anchor in the art. */
+private enum class Feature(val anchor: String?) { NONE(null), EYE_R("eyeR"), EYE_L("eyeL"), BROW_R("browR"), BROW_L("browL"), NOSE("nose"), MOUTH("mouth") }
+
+/** One part to draw: [head] parts follow the head-size slider; [accId] tags accessories for the drop-in. */
+private class PartRef(val key: String, val head: Boolean, val feature: Feature = Feature.NONE, val accId: String? = null)
+
+/** Parts in drawing order. */
+private fun partKeys(o: Outfit, mood: Mood, blink: Boolean): List<PartRef> {
     val bt = o.body.name
     val accs = listOf(o.back, o.head, o.face).filter { it.isNotEmpty() }
     val top = o.topStyle.name.lowercase()
     val sleeve = if (o.topStyle == TopStyle.TEE && o.shortSleeve) "short" else "long"
-    val keys = ArrayList<Pair<String, String?>>()
-    keys += "hairBack.${o.style.name.lowercase()}" to null
-    accs.forEach { keys += "accBack.$it" to it }
-    keys += "body.$bt" to null
-    keys += "arms.$bt" to null
-    if (o.topStyle != TopStyle.DRESS) keys += "bottom.$bt.${o.bottom.name.lowercase()}" to null
-    keys += "shoes.$bt.${o.shoeStyle.name.lowercase()}" to null
-    keys += "top.$bt.$top.$sleeve" to null
-    if (o.striped) keys += "stripes.$bt.$top.$sleeve" to null
-    keys += "head.${o.faceShape.name.lowercase()}" to null
-    keys += "blush.${if (o.blush) 1 else 0}" to null
-    keys += "nose" to null
+    val hair = o.style.name.lowercase()
+    val eyes = "eyes.$bt.${o.eyeStyle.name.lowercase()}.${if (blink && mood in OPEN_EYES) "blink" else moodKey(mood)}"
+    val brows = "brows.${o.browStyle.name.lowercase()}.${moodKey(mood)}"
+    val keys = ArrayList<PartRef>()
+    keys += PartRef("hairBack.$hair", head = true)
+    accs.forEach { keys += PartRef("accBack.$it", head = it != "cape", accId = it) }
+    keys += PartRef("body.$bt", head = false)
+    if (o.topStyle != TopStyle.DRESS) keys += PartRef("bottom.$bt.${o.bottom.name.lowercase()}", head = false)
+    keys += PartRef("shoes.$bt.${o.shoeStyle.name.lowercase()}", head = false)
+    keys += PartRef("arms.$bt", head = false)
+    keys += PartRef("top.$bt.$top.$sleeve", head = false)
+    if (o.striped) keys += PartRef("stripes.$bt.$top.$sleeve", head = false)
+    keys += PartRef("hands.$bt", head = false)
+    keys += PartRef("head.${o.faceShape.name.lowercase()}", head = true)
+    keys += PartRef("blush.${if (o.blush) 1 else 0}", head = true)
+    keys += PartRef("nose", head = true, feature = Feature.NOSE)
     for (f in FaceFeature.entries) {
         if (f !in o.features || (f == FaceFeature.MUSTACHE && FaceFeature.BEARD in o.features)) continue
-        keys += "feature.${f.name.lowercase()}" to null
+        keys += PartRef("feature.${f.name.lowercase()}", head = true)
     }
-    keys += "mouth.${moodKey(mood)}" to null
-    keys += "eyes.$bt.${o.eyeStyle.name.lowercase()}.${if (blink && mood in OPEN_EYES) "blink" else moodKey(mood)}" to null
-    keys += "hairFront.${o.style.name.lowercase()}" to null
-    keys += "brows.${o.browStyle.name.lowercase()}.${moodKey(mood)}" to null
-    accs.forEach { keys += "accFront.$it" to it }
+    keys += PartRef("mouth.${moodKey(mood)}", head = true, feature = Feature.MOUTH)
+    keys += PartRef("$eyes.R", head = true, feature = Feature.EYE_R)
+    keys += PartRef("$eyes.L", head = true, feature = Feature.EYE_L)
+    keys += PartRef("hairFront.$hair", head = true)
+    keys += PartRef("$brows.R", head = true, feature = Feature.BROW_R)
+    keys += PartRef("$brows.L", head = true, feature = Feature.BROW_L)
+    accs.forEach { keys += PartRef("accFront.$it", head = it != "cape", accId = it) }
     return keys
 }
+
+/**
+ * The art with [outfit]'s fine-tune sliders applied: morphed layers (made on first use) and the
+ * moved anchors the features scale and tilt around.
+ */
+internal class Posed(private val art: Art, outfit: Outfit) {
+    private val values = FloatArray(art.params.size) { i -> Tune.entries.firstOrNull { it.art == art.params[i] }?.let(outfit::tuned) ?: 0f }
+    private val cache = HashMap<String, List<ArtLayer>?>()
+
+    fun layers(key: String): List<ArtLayer>? = cache.getOrPut(key) { art.parts[key]?.map { it.morphed(values) } }
+
+    private val anchors: Map<String, Offset> = run {
+        val layers = layers("anchors.${outfit.faceShape.name.lowercase()}").orEmpty()
+        art.anchorNames.withIndex().associate { (i, name) ->
+            val l = layers.getOrNull(i)
+            val c = l?.morph(l.shape, false, values) ?: l?.shape?.coords
+            name to if (c != null) Offset(c[0], c[1]) else Offset(100f, 100f)
+        }
+    }
+
+    fun anchor(name: String) = anchors[name] ?: Offset(100f, 100f)
+}
+
+/** Pets use fixed colours only, so any palette works. */
+internal fun DrawScope.drawArtLayer(l: ArtLayer) = drawLayer(l, FixedPalette)
+
+private val FixedPalette by lazy { Palette.of(com.today.app.data.Outfits.presets.first()) }
 
 private fun DrawScope.drawLayer(l: ArtLayer, pal: Palette) {
     fun brush(p: Paint): Brush = when (p) {
@@ -152,37 +193,97 @@ private fun DrawScope.drawLayer(l: ArtLayer, pal: Palette) {
     if (clip != null) clipPath(clip) { draw() } else draw()
 }
 
+/** How much the head is scaled by the head-size slider. */
+private fun headScale(o: Outfit) = 1f + 0.1f * o.tuned(Tune.HEAD_SIZE)
+
+/** [box] grown / shrunk with the head so portraits keep the same framing. */
+private fun headBox(box: Rect, o: Outfit, pivot: Offset): Rect {
+    val k = headScale(o)
+    if (k == 1f) return box
+    return Rect(pivot.x + (box.left - pivot.x) * k, pivot.y + (box.top - pivot.y) * k, pivot.x + (box.right - pivot.x) * k, pivot.y + (box.bottom - pivot.y) * k)
+}
+
+/** Moves, scales and tilts one face feature by the sliders. */
+private fun DrawScope.withFeature(f: Feature, o: Outfit, posed: Posed, block: DrawScope.() -> Unit) {
+    val name = f.anchor ?: return block()
+    val pivot = posed.anchor(name)
+    var dx = 0f
+    var dy = 0f
+    var sx = 1f
+    var sy = 1f
+    var deg = 0f
+    when (f) {
+        Feature.EYE_R, Feature.EYE_L -> {
+            val side = if (f == Feature.EYE_R) 1f else -1f
+            sx = 1f + 0.16f * o.tuned(Tune.EYE_SIZE)
+            sy = sx
+            dy = -3f * o.tuned(Tune.EYE_HEIGHT)
+            dx = side * 2.6f * o.tuned(Tune.EYE_SPACING)
+            deg = -side * 9f * o.tuned(Tune.EYE_TILT)
+        }
+        Feature.BROW_R, Feature.BROW_L -> {
+            val side = if (f == Feature.BROW_R) 1f else -1f
+            sy = 1f + 0.4f * o.tuned(Tune.BROW_THICKNESS)
+            dy = -3f * o.tuned(Tune.BROW_HEIGHT) - 1.5f * o.tuned(Tune.EYE_HEIGHT)
+            dx = side * 2f * o.tuned(Tune.EYE_SPACING)
+            deg = -side * 12f * o.tuned(Tune.BROW_TILT)
+        }
+        Feature.NOSE -> {
+            sx = 1f + 0.25f * o.tuned(Tune.NOSE_SIZE)
+            sy = sx
+            dy = -2.5f * o.tuned(Tune.NOSE_HEIGHT)
+        }
+        Feature.MOUTH -> {
+            sx = 1f + 0.28f * o.tuned(Tune.MOUTH_SIZE)
+            sy = 1f + 0.12f * o.tuned(Tune.MOUTH_SIZE)
+            dy = -3f * o.tuned(Tune.MOUTH_HEIGHT)
+        }
+        Feature.NONE -> Unit
+    }
+    if (dx == 0f && dy == 0f && sx == 1f && sy == 1f && deg == 0f) return block()
+    withTransform({
+        translate(dx, dy)
+        rotate(deg, pivot)
+        scale(sx, sy, pivot)
+    }, block)
+}
+
 /**
  * Draws the character so the art box [box] (art coordinates) fills this draw scope.
  * [time] (0..1, looping) makes crowns and halos glint.
  */
 private fun DrawScope.drawCharacter(
-    parts: Map<String, List<ArtLayer>>,
+    posed: Posed,
     outfit: Outfit,
     pal: Palette,
     mood: Mood,
     blink: Boolean,
-    box: Rect = Rect(0f, CharacterArt.TOP, CharacterArt.W, CharacterArt.TOP + CharacterArt.H),
+    box: Rect = FULL,
     time: Float = 0f,
     drop: AccessoryDrop? = null,
 ) {
     val k = size.width / box.width
+    val neck = posed.anchor("neck")
+    val hs = headScale(outfit)
     clipRect {
         scale(k, k, pivot = Offset.Zero) {
             translate(-box.left, -box.top) {
-                for ((key, accId) in partKeys(outfit, mood, blink)) {
-                    val layers = parts[key] ?: continue
-                    val dy = if (drop != null && accId == drop.id) -drop.offset else 0f
-                    translate(0f, dy) { layers.forEach { drawLayer(it, pal) } }
+                for (ref in partKeys(outfit, mood, blink)) {
+                    val layers = posed.layers(ref.key) ?: continue
+                    val dy = if (drop != null && ref.accId == drop.id) -drop.offset else 0f
+                    val draw: DrawScope.() -> Unit = { withFeature(ref.feature, outfit, posed) { translate(0f, dy) { layers.forEach { drawLayer(it, pal) } } } }
+                    if (ref.head && hs != 1f) scale(hs, hs, neck, draw) else draw()
                 }
-                if (outfit.head == "crown" || outfit.head == "halo") drawGlints(if (outfit.head == "crown") CROWN_GLINTS else HALO_GLINTS, time)
+                if (outfit.head == "crown" || outfit.head == "halo") {
+                    scale(hs, hs, neck) { drawGlints(if (outfit.head == "crown") CROWN_GLINTS else HALO_GLINTS, time) }
+                }
             }
         }
     }
 }
 
-private val CROWN_GLINTS = listOf(Offset(76f, 0f), Offset(100f, -8f), Offset(124f, 0f))
-private val HALO_GLINTS = listOf(Offset(76f, -8f), Offset(124f, -5f), Offset(100f, -12f))
+private val CROWN_GLINTS = listOf(Offset(76f, 7f), Offset(100f, -1f), Offset(124f, 7f))
+private val HALO_GLINTS = listOf(Offset(76f, -1f), Offset(124f, 2f), Offset(100f, -5f))
 
 private fun DrawScope.drawGlints(points: List<Offset>, time: Float) {
     points.forEachIndexed { i, p ->
@@ -210,7 +311,7 @@ fun PixelAvatar(
     mood: Mood = Mood.NORMAL,
     dropIn: String? = null,
 ) {
-    CharacterCanvas(outfit, modifier.aspectRatio(AVATAR_ASPECT), animateColors, mood, dropIn) { FULL }
+    CharacterCanvas(outfit, modifier.aspectRatio(AVATAR_ASPECT), animateColors, mood, dropIn, portrait = false) { FULL }
 }
 
 private val FULL = Rect(0f, CharacterArt.TOP, CharacterArt.W, CharacterArt.TOP + CharacterArt.H)
@@ -225,10 +326,10 @@ private fun fit(centerX: Float, centerY: Float, height: Float, aspect: Float) =
  */
 @Composable
 fun CharacterStage(outfit: Outfit, modifier: Modifier = Modifier, mood: Mood = Mood.NORMAL, zoom: Float = 0f) {
-    CharacterCanvas(outfit, modifier, animateColors = true, mood = mood, dropIn = null) { size ->
+    CharacterCanvas(outfit, modifier, animateColors = true, mood = mood, dropIn = null, portrait = false) { size ->
         val aspect = size.width / size.height
         val h = 570f + (175f - 570f) * zoom
-        val cy = (CharacterArt.TOP + CharacterArt.H / 2 - 6f) + (55f - (CharacterArt.TOP + CharacterArt.H / 2 - 6f)) * zoom
+        val cy = (CharacterArt.TOP + CharacterArt.H / 2 - 6f) + (68f - (CharacterArt.TOP + CharacterArt.H / 2 - 6f)) * zoom
         fit(100f, cy, h, aspect)
     }
 }
@@ -236,13 +337,14 @@ fun CharacterStage(outfit: Outfit, modifier: Modifier = Modifier, mood: Mood = M
 /** Portrait crop of the character ([box]), e.g. for tiles and profile pictures. */
 @Composable
 fun AvatarHead(outfit: Outfit, modifier: Modifier = Modifier, mood: Mood = Mood.NORMAL, box: HeadBox = HeadBox.FACE, dropIn: String? = null) {
-    CharacterCanvas(outfit, modifier.aspectRatio(box.rect.width / box.rect.height), animateColors = false, mood, dropIn) { box.rect }
+    CharacterCanvas(outfit, modifier.aspectRatio(box.rect.width / box.rect.height), animateColors = false, mood, dropIn, portrait = true) { box.rect }
 }
 
 @Composable
-private fun CharacterCanvas(outfit: Outfit, modifier: Modifier, animateColors: Boolean, mood: Mood, dropIn: String?, boxFor: (Size) -> Rect) {
+private fun CharacterCanvas(outfit: Outfit, modifier: Modifier, animateColors: Boolean, mood: Mood, dropIn: String?, portrait: Boolean, boxFor: (Size) -> Rect) {
     val context = LocalContext.current
-    val parts = remember { CharacterArt.parts(context.applicationContext) }
+    val art = remember { CharacterArt.art(context.applicationContext) }
+    val posed = remember(art, outfit.tune, outfit.faceShape) { Posed(art, outfit) }
     val spec = tween<Color>(durationMillis = if (animateColors) 600 else 0)
     val hair by animateColorAsState(Color(outfit.hair), spec, label = "hair")
     val skin by animateColorAsState(Color(outfit.skin), spec, label = "skin")
@@ -283,9 +385,10 @@ private fun CharacterCanvas(outfit: Outfit, modifier: Modifier, animateColors: B
 
     Canvas(modifier) {
         val pal = Palette(skin, hair, top, stripe, acc, bottom, shoes, iris, lip)
+        val box = boxFor(size)
         drawCharacter(
-            parts, outfit, pal, mood, blink,
-            box = boxFor(size),
+            posed, outfit, pal, mood, blink,
+            box = if (portrait) headBox(box, outfit, posed.anchor("neck")) else box,
             time = if (glinting) time.value else 0f,
             drop = if (dropId.isNotEmpty() && drop.value != 0f) AccessoryDrop(dropId, drop.value) else null,
         )
@@ -298,7 +401,8 @@ fun renderAvatarBitmap(context: Context, outfit: Outfit, mood: Mood = Mood.NORMA
     val height = (width * rect.height / rect.width).toInt()
     val image = ImageBitmap(width, height)
     CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, GraphicsCanvas(image), Size(width.toFloat(), height.toFloat())) {
-        drawCharacter(CharacterArt.parts(context.applicationContext), outfit, Palette.of(outfit), mood, blink = false, box = rect)
+        val posed = Posed(CharacterArt.art(context.applicationContext), outfit)
+        drawCharacter(posed, outfit, Palette.of(outfit), mood, blink = false, box = if (box == null) rect else headBox(rect, outfit, posed.anchor("neck")))
     }
     return image.asAndroidBitmap()
 }

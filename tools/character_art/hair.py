@@ -1,148 +1,191 @@
-"""Hair styles: back layer (behind the body) and front layer (over the face)."""
+"""Hair styles: back layer (behind the body) and front layer (over the face).
+
+Bangs are built from separate locks (tapered, slightly curved clumps) so the hair reads as strands
+rather than one cut-out shape; every lock gets a soft gradient, a darker edge and a strand line.
+"""
+import math
 from geo import *
 
-HAIR_LINE = dict(stroke="hairD", width=1.0, alpha=0.6)
+HAIR = "lin:hair:hairS:100:20:100:84"
 
 
-def strands(points, width=0.9, alpha=0.45, role="hairD"):
-    return [L(path(p[0], [("C", p[1], p[2], p[3])], close=False), stroke=role, width=width, alpha=alpha) for p in points]
+def crown_y(x):
+    """Height of the crown surface above x (roots of the bangs sit just below it)."""
+    t = min(1.0, abs(x - CX) / 44)
+    return 9 + 34 * (1 - math.sqrt(max(0.0, 1 - t * t)))
 
 
-def shine(y=36, w=24):
-    """Glossy band across the crown."""
-    d = path((CX - w, y + 6), [("C", (CX - w * 0.5, y - 2), (CX + w * 0.5, y - 2), (CX + w, y + 6)),
-                               ("C", (CX + w * 0.5, y + 1.5), (CX - w * 0.5, y + 1.5), (CX - w, y + 6))])
-    return [L(d, "hairL", alpha=0.55)]
+def lock(root, tip, w, bend=0.0, fill=None, line=True, alpha=1.0):
+    """A clump of hair from a root (top centre) to a pointed tip, in any direction; [bend] bows it
+    sideways (x). Only the two long edges are outlined, so roots melt into the crown."""
+    x0, y0 = root
+    x1, y1 = tip
+    ln = max(1.0, math.hypot(x1 - x0, y1 - y0))
+    ux, uy = (x1 - x0) / ln, (y1 - y0) / ln
+    nx, ny = -uy, ux
 
-
-def cap_top():
-    """Shared crown shape that covers the skull."""
-    return sym((CX, 13), [("C", (CX + 27, 13), (CX + 42, 30), (CX + 41, 58)), ("L", (CX, 58))])
-
-
-def bangs(kind="soft"):
-    if kind == "straight":
-        segs = [("C", (CX + 27, 13), (CX + 42, 30), (CX + 41, 58)), ("C", (CX + 41, 64), (CX + 39, 68), (CX + 36, 69)),
-                ("L", (CX + 30, 66)), ("L", (CX + 24, 69)), ("L", (CX + 16, 66)), ("L", (CX + 8, 69)), ("L", (CX, 66))]
-    elif kind == "side":
-        # swept to one side: asymmetric
-        return path((CX + 41, 58), [("C", (CX + 42, 30), (CX + 27, 13), (CX, 13)), ("C", (CX - 27, 13), (CX - 42, 30), (CX - 41, 58)),
-                                    ("C", (CX - 40, 66), (CX - 37, 72), (CX - 35, 76)), ("C", (CX - 30, 62), (CX - 22, 52), (CX - 8, 46)),
-                                    ("C", (CX + 5, 52), (CX + 18, 64), (CX + 33, 74)), ("C", (CX + 37, 70), (CX + 40, 65), (CX + 41, 58))])
-    elif kind == "parted":
-        segs = [("C", (CX + 27, 13), (CX + 42, 30), (CX + 41, 58)), ("C", (CX + 41, 66), (CX + 38, 72), (CX + 35, 75)),
-                ("C", (CX + 30, 60), (CX + 18, 44), (CX + 2, 36)), ("L", (CX, 35))]
-    elif kind == "short":
-        segs = [("C", (CX + 27, 13), (CX + 41, 28), (CX + 40, 52)), ("C", (CX + 40, 58), (CX + 38, 62), (CX + 36, 64)),
-                ("L", (CX + 30, 56)), ("L", (CX + 25, 61)), ("L", (CX + 19, 54)), ("L", (CX + 12, 60)), ("L", (CX + 6, 53)), ("L", (CX, 58))]
-    else:  # soft, pointed anime bangs
-        segs = [("C", (CX + 27, 13), (CX + 42, 30), (CX + 41, 58)), ("C", (CX + 41, 66), (CX + 39, 71), (CX + 36, 74)),
-                ("C", (CX + 35, 64), (CX + 32, 58), (CX + 29, 55)), ("C", (CX + 28, 62), (CX + 25, 68), (CX + 22, 71)),
-                ("C", (CX + 21, 61), (CX + 19, 55), (CX + 15, 51)), ("C", (CX + 13, 59), (CX + 10, 66), (CX + 6, 69)),
-                ("C", (CX + 5, 60), (CX + 3, 54), (CX, 50))]
-    return sym((CX, 13), segs)
-
-
-def side_locks(length=104, width=6):
-    out = []
-    for s in (1, -1):
-        x = CX + s * 37
-        d = path((x - s * 2, 58), [("C", (x + s * 4, 70), (x + s * 3, length - 20), (x + s * (width - 3), length)),
-                                   ("C", (x - s * 1, length - 6), (x - s * 4, length - 22), (x - s * 4.5, 66))])
-        out.append(L(d, "lin:hair:hairS:100:60:100:" + str(length)))
+    def P(a, b, k=0.0):
+        return (x0 + ux * a * ln - nx * b + bend * k, y0 + uy * a * ln - ny * b)
+    left, right = P(0, w / 2), P(0, -w / 2)
+    edges = [("C", P(0.45, w * 0.6, 0.3), P(0.8, w * 0.34, 1), (x1, y1)),
+             ("C", P(0.74, -w * 0.26, 1), P(0.45, -w * 0.6, 0.3), right)]
+    d = path(left, edges + [("C", P(-4 / ln, -w * 0.2), P(-4 / ln, w * 0.2), left)])
+    out = [L(d, fill or HAIR, alpha=alpha, region="head")]
+    if line:
+        out.append(L(path(left, edges, close=False), stroke="hairD", width=0.7, alpha=0.55, region="head"))
+        out.append(L(path(P(0.35, -w * 0.05), [("C", P(0.52, 0, 0.5), P(0.66, 0, 0.6), P(0.8, w * 0.04, 0.8))], close=False),
+                     stroke="hairD", width=0.5, alpha=0.25, region="head"))
     return out
 
 
-def ring(y=27):
-    """Glossy 'angel ring' arc across the crown with a jagged lower edge."""
-    top = []
-    for x in range(-38, 39, 4):
-        top.append((CX + x, y + (x / 38) ** 2 * 14 - 1))
-    low = []
-    for i, x in enumerate(range(38, -39, -4)):
-        low.append((CX + x, y + (x / 38) ** 2 * 14 + (5.5 if i % 2 else 2.5)))
-    return smooth(top + low, closed=True, t=0.5)
+def crown(top=9.0, side=43.0, low=60.0):
+    """Hair over the top of the skull, down behind the temples (front layer, behind the bangs)."""
+    return sym((CX, top), [("C", (CX + side * 0.62, top), (CX + side, top + 20), (CX + side, low - 12)),
+                           ("C", (CX + side, low - 4), (CX + side - 4, low), (CX + side - 8, low - 3)),
+                           ("C", (CX + 26, 44), (CX + 12, 40), (CX, 40))])
 
 
-MAIN = "lin:hair:hairS:100:14"
+def shine(y=27.0, span=37.0):
+    """Glossy 'angel ring': soft lens-shaped glints along an arc across the crown."""
+    out = []
+    for a, b in [(-0.92, -0.42), (-0.3, 0.3), (0.42, 0.92)]:
+        top, low = [], []
+        for i in range(7):
+            t = a + (b - a) * i / 6
+            x = CX + t * span
+            yy = y + (t ** 2) * 13
+            th = math.sin(math.pi * i / 6)
+            top.append((x, yy - th * 1.6))
+            low.append((x, yy + th * 2.6))
+        out.append(L(smooth(top + low[::-1], closed=True, t=0.8), "hairL", alpha=0.5, region="head"))
+    return out
 
 
-def decorate(front, back):
-    """Gloss, strands and outlines on the main pieces."""
-    out_front, out_back = [], []
-    for i, l in enumerate(back):
-        out_back.append(l)
-        if l.fill and not l.fill.startswith("acc"):
-            out_back.append(L(l.d, stroke="hairD", width=0.9, alpha=0.6))
-    for l in front:
-        out_front.append(l)
-        if l.fill and l.fill.startswith(MAIN):
-            out_front.append(L(ring(), "hairL", alpha=0.55, clip=l.d))
-            for k in (-26, -12, 4, 18, 30):
-                out_front.append(L(path((CX + k * 0.4 + 4, 22), [("C", (CX + k * 0.8, 34), (CX + k * 1.0, 50), (CX + k * 1.05, 68))], close=False),
-                                   stroke="hairD", width=0.7, alpha=0.28, clip=l.d))
-            out_front.append(L(l.d, stroke="hairD", width=0.9, alpha=0.75))
-        elif l.fill and l.fill.startswith("lin:hair"):
-            out_front.append(L(l.d, stroke="hairD", width=0.8, alpha=0.6))
-    return out_back, out_front
+def side_lock(s, top=52.0, bottom=110.0, w=9.0, x=37.0, curl=0.0):
+    """A lock framing the face, from the temple down past the cheek."""
+    return lock((CX + s * x, top), (CX + s * (x - 3 + curl), bottom), w, bend=s * (-2 + curl), fill=None)
+
+
+def back_shape(length, width=46.0, flare=0.0, tips=5, top=8.0):
+    """Hair behind the head and shoulders: rounded top, straight-ish sides, a soft locky hem."""
+    pts = [(CX, top), (CX + width * 0.62, top + 3), (CX + width * 0.95, top + 22), (CX + width, 60)]
+    if length > 100:
+        pts += [(CX + width + 1, 100), (CX + width + 2 + flare * 0.5, (100 + length) / 2), (CX + width + flare, length - 8)]
+    hem = []
+    for i in range(tips + 1):
+        t = i / tips
+        x = CX + (width + flare) * (1 - 2 * t)
+        y = length + (3.5 if i % 2 else -3) - abs(0.5 - t) * 10
+        hem.append((x, y))
+    pts += hem
+    if length > 100:
+        pts += [(CX - width - flare, length - 8), (CX - width - 2 - flare * 0.5, (100 + length) / 2), (CX - width - 1, 100)]
+    pts += [(CX - width, 60), (CX - width * 0.95, top + 22), (CX - width * 0.62, top + 3)]
+    return smooth(pts, closed=True, t=0.85)
+
+
+def back_layer(d, bottom):
+    return [L(d, "lin:hairS:hairD:100:30:100:" + f(bottom), region="head"), L(d, stroke="hairD", width=0.9, alpha=0.6, region="head")]
+
+
+def back_strands(xs, y0, y1):
+    out = []
+    for x in xs:
+        out.append(L(path((CX + x, y0), [("C", (CX + x * 1.05, y0 + (y1 - y0) * 0.35), (CX + x * 1.08, y0 + (y1 - y0) * 0.7), (CX + x * 1.02, y1))], close=False),
+                     stroke="hairD", width=0.8, alpha=0.4, region="head"))
+    return out
+
+
+def front_cap(bottom=74.0):
+    return [L(crown(), HAIR, region="head"), L(crown(), stroke="hairD", width=0.9, alpha=0.6, region="head")]
+
+
+# Bang sets: (root x, root y, tip x, tip y, width, bend)
+BANGS = {
+    "soft": [(-30, 16, -37, 66, 18, -2), (30, 16, 37, 66, 18, 2), (-19, 12, -25, 70, 18, -1), (19, 12, 24, 69, 18, 1),
+             (-8, 10, -11, 67, 17, 0), (9, 10, 10, 72, 17, 1), (1, 9, -1, 61, 12, 0)],
+    "straight": [(-30, 16, -34, 64, 18, -1), (30, 16, 34, 64, 18, 1), (-19, 12, -21, 66, 18, 0), (19, 12, 21, 66, 18, 0),
+                 (-7, 10, -8, 67, 18, 0), (7, 10, 8, 67, 18, 0)],
+    "short": [(-30, 16, -35, 58, 18, -2), (30, 16, 35, 58, 18, 2), (-18, 12, -24, 61, 18, -2), (18, 12, 22, 61, 18, 2),
+              (-6, 10, -10, 60, 17, -1), (7, 10, 6, 63, 17, 0)],
+    "parted": [(-28, 14, -38, 70, 20, -3), (-16, 11, -29, 66, 18, -3), (-5, 10, -18, 58, 16, -3),
+               (28, 14, 38, 70, 20, 3), (16, 11, 29, 66, 18, 3), (5, 10, 18, 58, 16, 3)],
+    "side": [(-30, 16, -38, 70, 18, -2), (-18, 12, -30, 66, 18, -3), (-4, 10, -18, 62, 20, -5), (10, 10, -2, 58, 20, -6),
+             (24, 12, 14, 62, 18, -4), (32, 16, 33, 70, 14, 1)],
+}
+
+
+def bangs(kind):
+    out = []
+    for (rx, ry, tx, ty, w, b) in BANGS[kind]:
+        x = CX + rx
+        out += lock((x, crown_y(x) + 7), (CX + tx, ty), w, b)
+    return out
 
 
 def style(name):
-    back, front = _style(name)
-    return decorate(front, back)
-
-
-def _style(name):
     """-> (back layers, front layers)"""
     back, front = [], []
     if name == "long":
-        back.append(L(sym((CX, 12), [("C", (CX + 30, 12), (CX + 46, 36), (CX + 45, 70)), ("C", (CX + 44, 110), (CX + 52, 160), (CX + 46, 212)),
-                                    ("C", (CX + 38, 222), (CX + 24, 218), (CX + 16, 210)), ("C", (CX + 10, 205), (CX + 5, 208), (CX, 206))]), "lin:hairS:hair:100:20:100:210"))
-        back += strands([((CX + 30, 120), (CX + 36, 150), (CX + 38, 180), (CX + 34, 205)), ((CX - 30, 120), (CX - 36, 150), (CX - 38, 180), (CX - 34, 205))])
-        front.append(L(bangs("soft"), "lin:hair:hairS:100:14:100:74"))
-        front += side_locks(150, 7)
+        d = back_shape(214, 47, flare=4, tips=6)
+        back += back_layer(d, 214) + back_strands([28, 38, -28, -38, 10, -10], 90, 205)
+        front += front_cap() + bangs("soft")
+        for s in (1, -1):
+            front += side_lock(s, 50, 150, 10, 38, curl=1)
+            front += side_lock(s, 54, 124, 7, 33, curl=2)
     elif name == "bob":
-        back.append(L(sym((CX, 12), [("C", (CX + 30, 12), (CX + 46, 34), (CX + 45, 66)), ("C", (CX + 45, 90), (CX + 46, 110), (CX + 42, 124)),
-                                    ("C", (CX + 30, 128), (CX + 15, 125), (CX, 124))]), "lin:hairS:hair:100:20:100:124"))
-        front.append(L(bangs("straight"), "lin:hair:hairS:100:14:100:74"))
+        d = back_shape(122, 47, flare=2, tips=6)
+        back += back_layer(d, 122)
+        front += front_cap() + bangs("straight")
         for s in (1, -1):
-            front.append(L(path((CX + s * 36, 60), [("C", (CX + s * 44, 80), (CX + s * 45, 105), (CX + s * 40, 124)), ("C", (CX + s * 35, 120), (CX + s * 31, 105), (CX + s * 32, 70))]), "lin:hair:hairS:100:60:100:124"))
+            front += lock((CX + s * 39, 46), (CX + s * 39, 123), 13, s * 3)
+            front += lock((CX + s * 34, 52), (CX + s * 31, 116), 9, s * 2)
     elif name == "short":
-        back.append(L(sym((CX, 12), [("C", (CX + 30, 12), (CX + 44, 32), (CX + 42, 60)), ("C", (CX + 42, 76), (CX + 38, 86), (CX + 34, 90)), ("L", (CX, 90))]), "hairS"))
-        front.append(L(bangs("short"), "lin:hair:hairS:100:14:100:66"))
+        d = back_shape(92, 45, tips=5)
+        back += back_layer(d, 92)
+        front += front_cap(64) + bangs("short")
         for s in (1, -1):
-            front.append(L(path((CX + s * 36, 56), [("C", (CX + s * 39, 66), (CX + s * 38, 76), (CX + s * 35, 84)), ("C", (CX + s * 33, 76), (CX + s * 33, 66), (CX + s * 33, 58))]), "hair"))
+            front += lock((CX + s * 38, 46), (CX + s * 37, 86), 10, s * -1)
     elif name == "ponytail":
-        back.append(L(path((CX + 26, 30), [("C", (CX + 52, 26), (CX + 62, 60), (CX + 56, 110)), ("C", (CX + 52, 150), (CX + 60, 175), (CX + 50, 200)),
-                                           ("C", (CX + 44, 170), (CX + 36, 140), (CX + 38, 100)), ("C", (CX + 40, 70), (CX + 36, 46), (CX + 26, 40))]), "lin:hair:hairS:140:40:140:200"))
-        back.append(L(sym((CX, 12), [("C", (CX + 30, 12), (CX + 44, 32), (CX + 42, 62)), ("C", (CX + 42, 80), (CX + 38, 90), (CX + 34, 94)), ("L", (CX, 94))]), "hairS"))
-        back += strands([((CX + 45, 70), (CX + 50, 110), (CX + 48, 150), (CX + 50, 190))])
-        front.append(L(bangs("parted"), "lin:hair:hairS:100:14:100:78"))
-        front.append(L(ell(CX + 34, 33, 4, 5), "acc"))
-        front += side_locks(100, 4)
+        tail = smooth([(CX + 30, 26), (CX + 50, 22), (CX + 62, 46), (CX + 60, 92), (CX + 56, 140), (CX + 62, 178), (CX + 52, 206),
+                       (CX + 46, 176), (CX + 40, 140), (CX + 42, 96), (CX + 44, 60), (CX + 36, 40)], closed=True, t=0.85)
+        back += [L(tail, "lin:hair:hairS:140:30:140:206", region="head"), L(tail, stroke="hairD", width=0.9, alpha=0.6, region="head")]
+        back += back_strands([47, 52], 60, 190)
+        back += back_layer(back_shape(94, 45, tips=5), 94)
+        front += front_cap() + bangs("parted")
+        front.append(L(ell(CX + 36, 30, 4.2, 5.2), "lin:accS:acc:136:25:136:36", region="head"))
+        for s in (1, -1):
+            front += side_lock(s, 54, 100, 6, 36, curl=1)
     elif name == "twintail":
         for s in (1, -1):
-            back.append(L(path((CX + s * 34, 30), [("C", (CX + s * 62, 34), (CX + s * 68, 80), (CX + s * 62, 130)), ("C", (CX + s * 58, 170), (CX + s * 66, 195), (CX + s * 56, 215)),
-                                                   ("C", (CX + s * 48, 180), (CX + s * 44, 150), (CX + s * 46, 110)), ("C", (CX + s * 48, 75), (CX + s * 44, 50), (CX + s * 34, 42))]), "lin:hair:hairS:100:40:100:215"))
-            front.append(L(ell(CX + s * 38, 36, 4.5, 5), "acc"))
-        back.append(L(sym((CX, 12), [("C", (CX + 30, 12), (CX + 44, 32), (CX + 42, 62)), ("C", (CX + 42, 80), (CX + 38, 90), (CX + 34, 94)), ("L", (CX, 94))]), "hairS"))
-        front.append(L(bangs("soft"), "lin:hair:hairS:100:14:100:74"))
-        front += side_locks(104, 5)
+            tail = smooth([(CX + s * 34, 30), (CX + s * 58, 28), (CX + s * 70, 64), (CX + s * 66, 120), (CX + s * 62, 168), (CX + s * 70, 198), (CX + s * 58, 220),
+                           (CX + s * 50, 190), (CX + s * 46, 150), (CX + s * 48, 104), (CX + s * 50, 64), (CX + s * 40, 42)], closed=True, t=0.85)
+            back += [L(tail, "lin:hair:hairS:100:30:100:220", region="head"), L(tail, stroke="hairD", width=0.9, alpha=0.6, region="head")]
+            back += back_strands([s * 56, s * 60], 70, 200)
+        back += back_layer(back_shape(94, 45, tips=5), 94)
+        front += front_cap() + bangs("soft")
+        for s in (1, -1):
+            front.append(L(ell(CX + s * 39, 34, 4.6, 5.4), "lin:accS:acc:100:28:100:40", region="head"))
+            front += side_lock(s, 54, 108, 7, 36, curl=1)
     elif name == "bun":
-        back.append(L(ell(CX, 10, 15, 13), "lin:hairL:hairS:100:-2:100:22"))
-        back.append(L(sym((CX, 12), [("C", (CX + 30, 12), (CX + 44, 32), (CX + 42, 62)), ("C", (CX + 42, 80), (CX + 38, 90), (CX + 34, 94)), ("L", (CX, 94))]), "hairS"))
-        front.append(L(ell(CX, 10, 15, 13), "lin:hairL:hair:100:-2:100:22"))
-        front.append(L(path((CX - 15, 14), [("C", (CX - 5, 18), (CX + 5, 18), (CX + 15, 14))], close=False), stroke="acc", width=2.5))
-        front.append(L(bangs("side"), "lin:hair:hairS:100:14:100:78"))
-        front += side_locks(98, 3.5)
+        bun = ell(CX, 9, 15, 12.5)
+        back += [L(bun, "lin:hair:hairS:100:-3:100:21", region="head"), L(bun, stroke="hairD", width=0.9, alpha=0.6, region="head")]
+        back += back_layer(back_shape(92, 45, tips=5), 92)
+        front += [L(bun, "lin:hairL:hairS:100:-6:100:21", region="head"), L(bun, stroke="hairD", width=0.9, alpha=0.6, region="head")]
+        front += [L(path((CX - 10, 2), [("C", (CX - 5, 8), (CX + 2, 9), (CX + 9, 4))], close=False), stroke="hairD", width=0.7, alpha=0.4, region="head")]
+        front.append(L(path((CX - 14, 15), [("C", (CX - 5, 19), (CX + 5, 19), (CX + 14, 15))], close=False), stroke="acc", width=2.6, region="head"))
+        front += front_cap() + bangs("side")
+        for s in (1, -1):
+            front += side_lock(s, 56, 100, 5, 36, curl=1.5)
     elif name == "spiky":
-        back.append(L(sym((CX, 12), [("C", (CX + 30, 12), (CX + 44, 32), (CX + 42, 60)), ("C", (CX + 42, 76), (CX + 38, 86), (CX + 34, 90)), ("L", (CX, 90))]), "hairS"))
-        spikes = [("L", (CX + 10, 0)), ("L", (CX + 16, 10)), ("L", (CX + 30, 3)), ("L", (CX + 31, 16)), ("L", (CX + 46, 18)), ("L", (CX + 40, 30)),
-                  ("L", (CX + 50, 42)), ("L", (CX + 41, 48)), ("C", (CX + 42, 58), (CX + 40, 64), (CX + 37, 68)), ("L", (CX + 31, 58)), ("L", (CX + 26, 66)),
-                  ("L", (CX + 19, 55)), ("L", (CX + 12, 64)), ("L", (CX + 6, 53)), ("L", (CX, 60))]
-        front.append(L(sym((CX, 4), spikes), MAIN + ":100:66"))
+        back += back_layer(back_shape(90, 45, tips=5), 90)
+        for (rx, ry, tx, ty, w) in [(-34, 38, -51, 30, 16), (34, 38, 51, 32, 16), (-24, 28, -36, 8, 17), (24, 28, 37, 9, 17),
+                                    (-10, 24, -14, 2, 17), (11, 24, 16, 3, 17)]:
+            front += lock((CX + rx, ry), (CX + tx, ty), w)
+        front += front_cap(64) + bangs("short")
+        for s in (1, -1):
+            front += lock((CX + s * 38, 44), (CX + s * 41, 86), 10, s * 2)
     elif name == "curly":
-        import math
         def wavy(rx, ry, cy, n, amp, start, end):
             pts = []
             for i in range(n + 1):
@@ -150,15 +193,24 @@ def _style(name):
                 r = 1 + (amp if i % 2 else -amp * 0.4)
                 pts.append((CX + math.cos(t) * rx * r, cy - math.sin(t) * ry * r))
             return pts
-        outer = wavy(50, 60, 66, 26, 0.07, math.radians(-75), math.radians(255))
-        back.append(L(smooth(outer + [(CX, 118)], closed=True, t=0.8), "hairS"))
-        crown = wavy(44, 50, 60, 20, 0.08, math.radians(-15), math.radians(195))
-        crown += [(CX - 30, 62), (CX - 20, 52), (CX - 8, 58), (CX + 4, 50), (CX + 16, 58), (CX + 28, 52), (CX + 36, 62)]
-        front.append(L(smooth(crown, closed=True, t=0.8), MAIN + ":100:66"))
-        for (x, y) in [(CX - 30, 30), (CX - 10, 20), (CX + 12, 22), (CX + 32, 34), (CX - 40, 52), (CX + 42, 56), (CX - 18, 42), (CX + 20, 44)]:
-            front.append(L(path((x - 4, y + 2), [("C", (x - 4, y - 4), (x + 4, y - 4), (x + 4, y + 1)), ("C", (x + 4, y + 4), (x, y + 4), (x - 1, y + 1))], close=False),
-                           stroke="hairD", width=0.9, alpha=0.5))
+        outer = wavy(52, 60, 64, 26, 0.07, math.radians(-75), math.radians(255))
+        d = smooth(outer + [(CX, 116)], closed=True, t=0.8)
+        back += back_layer(d, 120)
+        cr = wavy(46, 52, 60, 20, 0.08, math.radians(-12), math.radians(192))
+        cr += [(CX - 34, 64), (CX - 24, 54), (CX - 12, 62), (CX, 52), (CX + 12, 62), (CX + 24, 54), (CX + 34, 64)]
+        cd = smooth(cr, closed=True, t=0.8)
+        front += [L(cd, HAIR, region="head"), L(cd, stroke="hairD", width=0.9, alpha=0.6, region="head")]
+        for (x, y) in [(CX - 30, 28), (CX - 10, 18), (CX + 12, 20), (CX + 32, 32), (CX - 40, 50), (CX + 42, 54), (CX - 18, 40), (CX + 20, 42), (CX, 32)]:
+            front.append(L(path((x - 4.5, y + 2), [("C", (x - 4.5, y - 4.5), (x + 4.5, y - 4.5), (x + 4.5, y + 1)), ("C", (x + 4.5, y + 4.5), (x, y + 4.5), (x - 1, y + 1))], close=False),
+                           stroke="hairD", width=0.9, alpha=0.5, region="head"))
+            front.append(L(ell(x - 1, y - 2, 2.2, 1.2), "hairL", alpha=0.4, region="head"))
+        return back, front
     elif name == "buzz":
-        front.append(L(sym((CX, 18), [("C", (CX + 26, 18), (CX + 37, 32), (CX + 36, 54)), ("C", (CX + 35, 52), (CX + 30, 44), (CX + 24, 41)),
-                                     ("C", (CX + 16, 38), (CX + 8, 39), (CX, 40))]), MAIN + ":100:52", alpha=0.95))
+        d = sym((CX, 17), [("C", (CX + 25, 17), (CX + 36.5, 31), (CX + 36, 54)), ("C", (CX + 35, 52), (CX + 31, 45), (CX + 25, 41)),
+                           ("C", (CX + 16, 37.5), (CX + 8, 38), (CX, 39))])
+        front += [L(d, HAIR, alpha=0.95, region="head"), L(d, stroke="hairD", width=0.8, alpha=0.5, region="head")]
+        for k in range(-5, 6):
+            front.append(L(ell(CX + k * 5.5, 30 + abs(k) * 1.2, 0.6, 0.6), "hairD", alpha=0.35, region="head"))
+        return back, front
+    front += shine()
     return back, front

@@ -8,6 +8,7 @@ import com.today.app.data.FaceFeature
 import com.today.app.data.FaceShape
 import com.today.app.data.ShoeStyle
 import com.today.app.data.TopStyle
+import com.today.app.data.Tune
 import com.today.app.data.HairStyle
 import com.today.app.data.MissionType
 import com.today.app.data.Mood
@@ -163,6 +164,11 @@ interface FeatureStrings {
     fun msgLookLoaded(n: Int): String
     val msgSlotEmpty: String
     fun bodyName(b: BodyType): String
+    /** Fine-tune slider label and what its two ends do. */
+    fun tuneName(t: Tune): String
+    fun tuneEnds(t: Tune): Pair<String, String>
+    val secFineTune: String
+    val tuneReset: String
     fun faceShapeName(f: FaceShape): String
     fun eyeStyleName(e: EyeStyle): String
     fun browName(b: BrowStyle): String
@@ -410,7 +416,7 @@ object KoFeatureStrings : FeatureStrings {
     override val creatorConfirm = "외형 결정"
     override val creatorRandom = "무작위 외형"
     override val creatorReset = "전체 초기화"
-    override fun creatorTab(i: Int) = listOf("프리셋", "체형", "얼굴", "눈", "헤어", "메이크업", "의상").getOrElse(i) { "" }
+    override fun creatorTab(i: Int) = listOf("프리셋", "체형", "얼굴", "눈", "코·입", "헤어", "메이크업", "의상").getOrElse(i) { "" }
     override val creatorPresetHint = "얼굴, 눈, 피부, 머리 등 모든 것이 포함된 외형"
     override val creatorSlots = "커스터마이징 저장 / 불러오기"
     override val creatorSave = "저장"
@@ -427,6 +433,25 @@ object KoFeatureStrings : FeatureStrings {
     override fun msgLookLoaded(n: Int) = "슬롯 ${n}의 외형을 불러왔어요"
     override val msgSlotEmpty = "빈 슬롯이에요. 먼저 저장해 주세요"
     override fun bodyName(b: BodyType) = when (b) { BodyType.SLIM -> "슬림형"; BodyType.BROAD -> "건장형" }
+    override fun tuneName(t: Tune) = when (t) {
+        Tune.HEAD_SIZE -> "머리 크기"; Tune.SHOULDERS -> "어깨 너비"; Tune.WAIST -> "허리"; Tune.HIPS -> "골반"; Tune.LEGS -> "다리 길이"; Tune.LIMBS -> "팔다리 두께"
+        Tune.FACE_WIDTH -> "얼굴 너비"; Tune.CHEEKS -> "볼살"; Tune.JAW -> "턱 길이"; Tune.CHIN -> "턱끝 모양"
+        Tune.EYE_SIZE -> "눈 크기"; Tune.EYE_HEIGHT -> "눈 높이"; Tune.EYE_SPACING -> "눈 간격"; Tune.EYE_TILT -> "눈꼬리"
+        Tune.BROW_HEIGHT -> "눈썹 높이"; Tune.BROW_TILT -> "눈썹 각도"; Tune.BROW_THICKNESS -> "눈썹 두께"
+        Tune.NOSE_SIZE -> "코 크기"; Tune.NOSE_HEIGHT -> "코 높이"; Tune.MOUTH_SIZE -> "입 크기"; Tune.MOUTH_HEIGHT -> "입 위치"
+    }
+    override fun tuneEnds(t: Tune) = when (t) {
+        Tune.HEAD_SIZE, Tune.EYE_SIZE, Tune.NOSE_SIZE, Tune.MOUTH_SIZE -> "작게" to "크게"
+        Tune.SHOULDERS, Tune.WAIST, Tune.HIPS, Tune.FACE_WIDTH, Tune.EYE_SPACING -> "좁게" to "넓게"
+        Tune.LEGS, Tune.JAW -> "짧게" to "길게"
+        Tune.LIMBS, Tune.BROW_THICKNESS -> "얇게" to "두껍게"
+        Tune.CHEEKS -> "갸름하게" to "통통하게"
+        Tune.CHIN -> "뾰족하게" to "둥글게"
+        Tune.EYE_HEIGHT, Tune.BROW_HEIGHT, Tune.NOSE_HEIGHT, Tune.MOUTH_HEIGHT -> "아래로" to "위로"
+        Tune.EYE_TILT, Tune.BROW_TILT -> "처지게" to "올라가게"
+    }
+    override val secFineTune = "세부 조정"
+    override val tuneReset = "초기화"
     override fun faceShapeName(f: FaceShape) = when (f) { FaceShape.OVAL -> "계란형"; FaceShape.ROUND -> "둥근형"; FaceShape.SHARP -> "갸름형"; FaceShape.SQUARE -> "각진형" }
     override fun eyeStyleName(e: EyeStyle) = when (e) { EyeStyle.ALMOND -> "아몬드"; EyeStyle.ROUND -> "동글"; EyeStyle.SHARP -> "날렵"; EyeStyle.GENTLE -> "순한" }
     override fun browName(b: BrowStyle) = when (b) { BrowStyle.NATURAL -> "자연"; BrowStyle.ARCHED -> "아치"; BrowStyle.STRAIGHT -> "일자"; BrowStyle.THICK -> "진한" }
@@ -664,7 +689,7 @@ object EnFeatureStrings : FeatureStrings {
     override val creatorConfirm = "Confirm Look"
     override val creatorRandom = "Randomize"
     override val creatorReset = "Reset All"
-    override fun creatorTab(i: Int) = listOf("Presets", "Body", "Face", "Eyes", "Hair", "Makeup", "Outfit").getOrElse(i) { "" }
+    override fun creatorTab(i: Int) = listOf("Presets", "Body", "Face", "Eyes", "Nose·Lips", "Hair", "Makeup", "Outfit").getOrElse(i) { "" }
     override val creatorPresetHint = "Complete looks: face, eyes, skin, hair and more"
     override val creatorSlots = "Save / load customization"
     override val creatorSave = "Save"
@@ -681,6 +706,25 @@ object EnFeatureStrings : FeatureStrings {
     override fun msgLookLoaded(n: Int) = "Loaded the look in slot $n"
     override val msgSlotEmpty = "That slot is empty. Save a look first"
     override fun bodyName(b: BodyType) = when (b) { BodyType.SLIM -> "Slim"; BodyType.BROAD -> "Broad" }
+    override fun tuneName(t: Tune) = when (t) {
+        Tune.HEAD_SIZE -> "Head size"; Tune.SHOULDERS -> "Shoulders"; Tune.WAIST -> "Waist"; Tune.HIPS -> "Hips"; Tune.LEGS -> "Leg length"; Tune.LIMBS -> "Arms & legs"
+        Tune.FACE_WIDTH -> "Face width"; Tune.CHEEKS -> "Cheeks"; Tune.JAW -> "Jaw length"; Tune.CHIN -> "Chin shape"
+        Tune.EYE_SIZE -> "Eye size"; Tune.EYE_HEIGHT -> "Eye height"; Tune.EYE_SPACING -> "Eye spacing"; Tune.EYE_TILT -> "Eye tilt"
+        Tune.BROW_HEIGHT -> "Brow height"; Tune.BROW_TILT -> "Brow angle"; Tune.BROW_THICKNESS -> "Brow thickness"
+        Tune.NOSE_SIZE -> "Nose size"; Tune.NOSE_HEIGHT -> "Nose height"; Tune.MOUTH_SIZE -> "Mouth size"; Tune.MOUTH_HEIGHT -> "Mouth height"
+    }
+    override fun tuneEnds(t: Tune) = when (t) {
+        Tune.HEAD_SIZE, Tune.EYE_SIZE, Tune.NOSE_SIZE, Tune.MOUTH_SIZE -> "Smaller" to "Bigger"
+        Tune.SHOULDERS, Tune.WAIST, Tune.HIPS, Tune.FACE_WIDTH, Tune.EYE_SPACING -> "Narrow" to "Wide"
+        Tune.LEGS, Tune.JAW -> "Shorter" to "Longer"
+        Tune.LIMBS, Tune.BROW_THICKNESS -> "Thinner" to "Thicker"
+        Tune.CHEEKS -> "Slim" to "Full"
+        Tune.CHIN -> "Pointed" to "Round"
+        Tune.EYE_HEIGHT, Tune.BROW_HEIGHT, Tune.NOSE_HEIGHT, Tune.MOUTH_HEIGHT -> "Lower" to "Higher"
+        Tune.EYE_TILT, Tune.BROW_TILT -> "Down" to "Up"
+    }
+    override val secFineTune = "Fine-tune"
+    override val tuneReset = "Reset"
     override fun faceShapeName(f: FaceShape) = when (f) { FaceShape.OVAL -> "Oval"; FaceShape.ROUND -> "Round"; FaceShape.SHARP -> "Slender"; FaceShape.SQUARE -> "Square" }
     override fun eyeStyleName(e: EyeStyle) = when (e) { EyeStyle.ALMOND -> "Almond"; EyeStyle.ROUND -> "Round"; EyeStyle.SHARP -> "Sharp"; EyeStyle.GENTLE -> "Gentle" }
     override fun browName(b: BrowStyle) = when (b) { BrowStyle.NATURAL -> "Natural"; BrowStyle.ARCHED -> "Arched"; BrowStyle.STRAIGHT -> "Straight"; BrowStyle.THICK -> "Bold" }

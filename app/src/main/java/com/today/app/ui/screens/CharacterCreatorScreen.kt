@@ -40,6 +40,8 @@ import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material.icons.filled.ZoomOut
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -77,6 +79,8 @@ import com.today.app.data.Outfits
 import com.today.app.data.ShoeStyle
 import com.today.app.data.TodayViewModel
 import com.today.app.data.TopStyle
+import com.today.app.data.Tune
+import com.today.app.data.TuneGroup
 import com.today.app.i18n.LocalStrings
 import com.today.app.ui.components.AvatarHead
 import com.today.app.ui.components.CharacterStage
@@ -120,6 +124,8 @@ fun CharacterCreatorScreen(vm: TodayViewModel) {
         haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
         draft = f(draft)
     }
+    // Sliders change continuously: no haptic tick per step.
+    val tune: (Tune, Float) -> Unit = { t, v -> draft = draft.withTune(t, v) }
     val leave = { if (draft != original) confirmDiscard = true else vm.closeCreator() }
     BackHandler(onBack = leave)
 
@@ -194,14 +200,18 @@ fun CharacterCreatorScreen(vm: TodayViewModel) {
                     .border(1.dp, TileLine, RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)),
             ) {
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf("✨", "🧍", "🙂", "👁", "💇", "💄", "👕").forEachIndexed { i, icon ->
+                    listOf("✨", "🧍", "🙂", "👁", "👄", "💇", "💄", "👕").forEachIndexed { i, icon ->
                         val on = tab == i
                         Column(
                             Modifier
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(if (on) GoldC.copy(alpha = 0.18f) else TileBg)
                                 .border(1.5.dp, if (on) GoldC else TileLine, RoundedCornerShape(12.dp))
-                                .clickable { tab = i }
+                                .clickable {
+                                    tab = i
+                                    // Face, eyes and nose / mouth edits are easier to see up close.
+                                    zoomed = i in 2..4
+                                }
                                 .padding(horizontal = 12.dp, vertical = 6.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
@@ -218,11 +228,12 @@ fun CharacterCreatorScreen(vm: TodayViewModel) {
                 ) {
                     when (tab) {
                         0 -> PresetsTab(draft, edit)
-                        1 -> BodyTab(draft, edit)
-                        2 -> FaceTab(draft, edit)
-                        3 -> EyesTab(draft, edit)
-                        4 -> HairTab(draft, edit)
-                        5 -> MakeupTab(draft, edit)
+                        1 -> BodyTab(draft, edit, tune)
+                        2 -> FaceTab(draft, edit, tune)
+                        3 -> EyesTab(draft, edit, tune)
+                        4 -> NoseMouthTab(draft, edit, tune)
+                        5 -> HairTab(draft, edit)
+                        6 -> MakeupTab(draft, edit)
                         else -> OutfitTab(draft, edit)
                     }
                     Spacer(Modifier.height(8.dp))
@@ -413,7 +424,7 @@ private fun ColumnScope.PresetsTab(d: Outfit, edit: ((Outfit) -> Outfit) -> Unit
 }
 
 @Composable
-private fun ColumnScope.BodyTab(d: Outfit, edit: ((Outfit) -> Outfit) -> Unit) {
+private fun ColumnScope.BodyTab(d: Outfit, edit: ((Outfit) -> Outfit) -> Unit, tune: (Tune, Float) -> Unit) {
     val s = LocalStrings.current
     Section(s.creatorTab(1))
     TileGrid(BodyType.entries, 4) { b, m ->
@@ -421,15 +432,17 @@ private fun ColumnScope.BodyTab(d: Outfit, edit: ((Outfit) -> Outfit) -> Unit) {
     }
     Section(s.secSkin)
     Swatches(Outfits.skinTones, d.skin) { c -> edit { it.copy(skin = c) } }
+    TuneSliders(d, TuneGroup.BODY, edit, tune)
 }
 
 @Composable
-private fun ColumnScope.FaceTab(d: Outfit, edit: ((Outfit) -> Outfit) -> Unit) {
+private fun ColumnScope.FaceTab(d: Outfit, edit: ((Outfit) -> Outfit) -> Unit, tune: (Tune, Float) -> Unit) {
     val s = LocalStrings.current
     Section(s.creatorTab(2))
     TileGrid(FaceShape.entries, 4) { f, m ->
         Tile(d.faceShape == f, { edit { it.copy(faceShape = f) } }, m, s.faceShapeName(f)) { AvatarHead(d.copy(faceShape = f).withoutAccessories(), Modifier.fillMaxSize()) }
     }
+    TuneSliders(d, TuneGroup.FACE, edit, tune)
     Section(s.featuresTitle)
     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         FaceFeature.entries.forEach { f ->
@@ -440,7 +453,7 @@ private fun ColumnScope.FaceTab(d: Outfit, edit: ((Outfit) -> Outfit) -> Unit) {
 }
 
 @Composable
-private fun ColumnScope.EyesTab(d: Outfit, edit: ((Outfit) -> Outfit) -> Unit) {
+private fun ColumnScope.EyesTab(d: Outfit, edit: ((Outfit) -> Outfit) -> Unit, tune: (Tune, Float) -> Unit) {
     val s = LocalStrings.current
     Section(s.creatorTab(3))
     TileGrid(EyeStyle.entries, 4) { e, m ->
@@ -448,12 +461,67 @@ private fun ColumnScope.EyesTab(d: Outfit, edit: ((Outfit) -> Outfit) -> Unit) {
             AvatarHead(d.copy(eyeStyle = e).withoutAccessories(), Modifier.fillMaxSize(), box = HeadBox.EYES)
         }
     }
+    TuneSliders(d, TuneGroup.EYES, edit, tune)
     Section(s.secEyeColor)
     Swatches(Outfits.eyeColors, d.eyeColor) { c -> edit { it.copy(eyeColor = c) } }
     Section(s.secBrows)
     TileGrid(BrowStyle.entries, 4) { b, m ->
         Tile(d.browStyle == b, { edit { it.copy(browStyle = b) } }, m, s.browName(b), aspect = HeadBox.EYES.rect.width / HeadBox.EYES.rect.height) {
             AvatarHead(d.copy(browStyle = b).withoutAccessories(), Modifier.fillMaxSize(), box = HeadBox.EYES)
+        }
+    }
+    TuneSliders(d, TuneGroup.BROWS, edit, tune)
+}
+
+@Composable
+private fun ColumnScope.NoseMouthTab(d: Outfit, edit: ((Outfit) -> Outfit) -> Unit, tune: (Tune, Float) -> Unit) {
+    val s = LocalStrings.current
+    Section(s.creatorTab(4))
+    TuneSliders(d, TuneGroup.NOSE_MOUTH, edit, tune, title = false)
+    Section(s.secLip)
+    Swatches(Outfits.lipColors, d.lipColor) { c -> edit { it.copy(lipColor = c) } }
+}
+
+/** The fine-tune sliders of one [group], with a reset for the whole group. */
+@Composable
+private fun TuneSliders(d: Outfit, group: TuneGroup, edit: ((Outfit) -> Outfit) -> Unit, tune: (Tune, Float) -> Unit, title: Boolean = true) {
+    val s = LocalStrings.current
+    val tunes = Tune.entries.filter { it.group == group }
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (title) Text(s.secFineTune, color = GoldC, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.weight(1f))
+            if (tunes.any { d.tuned(it) != 0f }) {
+                Text(
+                    "↺ " + s.tuneReset, color = Muted, fontSize = 11.sp,
+                    modifier = Modifier.clip(RoundedCornerShape(6.dp)).clickable { edit { o -> tunes.fold(o) { acc, t -> acc.withTune(t, 0f) } } }.padding(horizontal = 6.dp, vertical = 2.dp),
+                )
+            }
+        }
+        tunes.forEach { t -> TuneSlider(t, d.tuned(t)) { tune(t, it) } }
+    }
+}
+
+@Composable
+private fun TuneSlider(t: Tune, value: Float, onChange: (Float) -> Unit) {
+    val s = LocalStrings.current
+    val (low, high) = s.tuneEnds(t)
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(s.tuneName(t), color = TextC, fontSize = 12.sp, modifier = Modifier.width(78.dp))
+            Text(low, color = Muted, fontSize = 9.sp, maxLines = 1, modifier = Modifier.width(44.dp), textAlign = TextAlign.End)
+            Slider(
+                value = value,
+                onValueChange = onChange,
+                valueRange = -1f..1f,
+                modifier = Modifier.weight(1f).height(30.dp).padding(horizontal = 4.dp),
+                colors = SliderDefaults.colors(thumbColor = GoldC, activeTrackColor = TileLine, inactiveTrackColor = TileLine),
+            )
+            Text(high, color = Muted, fontSize = 9.sp, maxLines = 1, modifier = Modifier.width(44.dp))
+            Text(
+                "%+d".format((value * 50).toInt()).let { if (value == 0f) "0" else it }, color = if (value == 0f) Muted else GoldC, fontSize = 11.sp,
+                textAlign = TextAlign.End, modifier = Modifier.width(26.dp).clickable { onChange(0f) },
+            )
         }
     }
 }
@@ -474,8 +542,7 @@ private fun ColumnScope.HairTab(d: Outfit, edit: ((Outfit) -> Outfit) -> Unit) {
 @Composable
 private fun ColumnScope.MakeupTab(d: Outfit, edit: ((Outfit) -> Outfit) -> Unit) {
     val s = LocalStrings.current
-    Section(s.secLip)
-    Swatches(Outfits.lipColors, d.lipColor) { c -> edit { it.copy(lipColor = c) } }
+    Section(s.secBlush)
     TileGrid(listOf(false, true), 4) { b, m ->
         Tile(d.blush == b, { edit { it.copy(blush = b) } }, m, if (b) s.secBlush else "—") { AvatarHead(d.copy(blush = b).withoutAccessories(), Modifier.fillMaxSize()) }
     }

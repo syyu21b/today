@@ -1,6 +1,6 @@
 """Composes a character from options and renders preview sheets through headless Chrome."""
 import os, subprocess, sys
-import parts, hair, clothes, acc
+import parts, hair, clothes, acc, warp
 from geo import L
 
 D = os.path.dirname(os.path.abspath(__file__))
@@ -33,29 +33,39 @@ def roles(o):
     }
 
 
+def tagged(layers_, region):
+    for l in layers_:
+        if l.region is None:
+            l.region = region
+    return layers_
+
+
 def layers(o):
+    """The character's layers in drawing order, warped by the base pose and o["tune"] (fine-tune sliders)."""
     bt = o.get("body", "F")
     back, front = hair.style(o.get("hairStyle", "long"))
-    accs = [acc.accessory(a) for a in o.get("acc_items", [])]
+    accs = [tuple(tagged(x, "torso" if a == "cape" else "head") for x in acc.accessory(a)) for a in o.get("acc_items", [])]
+    mood = o.get("mood", "normal")
     out = []
-    out += back
+    out += tagged(back, "head")
     for b, _ in accs:
-        out += b
-    out += parts.body(bt)
-    out += parts.arms(bt)
-    out += clothes.bottom(bt, o.get("bottomKind", "pants")) if o.get("topKind") != "dress" else []
-    out += clothes.shoes(bt, o.get("shoesKind", "sneakers"))
-    out += clothes.top(bt, o.get("topKind", "tee"), o.get("sleeve", "short"))
-    out += parts.head(o.get("face", "oval"))
-    out += parts.blush(o.get("blushStrong", False))
-    out += parts.nose()
-    out += acc.features(o.get("features", []))
-    out += parts.mouth(o.get("mood", "normal"))
-    out += parts.eyes(o.get("eyes", "almond"), o.get("mood", "normal"), bt)
-    out += front
-    out += parts.brows(o.get("brows", "natural"), o.get("mood", "normal"))
+        out += tagged(b, "head")
+    out += tagged(parts.body(bt), "torso")
+    out += tagged(clothes.bottom(bt, o.get("bottomKind", "pants")), "torso") if o.get("topKind") != "dress" else []
+    out += tagged(clothes.shoes(bt, o.get("shoesKind", "sneakers")), "torso")
+    out += tagged(parts.arms(bt), "torso")
+    out += tagged(clothes.top(bt, o.get("topKind", "tee"), o.get("sleeve", "short")), "torso")
+    out += tagged(parts.hands(bt), "torso")
+    face = parts.head(o.get("face", "oval")) + parts.blush(o.get("blushStrong", False)) + parts.nose() + acc.features(o.get("features", []))         + parts.mouth(mood) + parts.eyes(o.get("eyes", "almond"), mood, bt) + front + parts.brows(o.get("brows", "natural"), mood)
+    out += tagged(face, "head")
     for _, fr in accs:
-        out += fr
+        out += tagged(fr, "head")
+    tune = o.get("tune", {})
+    for l in out:
+        l.d = warp.warp_path(l.d, l.region, bt, tune)
+        if l.clip:
+            l.clip = warp.warp_path(l.clip, l.region, bt, tune)
+        l.fill = warp.warp_paint(l.fill, l.region, bt, tune)
     return out
 
 
@@ -119,5 +129,8 @@ if __name__ == "__main__":
         sheet([dict(BASE_F, acc_items=[i]) for i in items], "accs.png", scale=2.2, crop=(30, -50, 140, 190), cols=7)
         sheet([dict(BASE_F, acc_items=["cape"]), dict(BASE_M, features=["beard", "wrinkles"], hair="#9E9EA8", acc_items=["strawhat"]),
                dict(BASE_M, features=["mustache"], hairStyle="curly"), dict(BASE_F, features=["freckles"], hairStyle="twintail", hair="#E8B45A")], "feat.png", scale=1.8, cols=4)
+    elif what == "hair":
+        hs = ["short", "long", "bob", "ponytail", "twintail", "bun", "spiky", "curly", "buzz"]
+        sheet([dict(BASE_F if i % 2 == 0 else BASE_M, hairStyle=h, hair=["#7A5038", "#D9A84E", "#2E2A3A"][i % 3]) for i, h in enumerate(hs)], "hair.png", scale=2.4, crop=(20, -15, 160, 160), cols=5)
     elif what == "face":
         sheet([BASE_F, BASE_M], "face.png", scale=6, crop=(55, 0, 90, 130))

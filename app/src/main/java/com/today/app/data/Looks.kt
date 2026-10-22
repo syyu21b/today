@@ -19,6 +19,7 @@ data class Look(
     fun applyTo(o: Outfit) = o.copy(
         body = body, faceShape = face, eyeStyle = eyes, browStyle = brows, hairStyle = hairStyle, longHair = hairStyle.long,
         hair = hair.toInt(), skin = skin.toInt(), eyeColor = iris.toInt(), lipColor = lip.toInt(), blush = blush, features = features,
+        tune = emptyMap(),
     )
 
     /** Same face and hair as [o]? (drives the selected preset tile) */
@@ -61,7 +62,23 @@ object Looks {
         lipColor = Outfits.lipColors.random(r),
         blush = r.nextBoolean(),
         features = emptySet(),
+        // A few gentle slider nudges so random faces differ in more than the presets do.
+        tune = Tune.entries.shuffled(r).take(6).associateWith { (r.nextFloat() * 1.2f - 0.6f) },
     ).let { it.copy(longHair = it.style.long) }
+
+    /**
+     * Friends made before the creator existed all share the default face: give each one a face preset
+     * picked from its id (stable across launches). Faces someone already chose are kept.
+     */
+    fun forFriend(o: Outfit, id: String): Outfit {
+        val untouched = o.hairStyle == null && o.faceShape == FaceShape.OVAL && o.eyeStyle == EyeStyle.ALMOND && o.browStyle == BrowStyle.NATURAL &&
+            o.tune.isEmpty() && o.eyeColor == DEFAULT_EYE_COLOR
+        if (!untouched) return o
+        val look = presets[Math.floorMod(id.hashCode(), presets.size)]
+        // Keep the friend's own hair colour and length so their outfit preset still reads the same.
+        val hair = if (o.longHair == look.hairStyle.long) look.hairStyle else if (o.longHair) HairStyle.LONG else HairStyle.SHORT
+        return look.copy(hairStyle = hair, hair = o.hair.toLong() and 0xFFFFFFFFL).applyTo(o)
+    }
 
     /** "전체 초기화": the first preset on default clothes. */
     fun reset(o: Outfit): Outfit = presets.first().applyTo(Outfits.presets.first().withAccessoriesOf(o))

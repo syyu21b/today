@@ -52,6 +52,22 @@ enum class TopStyle { TEE, KNIT, HOODIE, JACKET, DRESS }
 enum class BottomStyle { PANTS, SHORTS, SKIRT }
 enum class ShoeStyle { SNEAKERS, BOOTS }
 
+/** Which creator tab a fine-tune slider sits in. */
+enum class TuneGroup { BODY, FACE, EYES, BROWS, NOSE_MOUTH }
+
+/**
+ * Fine-tune sliders of the character creator, each -1..1 (0 = as drawn). [art] names the morph target
+ * in character_art.json; the rest move, scale or tilt a feature when it is drawn (PixelAvatar.kt).
+ */
+enum class Tune(val group: TuneGroup, val art: String? = null) {
+    HEAD_SIZE(TuneGroup.BODY), SHOULDERS(TuneGroup.BODY, "shoulders"), WAIST(TuneGroup.BODY, "waist"), HIPS(TuneGroup.BODY, "hips"),
+    LEGS(TuneGroup.BODY, "legs"), LIMBS(TuneGroup.BODY, "limbs"),
+    FACE_WIDTH(TuneGroup.FACE, "faceWidth"), CHEEKS(TuneGroup.FACE, "cheeks"), JAW(TuneGroup.FACE, "jaw"), CHIN(TuneGroup.FACE, "chin"),
+    EYE_SIZE(TuneGroup.EYES), EYE_HEIGHT(TuneGroup.EYES), EYE_SPACING(TuneGroup.EYES), EYE_TILT(TuneGroup.EYES),
+    BROW_HEIGHT(TuneGroup.BROWS), BROW_TILT(TuneGroup.BROWS), BROW_THICKNESS(TuneGroup.BROWS),
+    NOSE_SIZE(TuneGroup.NOSE_MOUTH), NOSE_HEIGHT(TuneGroup.NOSE_MOUTH), MOUTH_SIZE(TuneGroup.NOSE_MOUTH), MOUTH_HEIGHT(TuneGroup.NOSE_MOUTH),
+}
+
 const val DEFAULT_EYE_COLOR = 0xFF6B4FD0.toInt()
 const val DEFAULT_LIP_COLOR = 0xFFE8707E.toInt()
 
@@ -93,9 +109,19 @@ data class Outfit(
     /** null = follow [shorts] (presets and photo styles). */
     val bottomStyle: BottomStyle? = null,
     val shoeStyle: ShoeStyle = ShoeStyle.SNEAKERS,
+    /** Fine-tune slider values (-1..1); missing = 0. */
+    val tune: Map<Tune, Float> = emptyMap(),
 ) {
     val style: HairStyle get() = hairStyle ?: if (longHair) HairStyle.LONG else HairStyle.SHORT
     val bottom: BottomStyle get() = bottomStyle ?: if (shorts) BottomStyle.SHORTS else BottomStyle.PANTS
+
+    fun tuned(t: Tune): Float = tune[t] ?: 0f
+
+    /** Sets one slider; values near 0 are dropped so an untouched character compares equal. */
+    fun withTune(t: Tune, value: Float): Outfit {
+        val v = value.coerceIn(-1f, 1f)
+        return copy(tune = if (kotlin.math.abs(v) < 0.02f) tune - t else tune + (t to v))
+    }
 
     fun accessoryIn(slot: AccessorySlot) = when (slot) {
         AccessorySlot.HEAD -> head
@@ -118,7 +144,7 @@ data class Outfit(
     fun withBodyOf(other: Outfit) = withAccessoriesOf(other).copy(
         hairStyle = other.hairStyle, features = other.features, skin = other.skin,
         body = other.body, faceShape = other.faceShape, eyeStyle = other.eyeStyle, browStyle = other.browStyle,
-        eyeColor = other.eyeColor, lipColor = other.lipColor, blush = other.blush,
+        eyeColor = other.eyeColor, lipColor = other.lipColor, blush = other.blush, tune = other.tune,
     )
 }
 
@@ -326,7 +352,7 @@ object DummyData {
         Friend("f3", "서연", "Seoyeon", "seoyeon.run", Outfits.presets[4], online = false, level = 15),
         Friend("f4", "도윤", "Doyoon", "doyoon.gg", Outfits.presets[5], online = true, level = 5),
         Friend("f5", "하은", "Haeun", "haeun_reads", Outfits.presets[0], online = false, level = 10),
-    )
+    ).map { it.copy(outfit = Looks.forFriend(it.outfit, it.id)) }
 
     /** Scripted first messages: (Korean, English). */
     val openingMessages = mapOf(

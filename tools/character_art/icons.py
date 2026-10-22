@@ -5,12 +5,12 @@ One icon per preset outfit (see Outfits.presets in Models.kt and AppIconManager.
 ic_launcher_monochrome*.xml, plus icons.png (a preview sheet) next to this script.
 """
 import os, subprocess
-import render, export
+import render, clothes
 from render import roles, layers, CHROME, D
 
 RES = os.path.join(D, "..", "..", "app", "src", "main", "res", "drawable")
 # Head and shoulders of the 200 x 545 art, mapped onto the 108 x 108 adaptive canvas.
-CROP_X, CROP_Y, CROP = 30.0, 4.0, 140.0
+CROP_X, CROP_Y, CROP = 32.0, 10.0, 136.0
 INSET = 16.0  # keeps the head inside the 66dp safe zone
 SCALE = (108 - 2 * INSET) / CROP
 
@@ -37,9 +37,14 @@ def options(key):
 def all_layers(o):
     out = layers(o)
     if "stripe" in o:
-        # Same stripes the app draws, slotted in right after the shirt.
-        idx = max(i for i, l in enumerate(out) if l.fill and l.fill.startswith("lin:topL")) + 1
-        out[idx:idx] = export.stripes(o["body"], o["topKind"], o["sleeve"])
+        # Same stripes the app draws, slotted in right after the shirt body.
+        import warp
+        st = clothes.stripes(o["body"], o["topKind"], o["sleeve"])
+        for l in st:
+            l.d = warp.warp_path(l.d, "torso", o["body"], {})
+            l.clip = warp.warp_path(l.clip, "torso", o["body"], {})
+        idx = max(i for i, l in enumerate(out) if l.fill and l.fill.startswith("lin:topL:top:100:")) + 1
+        out[idx:idx] = st
     return out
 
 
