@@ -10,7 +10,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -19,6 +19,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -50,6 +51,7 @@ import com.today.app.data.TopStyle
 import com.today.app.data.Tune
 import kotlinx.coroutines.delay
 import kotlin.math.PI
+import kotlin.math.ceil
 import kotlin.math.sin
 
 /** Width : height of the full-body character. */
@@ -259,10 +261,17 @@ private fun DrawScope.withFeature(f: Feature, o: Outfit, posed: Posed, block: Dr
     }, block)
 }
 
-/**
- * Draws the character so the art box [box] (art coordinates) fills this draw scope.
- * [time] (0..1, looping) makes crowns and halos glint.
- */
+/** Runs [block] in art coordinates, with the art box [box] filling this draw scope. */
+private fun DrawScope.inArtBox(box: Rect, block: DrawScope.() -> Unit) {
+    val k = size.width / box.width
+    clipRect {
+        scale(k, k, pivot = Offset.Zero) {
+            translate(-box.left, -box.top, block)
+        }
+    }
+}
+
+/** Draws the character so the art box [box] (art coordinates) fills this draw scope. */
 private fun DrawScope.drawCharacter(
     posed: Posed,
     outfit: Outfit,
@@ -270,27 +279,49 @@ private fun DrawScope.drawCharacter(
     mood: Mood,
     blink: Boolean,
     box: Rect = FULL,
-    time: Float = 0f,
     drop: AccessoryDrop? = null,
 ) {
-    val k = size.width / box.width
     val neck = posed.anchor("neck")
     val hs = headScale(outfit)
-    clipRect {
-        scale(k, k, pivot = Offset.Zero) {
-            translate(-box.left, -box.top) {
-                for (ref in partKeys(outfit, mood, blink)) {
-                    val layers = posed.layers(ref.key) ?: continue
-                    val dy = if (drop != null && ref.accId == drop.id) -drop.offset else 0f
-                    val draw: DrawScope.() -> Unit = { withFeature(ref.feature, outfit, posed) { translate(0f, dy) { layers.forEach { drawLayer(it, pal) } } } }
-                    if (ref.head && hs != 1f) scale(hs, hs, neck, draw) else draw()
-                }
-                if (outfit.head == "crown" || outfit.head == "halo") {
-                    scale(hs, hs, neck) { drawGlints(if (outfit.head == "crown") CROWN_GLINTS else HALO_GLINTS, time) }
-                }
-            }
+    inArtBox(box) {
+        for (ref in partKeys(outfit, mood, blink)) {
+            val layers = posed.layers(ref.key) ?: continue
+            val dy = if (drop != null && ref.accId == drop.id) -drop.offset else 0f
+            val draw: DrawScope.() -> Unit = { withFeature(ref.feature, outfit, posed) { translate(0f, dy) { layers.forEach { drawLayer(it, pal) } } } }
+            if (ref.head && hs != 1f) scale(hs, hs, neck, draw) else draw()
         }
     }
+}
+
+/** Crowns and halos glinting over the character at [time] (0..1, looping). */
+private fun DrawScope.drawCharacterGlints(posed: Posed, outfit: Outfit, box: Rect, time: Float) {
+    val hs = headScale(outfit)
+    inArtBox(box) {
+        scale(hs, hs, posed.anchor("neck")) { drawGlints(if (outfit.head == "crown") CROWN_GLINTS else HALO_GLINTS, time) }
+    }
+}
+
+/**
+ * Draws [block] into a software bitmap the size of [size] (reusing [into] when it fits).
+ * The art has hundreds of gradient fills; drawn straight to the screen every frame, the GPU
+ * renderer (seen on the emulator) starts dropping them after a while and characters turn into
+ * bare outlines. Rasterising on the CPU once and showing the picture avoids that and is cheaper.
+ */
+internal fun rasterize(size: Size, into: ImageBitmap? = null, block: DrawScope.() -> Unit): ImageBitmap {
+    val w = ceil(size.width).toInt().coerceAtLeast(1)
+    val h = ceil(size.height).toInt().coerceAtLeast(1)
+    val image = into?.takeIf { it.width == w && it.height == h }?.also { it.asAndroidBitmap().eraseColor(0) } ?: ImageBitmap(w, h)
+    CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, GraphicsCanvas(image), size, block)
+    return image
+}
+
+/** Two bitmaps used in turn, so the picture on screen is never drawn over while the next one is made. */
+private class DoubleBuffer {
+    private val images = arrayOfNulls<ImageBitmap>(2)
+    private var next = 0
+
+    fun draw(size: Size, block: DrawScope.() -> Unit): ImageBitmap =
+        rasterize(size, images[next], block).also { images[next] = it; next = 1 - next }
 }
 
 private val CROWN_GLINTS = listOf(Offset(81f, 21f), Offset(100f, 15f), Offset(119f, 21f))
@@ -394,26 +425,29 @@ private fun CharacterCanvas(outfit: Outfit, modifier: Modifier, animateColors: B
         if (dropId.isNotEmpty()) drop.animateTo(0f, spring(dampingRatio = 0.45f, stiffness = 380f))
     }
 
-    Canvas(modifier) {
-        val pal = Palette(skin, hair, top, stripe, acc, bottom, shoes, iris, lip)
-        val box = boxFor(size)
-        drawCharacter(
-            posed, outfit, pal, mood, blink,
-            box = if (portrait) headBox(box, outfit, posed.anchor("neck")) else box,
-            time = if (glinting) time.value else 0f,
-            drop = if (dropId.isNotEmpty() && drop.value != 0f) AccessoryDrop(dropId, drop.value) else null,
-        )
-    }
+    val buffer = remember { DoubleBuffer() }
+    // The character is redrawn into a bitmap only when it changes (colours, blink, drop-in, size);
+    // the glints are the only thing drawn live.
+    Spacer(
+        modifier.drawWithCache {
+            val pal = Palette(skin, hair, top, stripe, acc, bottom, shoes, iris, lip)
+            val box = boxFor(size).let { if (portrait) headBox(it, outfit, posed.anchor("neck")) else it }
+            val dropping = if (dropId.isNotEmpty() && drop.value != 0f) AccessoryDrop(dropId, drop.value) else null
+            val image = if (size.minDimension >= 1f) buffer.draw(size) { drawCharacter(posed, outfit, pal, mood, blink, box, dropping) } else null
+            onDrawBehind {
+                image?.let { drawImage(it) }
+                if (glinting) drawCharacterGlints(posed, outfit, box, time.value)
+            }
+        },
+    )
 }
 
 /** The character as a plain bitmap [width] px wide, for places without Compose (home-screen widget). */
 fun renderAvatarBitmap(context: Context, outfit: Outfit, mood: Mood = Mood.NORMAL, width: Int = 160, box: HeadBox? = null): Bitmap {
     val rect = box?.rect ?: Rect(0f, CharacterArt.TOP, CharacterArt.W, CharacterArt.TOP + CharacterArt.H)
     val height = (width * rect.height / rect.width).toInt()
-    val image = ImageBitmap(width, height)
-    CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, GraphicsCanvas(image), Size(width.toFloat(), height.toFloat())) {
-        val posed = Posed(CharacterArt.art(context.applicationContext), outfit)
+    val posed = Posed(CharacterArt.art(context.applicationContext), outfit)
+    return rasterize(Size(width.toFloat(), height.toFloat())) {
         drawCharacter(posed, outfit, Palette.of(outfit), mood, blink = false, box = if (box == null) rect else headBox(rect, outfit, posed.anchor("neck")))
-    }
-    return image.asAndroidBitmap()
+    }.asAndroidBitmap()
 }

@@ -7,9 +7,9 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.clickable
@@ -22,11 +22,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.drawscope.withTransform
 import com.today.app.data.PetSpecies
@@ -78,34 +81,43 @@ fun PixelPet(
     )
 
     val context = LocalContext.current
-    val art = remember { PetArt.get(context.applicationContext).getValue(species) }
+    val art = remember(species) { PetArt.get(context.applicationContext).getValue(species) }
     Box(modifier.aspectRatio(PET_W / PET_H).then(tap)) {
-        Canvas(Modifier.fillMaxSize()) {
-            val time = if (animated) t else 0f
-            // Movement is measured in tenths of the art box width (the old pixel grid).
-            val cell = size.width / 24f
-            val scale = stage.scale
-            // Hop: a little bounce twice per loop (fish float instead), plus a big jump when petted.
-            val hop = when {
-                stage == PetStage.EGG -> 0f
-                species == PetSpecies.FISH -> sin(time * 2 * PI).toFloat() * 0.6f
-                else -> (-kotlin.math.abs(sin(time * 2 * PI * 2)).toFloat() * 0.5f).coerceAtMost(0f)
+        // Each frame is rasterised once per size (see rasterize) and then only moved around.
+        Spacer(Modifier.fillMaxSize().drawWithCache {
+            // Index 0 is the egg, then the animal's frames.
+            val frames = HashMap<Int, ImageBitmap>()
+            fun frame(i: Int) = frames.getOrPut(i) {
+                val layers = if (i == 0) art.egg else art.frames[i - 1]
+                rasterize(size) {
+                    val k = size.width / PET_W
+                    scale(k, k, Offset.Zero) { layers.forEach { drawArtLayer(it) } }
+                }
             }
-            val jumpUp = sin(jump.value * PI).toFloat() * 4f
-            val pivot = Offset(size.width / 2, size.height)
-            val k = size.width / PET_W
-            withTransform({
-                scale(scale, scale, pivot)
-                translate(0f, (hop - jumpUp) * cell)
-                if (stage == PetStage.EGG) rotate(sin(time * 2 * PI * 2).toFloat() * 6f, pivot)
-                scale(k, k, Offset.Zero)
-            }) {
-                val layers = if (stage == PetStage.EGG) art.egg else art.frames[if (animated && time % 0.5f > 0.25f) 1 else 0]
-                layers.forEach { drawArtLayer(it) }
+            onDrawBehind {
+                val time = if (animated) t else 0f
+                // Movement is measured in tenths of the art box width (the old pixel grid).
+                val cell = size.width / 24f
+                val scale = stage.scale
+                // Hop: a little bounce twice per loop (fish float instead), plus a big jump when petted.
+                val hop = when {
+                    stage == PetStage.EGG -> 0f
+                    species == PetSpecies.FISH -> sin(time * 2 * PI).toFloat() * 0.6f
+                    else -> (-kotlin.math.abs(sin(time * 2 * PI * 2)).toFloat() * 0.5f).coerceAtMost(0f)
+                }
+                val jumpUp = sin(jump.value * PI).toFloat() * 4f
+                val pivot = Offset(size.width / 2, size.height)
+                withTransform({
+                    scale(scale, scale, pivot)
+                    translate(0f, (hop - jumpUp) * cell)
+                    if (stage == PetStage.EGG) rotate(sin(time * 2 * PI * 2).toFloat() * 6f, pivot)
+                }) {
+                    drawImage(frame(if (stage == PetStage.EGG) 0 else if (animated && time % 0.5f > 0.25f) 2 else 1))
+                }
+                val now = System.currentTimeMillis()
+                hearts.forEach { h -> drawHeart(h, now) }
             }
-            val now = System.currentTimeMillis()
-            hearts.forEach { h -> drawHeart(h, now) }
-        }
+        })
     }
 }
 
