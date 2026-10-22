@@ -1,4 +1,4 @@
-"""Point warps applied to every path: the base pose (head sits a little lower on a shorter neck) and
+"""Point warps applied to every path: the base pose (the head scaled onto the body, standing straight) and
 the creator's fine-tune sliders. Each slider's warp at +1 minus the base becomes a morph target the
 app blends with the slider value (export.py), so they must stay smooth and close to linear.
 """
@@ -13,12 +13,6 @@ HEAD_PARAMS = ["faceWidth", "cheeks", "jaw", "chin"]
 BODY_PARAMS = ["shoulders", "waist", "hips", "legs", "limbs"]
 PARAMS = HEAD_PARAMS + BODY_PARAMS
 HIP_Y = 280.0
-# Relaxed standing pose (contrapposto): weight on the figure's right leg (viewer's left, s = -1),
-# pelvis shifted over it and tilted up on that side, shoulders tilted the other way, the free leg's
-# knee turned slightly in.
-TILT_HIP = 0.06
-TILT_SH = 0.03
-SHIFT = 3.0
 
 
 def smoothstep(a, b, x):
@@ -41,7 +35,7 @@ def spine_x(spine, y):
     return pts[-1][0]
 
 
-def warp_point(x, y, region, bt, P, pose=True):
+def warp_point(x, y, region, bt, P):
     g = lambda k: P.get(k, 0.0)
     if region == "head":
         dx = x - CX
@@ -59,8 +53,6 @@ def warp_point(x, y, region, bt, P, pose=True):
         cx = CX + s * spine_x(ARM[bt], y)
         x = cx + (x - cx) * k
         x += s * sh_half * 0.12 * g("shoulders")
-        if pose:
-            y -= TILT_SH * s * 36  # the arm hangs from its (tilted) shoulder
         return x, y
     if region in ("legR", "legL"):
         s = 1 if region == "legR" else -1
@@ -68,21 +60,11 @@ def warp_point(x, y, region, bt, P, pose=True):
         cx = CX + s * spine_x(LEG[bt], y)
         x = cx + (x - cx) * k
         x += s * 0.12 * 14 * g("hips")
-        if pose:
-            down = smoothstep(290, 472, y)
-            if s < 0:  # standing leg slants in under the body
-                x += -SHIFT + 3.0 * down
-            else:  # free leg: knee turned in, foot relaxed slightly out
-                x += -SHIFT - 3.0 * bump(y, 300, 372, 396, 466) + 3.5 * smoothstep(400, 472, y)
-            y += TILT_HIP * (x - CX) * (1 - down)
         return x, legs(y)
     # torso (and anything else): width profile down the body, longer legs below the hips
     dx = x - CX
     k = 1 + 0.12 * g("shoulders") * bump(y, 128, 140, 168, 205) + 0.12 * g("waist") * bump(y, 196, 222, 240, 262)         + 0.11 * g("hips") * bump(y, 250, 268, 292, 360)
     x = CX + dx * k
-    if pose:
-        y += -TILT_SH * dx * bump(y, 118, 134, 170, 215) + TILT_HIP * dx * smoothstep(232, 272, y) * (1 - smoothstep(300, 472, y))
-        x += -SHIFT * smoothstep(190, 270, y)
     return x, legs(y)
 
 
