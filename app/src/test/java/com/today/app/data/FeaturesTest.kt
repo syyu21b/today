@@ -208,10 +208,37 @@ class FeaturesTest {
         assertEquals(a, Looks.forFriend(plain, "f1"))
         assertEquals(plain.shirt, a.shirt)
         assertEquals(plain.hair, a.hair)
-        assertEquals(plain.longHair, a.style.long)
+        assertEquals(plain.gender, a.gender)
+        // Boys get boys' looks.
+        val boy = Looks.forFriend(plain.copy(gender = Gender.MALE), "f2")
+        assertEquals(Gender.MALE, boy.gender)
+        assertTrue(Gender.MALE in boy.style.genders)
         // Different friends don't all look alike.
         assertTrue(DummyData.friends.map { it.outfit.faceShape to it.outfit.eyeStyle }.toSet().size > 2)
         val chosen = plain.copy(eyeStyle = EyeStyle.ROUND)
         assertEquals(chosen, Looks.forFriend(chosen, "f1"))
+    }
+
+    @Test
+    fun switchingGenderSwapsWhatTheOtherCantWear() {
+        val her = Looks.female[0].applyTo(Outfits.presets[0]).copy(topStyle = TopStyle.DRESS, head = "cap")
+        val him = Looks.switchGender(her, Gender.MALE)
+        assertEquals(Gender.MALE, him.gender)
+        assertEquals(TopStyle.TEE, him.topStyle)
+        assertEquals("cap", him.head)
+        assertEquals(her.shirt, him.shirt)
+        assertTrue(Gender.MALE in him.style.genders)
+        assertEquals(him, Looks.switchGender(him, Gender.MALE))
+        // Every preset only uses what its gender can wear, and random looks stay in the gender.
+        Looks.presets.forEach { assertTrue(it.gender in it.hairStyle.genders) }
+        repeat(20) { assertTrue(Gender.MALE in Looks.random(him, kotlin.random.Random(it)).style.genders) }
+        assertEquals(Gender.MALE, Looks.reset(him).gender)
+        // A skirt on him becomes pants; clothes presets keep his gender.
+        val skirted = him.copy(bottomStyle = BottomStyle.SKIRT).fitGender()
+        assertEquals(BottomStyle.PANTS, skirted.bottom)
+        assertEquals(Gender.MALE, Outfits.presets[4].withBodyOf(him).gender)
+        // Demo friends have the gender their names suggest.
+        assertEquals(Gender.MALE, DummyData.demoFriend("f2")!!.outfit.gender)
+        assertEquals(Gender.FEMALE, DummyData.demoFriend("f1")!!.outfit.gender)
     }
 }

@@ -102,6 +102,8 @@ class RewardsTest {
         assertEquals("glasses", ocean.face)
         assertEquals(Outfits.presets[2], ocean.withoutAccessories())
         assertEquals("ocean", AppIconManager.iconKeyFor(ocean))
+        // Boys get the boy version of the same icon.
+        assertEquals("ocean_m", AppIconManager.iconKeyFor(ocean.copy(gender = Gender.MALE)))
     }
 
     @Test

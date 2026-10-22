@@ -10,13 +10,13 @@ import parts, hair, clothes, acc, warp
 from geo import L, CX
 
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "app", "src", "main", "assets", "character_art.json")
-BODIES = {"SLIM": "F", "BROAD": "M"}
+GENDERS = ["F", "M"]
 MOODS = ["normal", "happy", "sleepy", "sad", "excited", "calm", "love", "angry", "sick"]
-HAIRS = ["short", "long", "bob", "ponytail", "twintail", "bun", "spiky", "curly", "buzz"]
+HAIRS = ["short", "long", "bob", "ponytail", "twintail", "bun", "spiky", "curly", "buzz", "comma", "parted", "slicked", "wavy"]
 EYES = ["almond", "round", "sharp", "gentle"]
 BROWS = ["natural", "arched", "straight", "thick"]
 FACES = ["oval", "round", "sharp", "square"]
-TOPS = [("tee", "short"), ("tee", "long"), ("knit", "long"), ("hoodie", "long"), ("jacket", "long"), ("dress", "long")]
+TOPS = [("tee", "short"), ("tee", "long"), ("knit", "long"), ("hoodie", "long"), ("jacket", "long"), ("dress", "long"), ("shirt", "long")]
 ACCS = ["cap", "glasses", "sunglasses", "headphones", "cape", "crown", "catears", "halo", "partyhat", "flowercrown", "strawhat", "witchhat", "santahat"]
 SIDES = {"R": (1,), "L": (-1,)}
 
@@ -61,13 +61,14 @@ def enc(layers, region, bt="F"):
     return out
 
 
-def anchors(shape):
+def anchors(shape, g):
     """One tiny path per pivot ("M x,y L x,y"), morphed like everything else so pivots follow the face."""
     out = []
     for _, x, y in ANCHORS:
         out.append(L(f"M{x},{y} L{x},{y}", stroke="line", width=0, alpha=0.01))
     # chin bottom (portrait framing)
-    out.append(L(f"M{CX},{parts.CHIN_Y[shape]} L{CX},{parts.CHIN_Y[shape]}", stroke="line", width=0, alpha=0.01))
+    chin = parts.shapes(g)[1][shape]
+    out.append(L(f"M{CX},{chin} L{CX},{chin}", stroke="line", width=0, alpha=0.01))
     return enc(out, "head")
 
 
@@ -77,33 +78,34 @@ def main():
         b, fr = hair.style(h)
         p[f"hairBack.{h}"] = enc(b, "head")
         p[f"hairFront.{h}"] = enc(fr, "head")
-    for key, bt in BODIES.items():
-        p[f"body.{key}"] = enc(parts.body(bt), "torso", bt)
-        p[f"arms.{key}"] = enc(parts.arms(bt), "torso", bt)
-        p[f"hands.{key}"] = enc(parts.hands(bt), "torso", bt)
+    for bt in GENDERS:
+        p[f"body.{bt}"] = enc(parts.body(bt), "torso", bt)
+        p[f"arms.{bt}"] = enc(parts.arms(bt), "torso", bt)
+        p[f"hands.{bt}"] = enc(parts.hands(bt), "torso", bt)
         for k in ("pants", "shorts", "skirt"):
-            p[f"bottom.{key}.{k}"] = enc(clothes.bottom(bt, k), "torso", bt)
+            p[f"bottom.{bt}.{k}"] = enc(clothes.bottom(bt, k), "torso", bt)
         for k in ("sneakers", "boots"):
-            p[f"shoes.{key}.{k}"] = enc(clothes.shoes(bt, k), "torso", bt)
+            p[f"shoes.{bt}.{k}"] = enc(clothes.shoes(bt, k), "torso", bt)
         for kind, sl in TOPS:
-            p[f"top.{key}.{kind}.{sl}"] = enc(clothes.top(bt, kind, sl), "torso", bt)
-            p[f"stripes.{key}.{kind}.{sl}"] = enc(clothes.stripes(bt, kind, sl), "torso", bt)
+            p[f"top.{bt}.{kind}.{sl}"] = enc(clothes.top(bt, kind, sl), "torso", bt)
+            p[f"stripes.{bt}.{kind}.{sl}"] = enc(clothes.stripes(bt, kind, sl), "torso", bt)
         for e in EYES:
             for m in MOODS + ["blink"]:
                 for side, sides in SIDES.items():
-                    p[f"eyes.{key}.{e}.{m}.{side}"] = enc(parts.eyes(e, "sleepy" if m == "blink" else m, bt, sides), "head")
-    for fs in FACES:
-        p[f"head.{fs}"] = enc(parts.head(fs), "head")
-        p[f"anchors.{fs}"] = anchors(fs)
+                    p[f"eyes.{bt}.{e}.{m}.{side}"] = enc(parts.eyes(e, "sleepy" if m == "blink" else m, bt, sides), "head")
+    for g in GENDERS:
+        for fs in FACES:
+            p[f"head.{g}.{fs}"] = enc(parts.head(fs, g), "head")
+            p[f"anchors.{g}.{fs}"] = anchors(fs, g)
+        p[f"nose.{g}"] = enc(parts.nose(g), "head")
+        for m in MOODS:
+            p[f"mouth.{g}.{m}"] = enc(parts.mouth(m, g), "head")
+        for b in BROWS:
+            for m in MOODS:
+                for side, sides in SIDES.items():
+                    p[f"brows.{g}.{b}.{m}.{side}"] = enc(parts.brows(b, m, sides, g), "head")
     p["blush.0"] = enc(parts.blush(False), "head")
     p["blush.1"] = enc(parts.blush(True), "head")
-    p["nose"] = enc(parts.nose(), "head")
-    for m in MOODS:
-        p[f"mouth.{m}"] = enc(parts.mouth(m), "head")
-    for b in BROWS:
-        for m in MOODS:
-            for side, sides in SIDES.items():
-                p[f"brows.{b}.{m}.{side}"] = enc(parts.brows(b, m, sides), "head")
     for f in ("freckles", "wrinkles", "beard", "mustache"):
         p[f"feature.{f}"] = enc(acc.features([f]), "head")
     for a in ACCS:

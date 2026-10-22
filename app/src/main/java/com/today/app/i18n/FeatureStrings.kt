@@ -6,6 +6,7 @@ import com.today.app.data.BrowStyle
 import com.today.app.data.EyeStyle
 import com.today.app.data.FaceFeature
 import com.today.app.data.FaceShape
+import com.today.app.data.Gender
 import com.today.app.data.ShoeStyle
 import com.today.app.data.TopStyle
 import com.today.app.data.Tune
@@ -164,6 +165,7 @@ interface FeatureStrings {
     fun msgLookLoaded(n: Int): String
     val msgSlotEmpty: String
     fun bodyName(b: BodyType): String
+    fun genderName(g: Gender): String
     /** Fine-tune slider label and what its two ends do. */
     fun tuneName(t: Tune): String
     fun tuneEnds(t: Tune): Pair<String, String>
@@ -252,6 +254,10 @@ object KoFeatureStrings : FeatureStrings {
 
     override val hairStyleTitle = "헤어스타일"
     override fun hairStyleName(h: HairStyle) = when (h) {
+        HairStyle.COMMA -> "쉼표머리"
+        HairStyle.PARTED -> "가르마"
+        HairStyle.SLICKED -> "올백"
+        HairStyle.WAVY -> "웨이브"
         HairStyle.SHORT -> "숏컷"
         HairStyle.LONG -> "긴 머리"
         HairStyle.BOB -> "단발"
@@ -433,6 +439,7 @@ object KoFeatureStrings : FeatureStrings {
     override fun msgLookLoaded(n: Int) = "슬롯 ${n}의 외형을 불러왔어요"
     override val msgSlotEmpty = "빈 슬롯이에요. 먼저 저장해 주세요"
     override fun bodyName(b: BodyType) = when (b) { BodyType.SLIM -> "슬림형"; BodyType.BROAD -> "건장형" }
+    override fun genderName(g: Gender) = when (g) { Gender.FEMALE -> "여자"; Gender.MALE -> "남자" }
     override fun tuneName(t: Tune) = when (t) {
         Tune.HEAD_SIZE -> "머리 크기"; Tune.SHOULDERS -> "어깨 너비"; Tune.WAIST -> "허리"; Tune.HIPS -> "골반"; Tune.LEGS -> "다리 길이"; Tune.LIMBS -> "팔다리 두께"
         Tune.FACE_WIDTH -> "얼굴 너비"; Tune.CHEEKS -> "볼살"; Tune.JAW -> "턱 길이"; Tune.CHIN -> "턱끝 모양"
@@ -455,7 +462,7 @@ object KoFeatureStrings : FeatureStrings {
     override fun faceShapeName(f: FaceShape) = when (f) { FaceShape.OVAL -> "계란형"; FaceShape.ROUND -> "둥근형"; FaceShape.SHARP -> "갸름형"; FaceShape.SQUARE -> "각진형" }
     override fun eyeStyleName(e: EyeStyle) = when (e) { EyeStyle.ALMOND -> "아몬드"; EyeStyle.ROUND -> "동글"; EyeStyle.SHARP -> "날렵"; EyeStyle.GENTLE -> "순한" }
     override fun browName(b: BrowStyle) = when (b) { BrowStyle.NATURAL -> "자연"; BrowStyle.ARCHED -> "아치"; BrowStyle.STRAIGHT -> "일자"; BrowStyle.THICK -> "진한" }
-    override fun topStyleName(t: TopStyle) = when (t) { TopStyle.TEE -> "티셔츠"; TopStyle.KNIT -> "니트"; TopStyle.HOODIE -> "후드티"; TopStyle.JACKET -> "재킷"; TopStyle.DRESS -> "원피스" }
+    override fun topStyleName(t: TopStyle) = when (t) { TopStyle.TEE -> "티셔츠"; TopStyle.SHIRT -> "셔츠"; TopStyle.KNIT -> "니트"; TopStyle.HOODIE -> "후드티"; TopStyle.JACKET -> "재킷"; TopStyle.DRESS -> "원피스" }
     override fun bottomStyleName(b: BottomStyle) = when (b) { BottomStyle.PANTS -> "긴바지"; BottomStyle.SHORTS -> "반바지"; BottomStyle.SKIRT -> "치마" }
     override fun shoeStyleName(s: ShoeStyle) = when (s) { ShoeStyle.SNEAKERS -> "운동화"; ShoeStyle.BOOTS -> "부츠" }
     override val secSkin = "피부색"
@@ -525,6 +532,10 @@ object EnFeatureStrings : FeatureStrings {
 
     override val hairStyleTitle = "Hair style"
     override fun hairStyleName(h: HairStyle) = when (h) {
+        HairStyle.COMMA -> "Comma"
+        HairStyle.PARTED -> "Side part"
+        HairStyle.SLICKED -> "Slicked back"
+        HairStyle.WAVY -> "Wavy"
         HairStyle.SHORT -> "Short"
         HairStyle.LONG -> "Long"
         HairStyle.BOB -> "Bob"
@@ -706,6 +717,7 @@ object EnFeatureStrings : FeatureStrings {
     override fun msgLookLoaded(n: Int) = "Loaded the look in slot $n"
     override val msgSlotEmpty = "That slot is empty. Save a look first"
     override fun bodyName(b: BodyType) = when (b) { BodyType.SLIM -> "Slim"; BodyType.BROAD -> "Broad" }
+    override fun genderName(g: Gender) = when (g) { Gender.FEMALE -> "Female"; Gender.MALE -> "Male" }
     override fun tuneName(t: Tune) = when (t) {
         Tune.HEAD_SIZE -> "Head size"; Tune.SHOULDERS -> "Shoulders"; Tune.WAIST -> "Waist"; Tune.HIPS -> "Hips"; Tune.LEGS -> "Leg length"; Tune.LIMBS -> "Arms & legs"
         Tune.FACE_WIDTH -> "Face width"; Tune.CHEEKS -> "Cheeks"; Tune.JAW -> "Jaw length"; Tune.CHIN -> "Chin shape"
@@ -728,7 +740,7 @@ object EnFeatureStrings : FeatureStrings {
     override fun faceShapeName(f: FaceShape) = when (f) { FaceShape.OVAL -> "Oval"; FaceShape.ROUND -> "Round"; FaceShape.SHARP -> "Slender"; FaceShape.SQUARE -> "Square" }
     override fun eyeStyleName(e: EyeStyle) = when (e) { EyeStyle.ALMOND -> "Almond"; EyeStyle.ROUND -> "Round"; EyeStyle.SHARP -> "Sharp"; EyeStyle.GENTLE -> "Gentle" }
     override fun browName(b: BrowStyle) = when (b) { BrowStyle.NATURAL -> "Natural"; BrowStyle.ARCHED -> "Arched"; BrowStyle.STRAIGHT -> "Straight"; BrowStyle.THICK -> "Bold" }
-    override fun topStyleName(t: TopStyle) = when (t) { TopStyle.TEE -> "T-shirt"; TopStyle.KNIT -> "Knit"; TopStyle.HOODIE -> "Hoodie"; TopStyle.JACKET -> "Jacket"; TopStyle.DRESS -> "Dress" }
+    override fun topStyleName(t: TopStyle) = when (t) { TopStyle.TEE -> "T-shirt"; TopStyle.SHIRT -> "Shirt"; TopStyle.KNIT -> "Knit"; TopStyle.HOODIE -> "Hoodie"; TopStyle.JACKET -> "Jacket"; TopStyle.DRESS -> "Dress" }
     override fun bottomStyleName(b: BottomStyle) = when (b) { BottomStyle.PANTS -> "Pants"; BottomStyle.SHORTS -> "Shorts"; BottomStyle.SKIRT -> "Skirt" }
     override fun shoeStyleName(s: ShoeStyle) = when (s) { ShoeStyle.SNEAKERS -> "Sneakers"; ShoeStyle.BOOTS -> "Boots" }
     override val secSkin = "Skin tone"

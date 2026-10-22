@@ -769,6 +769,11 @@ class TodayViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** "외형 결정": the creator's draft becomes the character (locked accessories are taken off). */
+    /** Onboarding's "여자 / 남자": that gender's first look, clothes kept. */
+    fun setGender(g: Gender) {
+        setOutfit(Looks.switchGender(character.outfit, g))
+    }
+
     fun applyLook(outfit: Outfit) {
         setOutfit(sanitizeAccessories(outfit))
         creatorOpen = false

@@ -35,21 +35,35 @@ const val MAX_QUEST_XP = 30
 
 const val DEFAULT_SKIN = 0xFFF5C9A3.toInt()
 
-/** Hair shapes drawn by the avatar (art in CharacterArt.kt). */
-enum class HairStyle(val long: Boolean) {
-    SHORT(false), LONG(true), BOB(true), PONYTAIL(true), TWINTAIL(true), BUN(false), SPIKY(false), CURLY(false), BUZZ(false),
+/** The character's sex: face, body, hair styles and some clothes are drawn differently. [code] = art key. */
+enum class Gender(val code: String) { FEMALE("F"), MALE("M") }
+
+private val BOTH = setOf(Gender.FEMALE, Gender.MALE)
+private val F = setOf(Gender.FEMALE)
+private val M = setOf(Gender.MALE)
+
+/** Hair shapes drawn by the avatar (art in character_art.json); [genders] = who the creator offers them to. */
+enum class HairStyle(val long: Boolean, val genders: Set<Gender>) {
+    SHORT(false, BOTH), LONG(true, F), BOB(true, F), PONYTAIL(true, F), TWINTAIL(true, F), BUN(false, F), SPIKY(false, M), CURLY(false, BOTH),
+    BUZZ(false, M), COMMA(false, M), PARTED(false, M), SLICKED(false, M), WAVY(true, F),
+    ;
+
+    companion object {
+        fun forGender(g: Gender) = entries.filter { g in it.genders }
+    }
 }
 
 /** Optional face details, e.g. for an older-looking character. */
 enum class FaceFeature { FRECKLES, MUSTACHE, BEARD, WRINKLES }
 
-// Character creator options (art in assets/character_art.json, drawn by CharacterView).
+// Character creator options (art in assets/character_art.json, drawn by PixelAvatar).
+/** Build within the chosen [Gender]; BROAD adds to the shoulder / waist / limb sliders. */
 enum class BodyType { SLIM, BROAD }
 enum class FaceShape { OVAL, ROUND, SHARP, SQUARE }
 enum class EyeStyle { ALMOND, ROUND, SHARP, GENTLE }
 enum class BrowStyle { NATURAL, ARCHED, STRAIGHT, THICK }
-enum class TopStyle { TEE, KNIT, HOODIE, JACKET, DRESS }
-enum class BottomStyle { PANTS, SHORTS, SKIRT }
+enum class TopStyle(val genders: Set<Gender> = BOTH) { TEE, SHIRT, KNIT, HOODIE, JACKET, DRESS(F) }
+enum class BottomStyle(val genders: Set<Gender> = BOTH) { PANTS, SHORTS, SKIRT(F) }
 enum class ShoeStyle { SNEAKERS, BOOTS }
 
 /** Which creator tab a fine-tune slider sits in. */
@@ -111,8 +125,9 @@ data class Outfit(
     val shoeStyle: ShoeStyle = ShoeStyle.SNEAKERS,
     /** Fine-tune slider values (-1..1); missing = 0. */
     val tune: Map<Tune, Float> = emptyMap(),
+    val gender: Gender = Gender.FEMALE,
 ) {
-    val style: HairStyle get() = hairStyle ?: if (longHair) HairStyle.LONG else HairStyle.SHORT
+    val style: HairStyle get() = hairStyle ?: if (longHair && gender == Gender.FEMALE) HairStyle.LONG else HairStyle.SHORT
     val bottom: BottomStyle get() = bottomStyle ?: if (shorts) BottomStyle.SHORTS else BottomStyle.PANTS
 
     fun tuned(t: Tune): Float = tune[t] ?: 0f
@@ -144,8 +159,17 @@ data class Outfit(
     fun withBodyOf(other: Outfit) = withAccessoriesOf(other).copy(
         hairStyle = other.hairStyle, features = other.features, skin = other.skin,
         body = other.body, faceShape = other.faceShape, eyeStyle = other.eyeStyle, browStyle = other.browStyle,
-        eyeColor = other.eyeColor, lipColor = other.lipColor, blush = other.blush, tune = other.tune,
-    )
+        eyeColor = other.eyeColor, lipColor = other.lipColor, blush = other.blush, tune = other.tune, gender = other.gender,
+    ).fitGender()
+
+    /** Swaps whatever [gender] can't wear (a dress, a skirt, a hair style) for the closest thing it can. */
+    fun fitGender(): Outfit {
+        var o = this
+        if (gender !in o.topStyle.genders) o = o.copy(topStyle = TopStyle.TEE)
+        if (gender !in o.bottom.genders) o = o.copy(bottomStyle = BottomStyle.PANTS, shorts = false)
+        if (o.hairStyle != null && gender !in o.hairStyle!!.genders) o = o.copy(hairStyle = HairStyle.SHORT, longHair = false)
+        return o
+    }
 }
 
 data class CharacterState(
@@ -347,12 +371,14 @@ object DummyData {
 
     val friends = listOf(
         Friend("f1", "민지", "Minji", "minji.daily", Outfits.presets[2], online = true, level = 12),
-        Friend("f2", "준호", "Junho", "junho_dev", Outfits.presets[3], online = true, level = 8),
-        Friend("f6", "Alex", "Alex", "alex.levelup", Outfits.presets[1], online = true, level = 9),
+        Friend("f2", "준호", "Junho", "junho_dev", Outfits.presets[3].copy(gender = Gender.MALE), online = true, level = 8),
+        Friend("f6", "Alex", "Alex", "alex.levelup", Outfits.presets[1].copy(gender = Gender.MALE), online = true, level = 9),
         Friend("f3", "서연", "Seoyeon", "seoyeon.run", Outfits.presets[4], online = false, level = 15),
-        Friend("f4", "도윤", "Doyoon", "doyoon.gg", Outfits.presets[5], online = true, level = 5),
+        Friend("f4", "도윤", "Doyoon", "doyoon.gg", Outfits.presets[5].copy(gender = Gender.MALE), online = true, level = 5),
         Friend("f5", "하은", "Haeun", "haeun_reads", Outfits.presets[0], online = false, level = 10),
     ).map { it.copy(outfit = Looks.forFriend(it.outfit, it.id)) }
+
+    fun demoFriend(id: String) = friends.firstOrNull { it.id == id }
 
     /** Scripted first messages: (Korean, English). */
     val openingMessages = mapOf(

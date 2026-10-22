@@ -22,10 +22,19 @@ object AppIconManager {
         "forest" to "com.today.app.LauncherForest",
         "sunset" to "com.today.app.LauncherSunset",
         "neon" to "com.today.app.LauncherNeon",
+        // Same outfits drawn as a boy.
+        "default_m" to "com.today.app.LauncherDefaultM",
+        "street_m" to "com.today.app.LauncherStreetM",
+        "ocean_m" to "com.today.app.LauncherOceanM",
+        "forest_m" to "com.today.app.LauncherForestM",
+        "sunset_m" to "com.today.app.LauncherSunsetM",
+        "neon_m" to "com.today.app.LauncherNeonM",
     )
 
-    /** Which preset icon best represents [outfit]. */
-    fun iconKeyFor(outfit: Outfit): String {
+    /** Which preset icon best represents [outfit] (the "_m" one for male characters). */
+    fun iconKeyFor(outfit: Outfit): String = presetFor(outfit) + if (outfit.gender == Gender.MALE) "_m" else ""
+
+    private fun presetFor(outfit: Outfit): String {
         Outfits.presets.firstOrNull { it.withBodyOf(outfit) == outfit && outfit.hairStyle == null }?.let { return it.name }
         // What the icon shows: hair (and its length), skin, top, collar.
         return Outfits.presets.minBy { p ->

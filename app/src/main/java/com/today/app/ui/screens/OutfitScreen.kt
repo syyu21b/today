@@ -366,7 +366,7 @@ private fun FineTuneCard(outfit: Outfit, extracted: List<Int>, onChange: ((Outfi
             FilterChip(selected = outfit.shorts, onClick = { onChange { it.copy(shorts = !it.shorts) } }, label = { Text(s.chipShorts) })
         }
         Text(s.hairStyleTitle, fontSize = 13.sp, color = TextMuted)
-        HairStyleChips(outfit.style) { h -> onChange { it.copy(hairStyle = h, longHair = h.long) } }
+        HairStyleChips(outfit.style, outfit.gender) { h -> onChange { it.copy(hairStyle = h, longHair = h.long) } }
         Text(s.featuresTitle, fontSize = 13.sp, color = TextMuted)
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FaceFeature.entries.forEach { f ->

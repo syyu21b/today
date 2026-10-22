@@ -50,6 +50,8 @@ def body(bt):
     out.append(L(neck, "lin:skinS:skin:100:110:100:136", region="torso"))
     # shadow the head casts on the neck
     out.append(L(sym((CX, 104), [("L", (CX + nk, 104)), ("C", (CX + nk, 122), (CX + 4, 128), (CX, 129))]), "skinS", alpha=0.7, region="torso"))
+    if bt == "M":
+        out.append(L(path((CX - 1.6, 124), [("C", (CX - 0.6, 126.5), (CX + 0.6, 126.5), (CX + 1.6, 124))], close=False), stroke="skinD", width=0.8, alpha=0.35, region="torso"))
     # collarbones
     for s in (1, -1):
         out.append(L(path((CX + s * 4, 141), [("C", (CX + s * 9, 139.5), (CX + s * 14, 140), (CX + s * 18, 139))], close=False), stroke="skinD", width=0.8, alpha=0.35, region="torso"))
@@ -104,18 +106,32 @@ FACE_SHAPES = {
     "square": [(34.8, 58), (35.4, 72), (35, 88), (33, 100.5), (25, 109.6), (10, 113.2)],
 }
 CHIN_Y = {"oval": 115.4, "round": 114.8, "sharp": 116.2, "square": 114.2}
+# Male faces: a little longer, a wider jaw with a clear angle and a flatter, broader chin.
+FACE_SHAPES_M = {
+    "oval":   [(34, 58), (34.6, 72), (34, 87), (31.4, 100.5), (23.5, 111), (10.5, 116.2)],
+    "round":  [(35, 58), (35.6, 72), (35.4, 88), (33, 101), (25.5, 111), (11.5, 115.6)],
+    "sharp":  [(33.6, 58), (34.2, 72), (33.4, 87), (29.6, 100.5), (20, 111.2), (7.5, 117)],
+    "square": [(35.4, 58), (36, 72), (36, 89), (35, 102.5), (28.5, 112), (12.5, 115.8)],
+}
+CHIN_Y_M = {"oval": 117.2, "round": 116.6, "sharp": 118, "square": 116.6}
 
 
-def face_outline(shape="oval"):
-    right = [(CX, 23.5), (CX + 19, 26), (CX + 29, 36), (CX + 32.6, 46)] + [(CX + x, y) for x, y in FACE_SHAPES[shape]]
-    chin = (CX, CHIN_Y[shape])
+def shapes(g):
+    return (FACE_SHAPES_M, CHIN_Y_M) if g == "M" else (FACE_SHAPES, CHIN_Y)
+
+
+def face_outline(shape="oval", g="F"):
+    fs, cy = shapes(g)
+    right = [(CX, 23.5), (CX + 19, 26), (CX + 29, 36), (CX + 32.6, 46)] + [(CX + x, y) for x, y in fs[shape]]
+    chin = (CX, cy[shape])
     full = right + [chin] + [mx(p) for p in right[::-1][:-1]]
     return smooth(full, closed=True, t=0.95)
 
 
-def head(shape="oval"):
+def head(shape="oval", g="F"):
     out = []
-    pts = FACE_SHAPES[shape]
+    fs, chin_y = shapes(g)
+    pts = fs[shape]
     w = pts[1][0]
     # ears
     for s in (1, -1):
@@ -124,7 +140,7 @@ def head(shape="oval"):
         out.append(L(ear, "lin:skinS:skin:" + f"{CX + s * w}:80:{CX + s * (w + 7)}:80", region="head"))
         out.append(L(path((CX + s * (w - 0.5), 76.5), [("C", (CX + s * (w + 4), 73.5), (CX + s * (w + 5.5), 82), (CX + s * (w + 2.5), 88)),
                                                         ("C", (CX + s * (w + 1.5), 84), (CX + s * (w + 1), 80), (CX + s * w, 78.5))]), "skinD", alpha=0.45))
-    face = face_outline(shape)
+    face = face_outline(shape, g)
     out.append(L(face, "lin:skinL:skin:100:30:100:112"))
     # warm glow on the cheeks and a cool shade towards the jaw and the sides
     out.append(L(face, "rad:skinL:0.75:100:72:30"))
@@ -134,8 +150,15 @@ def head(shape="oval"):
         out.append(L(smooth([(CX + s * (pts[0][0] - 0.3), 60), (CX + s * (pts[1][0] - 0.2), 72), (CX + s * (pts[2][0] - 0.2), 86), (CX + s * (x2 - 0.2), y2),
                              (CX + s * (x3 - 0.2), y3), (CX + s * (x3 - 4), y3 - 2.5), (CX + s * (x2 - 5), y2 - 4), (CX + s * (pts[2][0] - 4.5), 85),
                              (CX + s * (pts[1][0] - 4), 72)], closed=True, t=0.9), "skinS", alpha=0.22))
-    out.append(L(path((CX - 9, CHIN_Y[shape] - 3.2), [("C", (CX - 4, CHIN_Y[shape] - 1.2), (CX + 4, CHIN_Y[shape] - 1.2), (CX + 9, CHIN_Y[shape] - 3.2))], close=False),
+    cy = chin_y[shape]
+    out.append(L(path((CX - 9, cy - 3.2), [("C", (CX - 4, cy - 1.2), (CX + 4, cy - 1.2), (CX + 9, cy - 3.2))], close=False),
                  stroke="skinS", width=1.6, alpha=0.18))
+    if g == "M":
+        # jaw angle shading
+        for s in (1, -1):
+            x3, y3 = pts[3]
+            out.append(L(path((CX + s * (x3 - 1.5), y3 - 6), [("C", (CX + s * (x3 - 2.5), y3), (CX + s * (pts[4][0] - 1), pts[4][1] - 2), (CX + s * (pts[4][0] - 5), pts[4][1] - 1))], close=False),
+                         stroke="skinS", width=1.4, alpha=0.25))
     out.append(L(face, stroke="line", width=0.9, alpha=0.5))
     return out
 
@@ -154,12 +177,14 @@ EYE_STYLES = {
 
 def eyes(style="almond", mood="normal", bt="F", sides=(1, -1)):
     out = []
-    wing = 4 if bt == "F" else 1.2
+    wing = 4 if bt == "F" else 0.6
+    ky = 1.0 if bt == "F" else 0.8  # male eyes: narrower opening, thinner lash band
+    kr = 1.0 if bt == "F" else 0.9
     I, c1, c2, O, l1, l2 = EYE_STYLES[style]
     for s in sides:
         ex = CX + s * EYE_X
         def a(p, dy=0.0):
-            return (ex + s * p[0], EYE_Y + p[1] + dy)
+            return (ex + s * p[0], EYE_Y + (p[1] + dy) * ky)
         # double-lid crease
         out.append(L(path(a((I[0] + 2, c1[1] - 1)), [("C", a((c1[0], c1[1] - 4.2)), a((c2[0], c2[1] - 4.2)), a((O[0] + 0.5, O[1] - 5)))], close=False),
                      stroke="skinD", width=0.8, alpha=0.45))
@@ -187,6 +212,7 @@ def eyes(style="almond", mood="normal", bt="F", sides=(1, -1)):
             out.append(L(path((cx_ + 3.8, cy_ - 3.8), [("L", (cx_ - 3.8, cy_ + 3.8))], close=False), stroke="eyeLine", width=1.9))
         else:
             k = 0.82 if mood == "angry" else 1.0
+            k *= kr
             iris = ell(cx_, cy_, 6.6 * k, 7.9 * k)
             out.append(L(iris, "lin:irisD:iris:100:77:100:90", clip=white))
             out.append(L(ell(cx_, cy_ + 3.4, 4.6 * k, 3.4 * k), "rad:irisL:0.8:" + f"{f(cx_)}:{f(cy_ + 4)}:5", clip=white))
@@ -194,7 +220,7 @@ def eyes(style="almond", mood="normal", bt="F", sides=(1, -1)):
             out.append(L(ell(cx_, cy_ + 0.2, 2.9 * k, 3.6 * k), "pupil", clip=white))
             # shadow of the upper lid
             out.append(L(ell(ex + s * 0.5, EYE_Y - 6.8, 11.5, 5), "eyeLine", alpha=0.3, clip=white))
-            out.append(L(ell(cx_ - 2.4, cy_ - 2.9, 2.3, 2.7), "white", clip=white))
+            out.append(L(ell(cx_ - 2.4 * kr, cy_ - 2.9 * kr, 2.3 * kr, 2.7 * kr), "white", clip=white))
             out.append(L(ell(cx_ + 2.6, cy_ + 3.4, 1.1, 1.1), "white", alpha=0.9, clip=white))
             out.append(L(ell(cx_ - 3.2, cy_ + 2.6, 0.7, 0.7), "white", alpha=0.6, clip=white))
             if mood == "excited":
@@ -216,14 +242,15 @@ def eyes(style="almond", mood="normal", bt="F", sides=(1, -1)):
     return out
 
 
-def brows(style="natural", mood="normal", sides=(1, -1)):
+def brows(style="natural", mood="normal", sides=(1, -1), g="F"):
     out = []
     lift = {"sad": (-2, 2.5), "angry": (3, -2.5), "excited": (-2, -1)}.get(mood, (0, 0))
     for s in sides:
         bx = CX + s * 15.5
-        by = 70
+        by = 70 if g == "F" else 71.2
+        kx, ky = (1.0, 1.0) if g == "F" else (1.1, 1.55)
         def a(p):
-            return (bx + s * p[0], by + p[1])
+            return (bx + s * p[0] * kx, by + p[1] * ky)
         inner_dy, outer_dy = lift[0], lift[1]
         if style == "straight":
             d = path(a((-8, 1 + inner_dy)), [("C", a((-3, -0.5 + inner_dy)), a((3, -0.5)), a((8, 0.5 + outer_dy))), ("C", a((3, 1.5)), a((-3, 2 + inner_dy)), a((-8, 2.6 + inner_dy)))])
@@ -237,13 +264,22 @@ def brows(style="natural", mood="normal", sides=(1, -1)):
     return out
 
 
-def nose():
+def nose(g="F"):
+    if g == "M":
+        return [L(path((CX + 1.6, 84), [("C", (CX + 2.4, 88), (CX + 2.8, 92), (CX + 3, 95))], close=False), stroke="skinD", width=0.8, alpha=0.3),
+                L(path((CX + 0.8, 92.5), [("C", (CX + 2.6, 96), (CX + 3.2, 98.4), (CX + 1, 100.2))], close=False), stroke="skinD", width=1.0, alpha=0.65),
+                L(path((CX - 3.6, 99.4), [("C", (CX - 2.6, 100.8), (CX - 0.6, 101), (CX + 0.6, 100.4))], close=False), stroke="skinD", width=0.8, alpha=0.4),
+                L(ell(CX + 0.8, 94.5, 0.8, 2.2), "skinL", alpha=0.55)]
     return [L(path((CX + 0.6, 92.5), [("C", (CX + 2, 96), (CX + 2.6, 98), (CX + 0.8, 99.6))], close=False), stroke="skinD", width=0.9, alpha=0.6),
             L(ell(CX - 1.4, 99.8, 1.7, 0.8), "skinD", alpha=0.3), L(ell(CX + 0.6, 95, 0.7, 1.6), "skinL", alpha=0.6)]
 
 
-def mouth(mood="normal"):
-    y = 106
+def mouth(mood="normal", g="F"):
+    y = 106 if g == "F" else 107.4
+    if g == "M" and mood in ("normal", "calm"):
+        # no lip tint: a firm line and a soft shadow under the lower lip
+        return [L(path((CX - 5.2, y + 0.8), [("C", (CX - 2, y + 1.9), (CX + 2, y + 1.9), (CX + 5.2, y + 0.4))], close=False), stroke="lipLine", width=1.1),
+                L(path((CX - 3, y + 4.4), [("C", (CX - 1, y + 5.2), (CX + 1, y + 5.2), (CX + 3, y + 4.4))], close=False), stroke="skinS", width=1.3, alpha=0.45)]
     if mood in ("happy", "excited", "love"):
         open_ = path((CX - 6, y - 1), [("C", (CX - 3, y + 0), (CX + 3, y + 0), (CX + 6, y - 1)), ("C", (CX + 4, y + 7), (CX - 4, y + 7), (CX - 6, y - 1))])
         return [L(open_, "#8E2F45"), L(path((CX - 3.5, y + 3.6), [("C", (CX - 1, y + 2), (CX + 1, y + 2), (CX + 3.5, y + 3.6)), ("C", (CX + 2, y + 5.4), (CX - 2, y + 5.4), (CX - 3.5, y + 3.6))]), "#FF8FA3"),

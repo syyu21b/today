@@ -41,7 +41,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.graphics.Canvas as GraphicsCanvas
+import com.today.app.data.BodyType
 import com.today.app.data.FaceFeature
+import com.today.app.data.Gender
 import com.today.app.data.Mood
 import com.today.app.data.Outfit
 import com.today.app.data.TopStyle
@@ -110,13 +112,13 @@ private class PartRef(val key: String, val head: Boolean, val feature: Feature =
 
 /** Parts in drawing order. */
 private fun partKeys(o: Outfit, mood: Mood, blink: Boolean): List<PartRef> {
-    val bt = o.body.name
+    val bt = o.gender.code
     val accs = listOf(o.back, o.head, o.face).filter { it.isNotEmpty() }
     val top = o.topStyle.name.lowercase()
     val sleeve = if (o.topStyle == TopStyle.TEE && o.shortSleeve) "short" else "long"
     val hair = o.style.name.lowercase()
     val eyes = "eyes.$bt.${o.eyeStyle.name.lowercase()}.${if (blink && mood in OPEN_EYES) "blink" else moodKey(mood)}"
-    val brows = "brows.${o.browStyle.name.lowercase()}.${moodKey(mood)}"
+    val brows = "brows.$bt.${o.browStyle.name.lowercase()}.${moodKey(mood)}"
     val keys = ArrayList<PartRef>()
     keys += PartRef("hairBack.$hair", head = true)
     accs.forEach { keys += PartRef("accBack.$it", head = it != "cape", accId = it) }
@@ -127,14 +129,15 @@ private fun partKeys(o: Outfit, mood: Mood, blink: Boolean): List<PartRef> {
     keys += PartRef("top.$bt.$top.$sleeve", head = false)
     if (o.striped) keys += PartRef("stripes.$bt.$top.$sleeve", head = false)
     keys += PartRef("hands.$bt", head = false)
-    keys += PartRef("head.${o.faceShape.name.lowercase()}", head = true)
-    keys += PartRef("blush.${if (o.blush) 1 else 0}", head = true)
-    keys += PartRef("nose", head = true, feature = Feature.NOSE)
+    keys += PartRef("head.$bt.${o.faceShape.name.lowercase()}", head = true)
+    // Boys only get rosy cheeks when they ask for them (makeup tab).
+    if (o.blush || o.gender == Gender.FEMALE) keys += PartRef("blush.${if (o.blush) 1 else 0}", head = true)
+    keys += PartRef("nose.$bt", head = true, feature = Feature.NOSE)
     for (f in FaceFeature.entries) {
         if (f !in o.features || (f == FaceFeature.MUSTACHE && FaceFeature.BEARD in o.features)) continue
         keys += PartRef("feature.${f.name.lowercase()}", head = true)
     }
-    keys += PartRef("mouth.${moodKey(mood)}", head = true, feature = Feature.MOUTH)
+    keys += PartRef("mouth.$bt.${moodKey(mood)}", head = true, feature = Feature.MOUTH)
     keys += PartRef("$eyes.R", head = true, feature = Feature.EYE_R)
     keys += PartRef("$eyes.L", head = true, feature = Feature.EYE_L)
     keys += PartRef("hairFront.$hair", head = true)
@@ -149,13 +152,16 @@ private fun partKeys(o: Outfit, mood: Mood, blink: Boolean): List<PartRef> {
  * moved anchors the features scale and tilt around.
  */
 internal class Posed(private val art: Art, outfit: Outfit) {
-    private val values = FloatArray(art.params.size) { i -> Tune.entries.firstOrNull { it.art == art.params[i] }?.let(outfit::tuned) ?: 0f }
+    private val values = FloatArray(art.params.size) { i ->
+        val name = art.params[i]
+        (Tune.entries.firstOrNull { it.art == name }?.let(outfit::tuned) ?: 0f) + if (outfit.body == BodyType.BROAD) BROAD_BUILD[name] ?: 0f else 0f
+    }
     private val cache = HashMap<String, List<ArtLayer>?>()
 
     fun layers(key: String): List<ArtLayer>? = cache.getOrPut(key) { art.parts[key]?.map { it.morphed(values) } }
 
     private val anchors: Map<String, Offset> = run {
-        val layers = layers("anchors.${outfit.faceShape.name.lowercase()}").orEmpty()
+        val layers = layers("anchors.${outfit.gender.code}.${outfit.faceShape.name.lowercase()}").orEmpty()
         art.anchorNames.withIndex().associate { (i, name) ->
             val l = layers.getOrNull(i)
             val c = l?.morph(l.shape, false, values) ?: l?.shape?.coords
@@ -192,6 +198,9 @@ private fun DrawScope.drawLayer(l: ArtLayer, pal: Palette) {
     val clip = l.clip
     if (clip != null) clipPath(clip) { draw() } else draw()
 }
+
+/** The broad build: a sturdier frame on top of whatever the sliders say. */
+private val BROAD_BUILD = mapOf("shoulders" to 1.1f, "limbs" to 0.9f, "waist" to 0.9f, "hips" to 0.35f)
 
 /** How much the head is scaled by the head-size slider. */
 private fun headScale(o: Outfit) = 1f + 0.1f * o.tuned(Tune.HEAD_SIZE)
@@ -344,7 +353,7 @@ fun AvatarHead(outfit: Outfit, modifier: Modifier = Modifier, mood: Mood = Mood.
 private fun CharacterCanvas(outfit: Outfit, modifier: Modifier, animateColors: Boolean, mood: Mood, dropIn: String?, portrait: Boolean, boxFor: (Size) -> Rect) {
     val context = LocalContext.current
     val art = remember { CharacterArt.art(context.applicationContext) }
-    val posed = remember(art, outfit.tune, outfit.faceShape) { Posed(art, outfit) }
+    val posed = remember(art, outfit.tune, outfit.faceShape, outfit.gender, outfit.body) { Posed(art, outfit) }
     val spec = tween<Color>(durationMillis = if (animateColors) 600 else 0)
     val hair by animateColorAsState(Color(outfit.hair), spec, label = "hair")
     val skin by animateColorAsState(Color(outfit.skin), spec, label = "skin")

@@ -6,7 +6,7 @@ few fold lines where cloth gathers: armpits, waist, knees, hems.
 from geo import *
 from parts import TORSO, LEG, ARM, Y, leg_spine, arm_spine, leg_region, arm_region
 
-HEMS = {"tee": 250, "hoodie": 256, "jacket": 258, "dress": 214, "knit": 252}
+HEMS = {"tee": 250, "hoodie": 256, "jacket": 258, "dress": 214, "knit": 252, "shirt": 254}
 TOP_FILL = "lin:topL:top:100:138:100:"
 
 
@@ -71,7 +71,7 @@ def top(bt, kind="tee", sleeve_kind="short"):
     out = []
     hem = HEMS[kind]
     short = sleeve_kind == "short" and kind == "tee"
-    loose = {"tee": 2.0, "knit": 2.6, "hoodie": 3.4, "jacket": 3.0, "dress": 1.0}[kind]
+    loose = {"tee": 2.0, "knit": 2.6, "hoodie": 3.4, "jacket": 3.0, "dress": 1.0, "shirt": 2.4}[kind]
     for s in (1, -1):
         out += sleeve(bt, s, short, grow={"hoodie": 2.6, "knit": 2.2, "jacket": 2.2}.get(kind, 1.9 if not short else 2.4), cuff=kind != "dress")
     if kind == "dress":
@@ -132,6 +132,19 @@ def top(bt, kind="tee", sleeve_kind="short"):
             out.append(L(path((CX + s * 15, 222), [("L", (CX + s * 24, 221))], close=False), stroke="topS", width=1.1, alpha=0.6, region="torso"))
         for y in (206, 226):
             out.append(L(ell(CX - 12.5, y, 1.3, 1.3), "topS", region="torso"))
+    elif kind == "shirt":
+        # button-down: pointed collar, placket with buttons, a chest pocket
+        for y in range(152, hem - 4, 17):
+            out.append(L(ell(CX + 0.4, y, 1.3, 1.3), "topS", region="torso"))
+        out.append(L(path((CX + 2.4, 140), [("C", (CX + 2.8, 180), (CX + 2.6, 220), (CX + 2.8, hem))], close=False), stroke="topS", width=0.9, alpha=0.6, region="torso"))
+        pocket = smooth([(CX + 8, 166), (CX + 18, 166), (CX + 18, 180), (CX + 13, 182), (CX + 8, 180)], t=0.2)
+        out.append(L(pocket, stroke="topS", width=0.9, alpha=0.6, region="torso"))
+        out.append(L(path((CX + 8, 169), [("L", (CX + 18, 169))], close=False), stroke="topS", width=0.8, alpha=0.5, region="torso"))
+        for s_ in (1, -1):
+            collar = path((CX + s_ * 1, 141), [("L", (CX + s_ * 9.5, 132.5)), ("C", (CX + s_ * 12.5, 134.5), (CX + s_ * 15, 137), (CX + s_ * 16, 140)),
+                                                ("L", (CX + s_ * 6, 152)), ("Z",)][:-1])
+            out.append(L(collar, "lin:topL:top:100:132:100:152", region="torso"))
+            out.append(L(collar, stroke="topS", width=1.0, alpha=0.8, region="torso"))
     elif kind == "dress":
         out.append(L(path((CX - 10, 135.5), [("C", (CX - 6, 147), (CX + 6, 147), (CX + 10, 135.5))], close=False), stroke="acc", width=2.2, region="torso"))
         sash = smooth([(CX - tx(bt, 204) - 1.5, 204), (CX + tx(bt, 204) + 1.5, 204), (CX + tx(bt, 210) + 2, 212), (CX - tx(bt, 210) - 2, 212)], t=0.3)

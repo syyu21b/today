@@ -205,6 +205,61 @@ def style(name):
                            stroke="hairD", width=0.9, alpha=0.5, region="head"))
             front.append(L(ell(x - 1, y - 2, 2.2, 1.2), "hairL", alpha=0.4, region="head"))
         return back, front
+    elif name == "comma":
+        # 쉼표머리: bangs swept to one side, the front lock curling back in like a comma
+        back += back_layer(back_shape(90, 45, tips=5), 90)
+        front += front_cap(64)
+        for (rx, tx, ty, w, b) in [(34, 38, 58, 14, 2), (24, 14, 58, 20, -5), (12, 0, 62, 22, -7), (-2, -14, 66, 22, -8), (-16, -28, 64, 20, -6), (-30, -38, 58, 16, -2)]:
+            x = CX + rx
+            front += lock((x, crown_y(x) + 7), (CX + tx, ty), w, b)
+        curl = smooth([(CX - 24, 47), (CX - 9, 51), (CX - 3.5, 63), (CX - 9, 73), (CX - 19, 72), (CX - 13.5, 67), (CX - 11.5, 61), (CX - 16, 55)], t=0.9)
+        front += [L(curl, HAIR, region="head"), L(curl, stroke="hairD", width=0.7, alpha=0.6, region="head")]
+        for s in (1, -1):
+            front += lock((CX + s * 38, 46), (CX + s * 37, 82), 9, s * -1)
+    elif name == "parted":
+        # 가르마: a side part, longer hair swept across the forehead on one side, the other side tucked back
+        back += back_layer(back_shape(92, 45, tips=5), 92)
+        front += front_cap(64)
+        px = CX + 13
+        for (rx, ry, tx, ty, w, b) in [(8, 14, -36, 64, 20, -6), (2, 16, -28, 60, 22, -8), (6, 20, -14, 54, 20, -7), (-12, 14, -40, 70, 14, -2)]:
+            front += lock((CX + rx, ry), (CX + tx, ty), w, b)
+        for (rx, ry, tx, ty, w, b) in [(18, 14, 38, 50, 14, 4), (26, 18, 40, 62, 12, 2)]:
+            front += lock((CX + rx, ry), (CX + tx, ty), w, b)
+        front.append(L(path((px, 12), [("C", (px + 0.5, 20), (px + 0.5, 28), (px - 0.5, 36))], close=False), stroke="hairD", width=1.1, alpha=0.6, region="head"))
+        for s in (1, -1):
+            front += lock((CX + s * 38, 48), (CX + s * 37, 84), 9, s * -1)
+    elif name == "slicked":
+        # 올백: combed back with a little lift at the front, forehead fully open
+        back += back_layer(back_shape(90, 45, tips=5), 90)
+        top = sym((CX, 6), [("C", (CX + 26, 5), (CX + 43, 20), (CX + 43, 46)), ("C", (CX + 43, 54), (CX + 40, 58), (CX + 36, 58)),
+                            ("C", (CX + 35, 48), (CX + 30, 40), (CX + 18, 37)), ("C", (CX + 8, 35), (CX + 3, 37), (CX, 39.5))])
+        front += [L(top, HAIR, region="head"), L(top, stroke="hairD", width=0.9, alpha=0.6, region="head")]
+        for k in (-28, -18, -8, 2, 12, 22, 30):
+            x0 = CX + k * 0.9
+            front.append(L(path((x0, 37 + abs(k) * 0.12), [("C", (x0 + k * 0.05, 26), (CX + k * 0.75, 16), (CX + k * 0.55, 9))], close=False),
+                           stroke="hairD", width=0.7, alpha=0.4, region="head"))
+        for s in (1, -1):
+            front += lock((CX + s * 39, 44), (CX + s * 38, 76), 8, s * -1)
+    elif name == "wavy":
+        # long waves: a wavy silhouette, soft side-swept bangs and rippling side locks
+        pts = [(CX, 8), (CX + 30, 11), (CX + 45, 30), (CX + 47, 62)]
+        for i in range(7):
+            y = 80 + i * 21
+            pts.append((CX + 49 + (5 if i % 2 else -2) + i * 0.8, y))
+        hem = [(CX + 52, 220), (CX + 30, 228), (CX + 10, 222), (CX - 10, 226), (CX - 30, 222), (CX - 52, 224)]
+        pts += hem
+        for i in range(6, -1, -1):
+            y = 80 + i * 21
+            pts.append((CX - 49 - (5 if i % 2 == 0 else -2) - i * 0.8, y))
+        pts += [(CX - 47, 62), (CX - 45, 30), (CX - 30, 11)]
+        d = smooth(pts, closed=True, t=0.9)
+        back += back_layer(d, 226) + back_strands([30, 40, -30, -40, 14, -14], 90, 214)
+        front += front_cap() + bangs("side")
+        for s in (1, -1):
+            wave = smooth([(CX + s * 34, 50), (CX + s * 44, 52), (CX + s * 47, 80), (CX + s * 42, 100), (CX + s * 48, 124), (CX + s * 44, 150), (CX + s * 38, 158),
+                           (CX + s * 38, 140), (CX + s * 34, 120), (CX + s * 38, 98), (CX + s * 34, 74)], closed=True, t=0.9)
+            front += [L(wave, HAIR, region="head"), L(wave, stroke="hairD", width=0.8, alpha=0.6, region="head")]
+            front.append(L(path((CX + s * 40, 70), [("C", (CX + s * 44, 86), (CX + s * 38, 104), (CX + s * 43, 128))], close=False), stroke="hairD", width=0.6, alpha=0.35, region="head"))
     elif name == "buzz":
         d = sym((CX, 17), [("C", (CX + 25, 17), (CX + 36.5, 31), (CX + 36, 54)), ("C", (CX + 35, 52), (CX + 31, 45), (CX + 25, 41)),
                            ("C", (CX + 16, 37.5), (CX + 8, 38), (CX, 39))])

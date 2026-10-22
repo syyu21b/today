@@ -71,6 +71,7 @@ import com.today.app.data.BrowStyle
 import com.today.app.data.EyeStyle
 import com.today.app.data.FaceFeature
 import com.today.app.data.FaceShape
+import com.today.app.data.Gender
 import com.today.app.data.HairStyle
 import com.today.app.data.Looks
 import com.today.app.data.Mood
@@ -194,11 +195,12 @@ fun CharacterCreatorScreen(vm: TodayViewModel) {
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .height(330.dp)
+                    .height(372.dp)
                     .clip(RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp))
                     .background(PanelBg)
                     .border(1.dp, TileLine, RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)),
             ) {
+                GenderSwitch(draft.gender) { g -> edit { Looks.switchGender(it, g) } }
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf("✨", "🧍", "🙂", "👁", "👄", "💇", "💄", "👕").forEachIndexed { i, icon ->
                         val on = tab == i
@@ -264,6 +266,31 @@ fun CharacterCreatorScreen(vm: TodayViewModel) {
             confirmButton = { TextButton(onClick = { confirmDiscard = false; vm.closeCreator() }) { Text(s.creatorDiscard) } },
             dismissButton = { TextButton(onClick = { confirmDiscard = false }) { Text(s.cancel) } },
         )
+    }
+}
+
+/** "여자 | 남자": picking the other one starts from that gender's first look (clothes stay). */
+@Composable
+private fun GenderSwitch(selected: Gender, onPick: (Gender) -> Unit) {
+    val s = LocalStrings.current
+    Row(
+        Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 10.dp).clip(RoundedCornerShape(12.dp)).background(TileBg).border(1.dp, TileLine, RoundedCornerShape(12.dp)).padding(3.dp),
+    ) {
+        Gender.entries.forEach { g ->
+            val on = g == selected
+            Box(
+                Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(9.dp))
+                    .background(if (on) GoldC.copy(alpha = 0.22f) else Color.Transparent)
+                    .border(if (on) 1.5.dp else 0.dp, if (on) GoldC else Color.Transparent, RoundedCornerShape(9.dp))
+                    .clickable { if (!on) onPick(g) }
+                    .padding(vertical = 7.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text((if (g == Gender.FEMALE) "♀ " else "♂ ") + s.genderName(g), color = if (on) GoldC else TextC, fontWeight = if (on) FontWeight.Bold else null, fontSize = 13.sp)
+            }
+        }
     }
 }
 
@@ -417,7 +444,7 @@ private fun Toggle(label: String, on: Boolean, onClick: () -> Unit) {
 private fun ColumnScope.PresetsTab(d: Outfit, edit: ((Outfit) -> Outfit) -> Unit) {
     val s = LocalStrings.current
     Section(s.creatorTab(0), s.creatorPresetHint)
-    TileGrid(Looks.presets, 5) { look, m ->
+    TileGrid(Looks.forGender(d.gender), 5) { look, m ->
         val o = look.applyTo(d)
         Tile(look.matches(d), { edit { look.applyTo(it) } }, m) { AvatarHead(o.withoutAccessories(), Modifier.fillMaxSize()) }
     }
@@ -529,8 +556,8 @@ private fun TuneSlider(t: Tune, value: Float, onChange: (Float) -> Unit) {
 @Composable
 private fun ColumnScope.HairTab(d: Outfit, edit: ((Outfit) -> Outfit) -> Unit) {
     val s = LocalStrings.current
-    Section(s.creatorTab(4))
-    TileGrid(HairStyle.entries, 5) { h, m ->
+    Section(s.creatorTab(5))
+    TileGrid(HairStyle.forGender(d.gender), 5) { h, m ->
         Tile(d.style == h, { edit { it.copy(hairStyle = h, longHair = h.long) } }, m, s.hairStyleName(h), aspect = 0.8f) {
             AvatarHead(d.copy(hairStyle = h).withoutAccessories(), Modifier.fillMaxSize(), box = HeadBox.HAT)
         }
@@ -554,7 +581,7 @@ private enum class ColorSlot { TOP, ACCENT, BOTTOM, SHOES }
 private fun ColumnScope.OutfitTab(d: Outfit, edit: ((Outfit) -> Outfit) -> Unit) {
     val s = LocalStrings.current
     Section(s.secTop)
-    TileGrid(TopStyle.entries, 5) { t, m ->
+    TileGrid(TopStyle.entries.filter { d.gender in it.genders }, 5) { t, m ->
         Tile(d.topStyle == t, { edit { it.copy(topStyle = t) } }, m, s.topStyleName(t), aspect = 0.75f) {
             AvatarHead(d.copy(topStyle = t).withoutAccessories(), Modifier.fillMaxSize(), box = HeadBox.BUST)
         }
@@ -568,7 +595,7 @@ private fun ColumnScope.OutfitTab(d: Outfit, edit: ((Outfit) -> Outfit) -> Unit)
     }
     if (d.topStyle != TopStyle.DRESS) {
         Section(s.secBottom)
-        TileGrid(BottomStyle.entries, 5) { b, m ->
+        TileGrid(BottomStyle.entries.filter { d.gender in it.genders }, 5) { b, m ->
             Tile(d.bottom == b, { edit { it.copy(bottomStyle = b, shorts = b == BottomStyle.SHORTS) } }, m, s.bottomStyleName(b), aspect = 0.5f) {
                 PixelAvatar(d.copy(bottomStyle = b).withoutAccessories(), Modifier.fillMaxHeight().padding(2.dp), animateColors = false)
             }

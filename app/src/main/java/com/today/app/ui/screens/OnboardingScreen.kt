@@ -50,6 +50,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.today.app.data.AppLanguage
+import com.today.app.data.Gender
 import com.today.app.data.HairStyle
 import com.today.app.data.MAX_PET_NAME
 import com.today.app.data.Outfits
@@ -132,7 +133,7 @@ fun OnboardingScreen(vm: TodayViewModel, modifier: Modifier = Modifier) {
             ) {
                 when (current) {
                     0 -> WelcomeStep(outfit)
-                    1 -> ProfileStep(nickname, { nickname = it }, outfit, onCustomize = vm::openCreator)
+                    1 -> ProfileStep(nickname, { nickname = it }, outfit, onCustomize = vm::openCreator, onGender = vm::setGender)
                     2 -> GoalsStep(packs, { id -> packs = if (id in packs) packs - id else packs + id }, questCount)
                     3 -> PetStep(species, { species = it }, petName, { petName = it })
                     else -> ReadyStep(outfit, species, nickname.ifBlank { vm.settings.nickname }, vm.backdrop)
@@ -196,10 +197,21 @@ private fun ProfileStep(
     onNickname: (String) -> Unit,
     outfit: com.today.app.data.Outfit,
     onCustomize: () -> Unit,
+    onGender: (Gender) -> Unit,
 ) {
     val s = LocalStrings.current
     Text(s.obProfileTitle, style = MaterialTheme.typography.titleLarge)
     Text(s.obProfileHint, color = TextMuted, fontSize = 14.sp)
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Gender.entries.forEach { g ->
+            FilterChip(
+                selected = outfit.gender == g,
+                onClick = { onGender(g) },
+                label = { Text((if (g == Gender.FEMALE) "♀ " else "♂ ") + s.genderName(g), fontSize = 15.sp) },
+                modifier = Modifier.weight(1f).height(44.dp),
+            )
+        }
+    }
     Backdrop("default", Modifier.fillMaxWidth().height(240.dp).clip(RoundedCornerShape(24.dp)).clickable(onClick = onCustomize)) {
         PixelAvatar(outfit, Modifier.height(228.dp).padding(top = 8.dp))
     }
@@ -216,10 +228,10 @@ private fun ProfileStep(
 
 /** Hair styles as chips (shared by the guide and the wardrobe editor). */
 @Composable
-fun HairStyleChips(selected: HairStyle, onSelect: (HairStyle) -> Unit) {
+fun HairStyleChips(selected: HairStyle, gender: Gender, onSelect: (HairStyle) -> Unit) {
     val s = LocalStrings.current
     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        HairStyle.entries.forEach { h ->
+        HairStyle.forGender(gender).forEach { h ->
             FilterChip(selected = h == selected, onClick = { onSelect(h) }, label = { Text(s.hairStyleName(h)) })
         }
     }

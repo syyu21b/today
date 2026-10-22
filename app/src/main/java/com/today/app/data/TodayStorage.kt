@@ -348,7 +348,9 @@ class TodayStorage(context: Context) {
         name = o.getString("name"),
         nameEn = o.optString("nameEn", o.getString("name")),
         handle = o.optString("handle"),
-        outfit = Looks.forFriend(outfitFromJson(o.getJSONObject("outfit")), o.getString("id")),
+        // Demo friends are scripted characters: always drawn as currently designed.
+        outfit = DummyData.demoFriend(o.getString("id"))?.takeIf { o.optString("source") == FriendSource.DEMO.name }?.outfit
+            ?: Looks.forFriend(outfitFromJson(o.getJSONObject("outfit")), o.getString("id")),
         online = o.optBoolean("online"),
         level = o.optInt("level", 1),
         source = enumOr(o.optString("source"), FriendSource.MANUAL),
@@ -395,9 +397,13 @@ class TodayStorage(context: Context) {
         .put("eyeColor", o.eyeColor).put("lipColor", o.lipColor).put("blush", o.blush)
         .put("topStyle", o.topStyle.name).put("bottomStyle", o.bottomStyle?.name ?: "").put("shoeStyle", o.shoeStyle.name)
         .put("tune", JSONObject().apply { o.tune.forEach { (k, v) -> put(k.name, v.toDouble()) } })
+        .put("gender", o.gender.name)
 
     private fun outfitFromJson(j: JSONObject): Outfit {
         val accent = j.getInt("accent")
+        // Before genders existed the BROAD body was the male one.
+        val legacyBroad = !j.has("gender") && j.optString("body") == BodyType.BROAD.name
+        val gender = if (legacyBroad) Gender.MALE else enumOr(j.optString("gender"), Gender.FEMALE)
         return Outfit(
             name = Outfits.normalizeName(j.getString("name")),
             hair = j.getInt("hair"),
@@ -418,7 +424,7 @@ class TodayStorage(context: Context) {
             features = j.optJSONArray("features")?.let { arr ->
                 List(arr.length()) { arr.optString(it) }.mapNotNull { runCatching { FaceFeature.valueOf(it) }.getOrNull() }.toSet()
             }.orEmpty(),
-            body = enumOr(j.optString("body"), BodyType.SLIM),
+            body = if (legacyBroad) BodyType.SLIM else enumOr(j.optString("body"), BodyType.SLIM),
             faceShape = enumOr(j.optString("faceShape"), FaceShape.OVAL),
             eyeStyle = enumOr(j.optString("eyeStyle"), EyeStyle.ALMOND),
             browStyle = enumOr(j.optString("browStyle"), BrowStyle.NATURAL),
@@ -435,6 +441,7 @@ class TodayStorage(context: Context) {
                     if (v.isNaN() || v == 0f) null else key to v
                 }.toMap()
             }.orEmpty(),
-        )
+            gender = gender,
+        ).fitGender()
     }
 }

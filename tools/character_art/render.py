@@ -56,7 +56,7 @@ def layers(o):
     out += tagged(parts.arms(bt), "torso")
     out += tagged(clothes.top(bt, o.get("topKind", "tee"), o.get("sleeve", "short")), "torso")
     out += tagged(parts.hands(bt), "torso")
-    face = parts.head(o.get("face", "oval")) + parts.blush(o.get("blushStrong", False)) + parts.nose() + acc.features(o.get("features", []))         + parts.mouth(mood) + parts.eyes(o.get("eyes", "almond"), mood, bt) + front + parts.brows(o.get("brows", "natural"), mood)
+    face = parts.head(o.get("face", "oval"), bt) + (parts.blush(o.get("blushStrong", False)) if bt == "F" or o.get("blushStrong") else []) + parts.nose(bt) + acc.features(o.get("features", []))         + parts.mouth(mood, bt) + parts.eyes(o.get("eyes", "almond"), mood, bt) + front + parts.brows(o.get("brows", "natural"), mood, g=bt)
     out += tagged(face, "head")
     for _, fr in accs:
         out += tagged(fr, "head")
