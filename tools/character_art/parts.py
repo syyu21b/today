@@ -1,22 +1,46 @@
-"""Character parts as layers. Body types: F (feminine) / M (masculine)."""
+"""Character parts as layers. Genders: F / M.
+
+Body proportions follow figure-drawing landmarks for a ~6.2-heads stylised adult (webtoon style):
+head = 1 unit (crown 40 to chin ~113 after the head is scaled in warp.py, H = 72.9 art units),
+shoulders 1.45 H, chest 2 H, waist 2.6 H (F, higher) / 2.7 H (M), hips 3.2 H, crotch 3.42 H,
+knees 4.72 H, ankles 5.92 H, soles 6.2 H. Elbows sit at the waist, wrists at the crotch, fingertips at
+mid-thigh. Women: narrower shoulders (~1.6 head widths), a defined waist, hips wider than the chest.
+Men: shoulders ~2 head widths, a V-taper to a straighter waist, narrower hips.
+"""
 from geo import *
 
-# ---------------------------------------------------------------- body proportions
-# Right half outlines (x offset from the centre line); mirrored for the left.
+H = 72.9
+Y = {
+    "F": dict(chin=113, neck=136, sh=146, arm=170, bust=186, ub=200, waist=229.5, navel=248, hip=273, crotch=290, knee=384, calf=408, ankle=472, sole=492),
+    "M": dict(chin=114, neck=135, sh=146, arm=170, bust=186, ub=202, waist=237, navel=250, hip=270, crotch=291, knee=384, calf=408, ankle=472, sole=492),
+}
+# Right half of the torso (x offset from the centre line, y), neck base to crotch.
 TORSO = {
-    "F": [(7.5, 134), (17, 137), (25, 141), (28, 149), (26, 164), (21.5, 186), (19.5, 204), (21.5, 222), (26, 238), (28, 250), (25, 262), (13, 267), (0, 268)],
-    "M": [(10, 134), (23, 137), (32, 141), (34.5, 150), (32, 168), (28, 190), (26, 210), (26, 226), (26.5, 242), (27, 254), (23, 264), (12, 268), (0, 269)],
+    "F": [(10.5, 133), (19, 136.5), (30, 139.5), (38, 143.5), (40.5, 150), (38, 159), (34.5, 169), (34.6, 181), (33.6, 193), (29.6, 209), (25.6, 229),
+          (26.8, 241), (31.4, 255), (36.6, 268), (38, 278), (35.4, 288), (25, 294.5), (12, 296.5), (0, 297)],
+    "M": [(14, 132.5), (26, 135.5), (39.5, 139), (47.5, 143.5), (50, 151), (47, 161), (42.4, 171), (41.4, 184), (39.6, 199), (36, 216), (32.6, 236),
+          (33, 250), (34, 262), (34.8, 272), (34, 283), (31, 291.5), (20, 296.5), (10, 298.5), (0, 299)],
 }
-NECK = {"F": 7.2, "M": 9.6}
+NECK = {"F": 10.2, "M": 13.6}
 LEG = {  # (x, y, half width) down the right leg
-    "F": [(13.8, 248, 13.8), (13.2, 285, 12.8), (11.8, 322, 10.6), (10.6, 356, 7.8), (10.8, 384, 8.6), (10.6, 420, 6.2), (10.4, 452, 4.6)],
-    "M": [(14.4, 248, 14.4), (14, 285, 13.6), (12.6, 322, 11.4), (11.6, 356, 8.8), (11.8, 384, 9.6), (11.6, 420, 7), (11.4, 452, 5.4)],
+    "F": [(17.6, 280, 17.6), (16.2, 300, 16.6), (15, 330, 14.6), (13.6, 360, 12), (12.6, 384, 10.2), (12.8, 408, 11), (12.2, 435, 8.6), (11.6, 458, 6.8), (11.4, 472, 6.2)],
+    "M": [(18.6, 278, 18.6), (17.6, 300, 17.6), (16.3, 330, 15.6), (14.9, 360, 13.2), (13.9, 384, 11.6), (14.1, 408, 12.6), (13.5, 435, 10), (12.9, 458, 8), (12.7, 472, 7.4)],
 }
-ARM = {
-    "F": [(25.2, 145, 6.5), (27.6, 170, 5.6), (28.6, 196, 4.7), (29.4, 220, 4.2), (30.6, 242, 3.5)],
-    "M": [(31.5, 146, 8), (34.2, 172, 6.9), (35.4, 198, 5.9), (36.2, 222, 5.2), (37.4, 245, 4.4)],
+ARM = {  # shoulder joint -> elbow (at the waist) -> wrist (at the crotch)
+    "F": [(30.4, 147, 10.4), (32, 166, 8.4), (32.8, 190, 7.4), (33.4, 212, 6.5), (33.8, 231, 6.0), (34.6, 250, 6.2), (35.6, 268, 5.2), (36.4, 284, 4.1)],
+    "M": [(37, 147, 13.4), (39, 167, 11), (39.8, 191, 9.8), (40.2, 214, 8.5), (40.4, 237, 7.7), (41, 256, 7.9), (41.8, 273, 6.7), (42.4, 288, 5.1)],
 }
-Y = dict(neck=112, sh=140, ch=165, wa=204, hip=242, crotch=264, knee=356, ankle=452, foot=470)
+
+
+def tx(bt, y):
+    """Torso half-width at y (linear between the outline points)."""
+    pts = TORSO[bt]
+    if y <= pts[0][1]:
+        return pts[0][0]
+    for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+        if y0 <= y <= y1:
+            return x0 + (x1 - x0) * (y - y0) / max(1e-6, y1 - y0)
+    return pts[-1][0]
 
 
 def outline(right, grow=0.0, until=None):
@@ -45,24 +69,35 @@ def arm_region(s):
 
 def body(bt):
     out = []
+    y = Y[bt]
     nk = NECK[bt]
-    neck = sym((CX, 104), [("L", (CX + nk - 0.6, 104)), ("C", (CX + nk, 122), (CX + nk + 1.5, 130), (CX + nk + 9, 138)), ("L", (CX, 139))])
+    # neck: a cylinder flaring into the trapezius
+    neck = sym((CX, 100), [("L", (CX + nk, 100)), ("C", (CX + nk + 0.3, 120), (CX + nk + 1.5, 129), (CX + nk + 8, y["neck"] + 1)), ("L", (CX, y["neck"] + 4))])
     out.append(L(neck, "lin:skinS:skin:100:110:100:136", region="torso"))
-    # shadow the head casts on the neck
-    out.append(L(sym((CX, 104), [("L", (CX + nk, 104)), ("C", (CX + nk, 122), (CX + 4, 128), (CX, 129))]), "skinS", alpha=0.7, region="torso"))
-    if bt == "M":
-        out.append(L(path((CX - 1.6, 124), [("C", (CX - 0.6, 126.5), (CX + 0.6, 126.5), (CX + 1.6, 124))], close=False), stroke="skinD", width=0.8, alpha=0.35, region="torso"))
-    # collarbones
+    # shadow of the jaw on the neck, sternocleidomastoid lines
+    out.append(L(sym((CX, 100), [("L", (CX + nk, 100)), ("C", (CX + nk, 116), (CX + 5, 122), (CX, 123.5))]), "skinS", alpha=0.75, region="torso"))
     for s in (1, -1):
-        out.append(L(path((CX + s * 4, 141), [("C", (CX + s * 9, 139.5), (CX + s * 14, 140), (CX + s * 18, 139))], close=False), stroke="skinD", width=0.8, alpha=0.35, region="torso"))
+        out.append(L(path((CX + s * (nk - 1.5), 112), [("C", (CX + s * (nk - 3), 122), (CX + s * 5, 130), (CX + s * 2.5, 135))], close=False), stroke="skinS", width=1.2, alpha=0.4, region="torso"))
+    if bt == "M":
+        out.append(L(path((CX - 2, 121), [("C", (CX - 0.8, 124), (CX + 0.8, 124), (CX + 2, 121))], close=False), stroke="skinD", width=0.9, alpha=0.35, region="torso"))
     for s in (1, -1):
         sp = leg_spine(bt, s)
-        out.append(L(limb(sp), "lin:skinS:skinL:" + f"{CX + s * 1}:300:{CX + s * 22}:300", region=leg_region(s)))
-        # inner-leg shade, knee and ankle bone
-        kx = CX + s * LEG[bt][3][0]
-        out.append(L(path((CX + s * 3, 268), [("C", (CX + s * 4, 300), (CX + s * 5, 330), (kx - s * 5, 356))], close=False), stroke="skinS", width=2.2, alpha=0.35, region=leg_region(s)))
-        out.append(L(path((kx - 3, 353), [("C", (kx - 1.5, 349), (kx + 1.5, 349), (kx + 3, 353))], close=False), stroke="skinD", width=0.8, alpha=0.4, region=leg_region(s)))
-    out.append(L(outline(TORSO[bt]), "lin:skinL:skinS:100:140:100:268", region="torso"))
+        reg = leg_region(s)
+        out.append(L(limb(sp), "lin:skinS:skinL:" + f"{CX + s * 2}:340:{CX + s * 26}:340", region=reg))
+        kx = CX + s * LEG[bt][4][0]
+        # inner thigh shade, kneecap, shin line, ankle bone
+        out.append(L(path((CX + s * 4, y["crotch"]), [("C", (CX + s * 5, 320), (CX + s * 6, 350), (kx - s * 6, y["knee"] - 4))], close=False), stroke="skinS", width=3, alpha=0.3, region=reg))
+        # soft kneecap: a light plane with a faint shadow under it
+        out.append(L(ell(kx, y["knee"] - 3, 5.5, 4.2), "skinL", alpha=0.35, region=reg))
+        out.append(L(path((kx - 4, y["knee"] + 2.5), [("C", (kx - 1.5, y["knee"] + 4.5), (kx + 1.5, y["knee"] + 4.5), (kx + 4, y["knee"] + 2.5))], close=False), stroke="skinS", width=1.2, alpha=0.3, region=reg))
+        ax = CX + s * LEG[bt][-1][0]
+        out.append(L(ell(ax - s * 4, y["ankle"] - 4, 1.6, 2.2), "skinS", alpha=0.6, region=reg))
+    out.append(L(outline(TORSO[bt]), "lin:skinL:skinS:100:140:100:296", region="torso"))
+    # collarbones and the pit of the neck
+    for s in (1, -1):
+        out.append(L(path((CX + s * 3.5, y["neck"] + 6), [("C", (CX + s * 10, y["neck"] + 4), (CX + s * 18, y["neck"] + 5), (CX + s * (27 if bt == "F" else 34), y["neck"] + 4))], close=False),
+                     stroke="skinD", width=0.9, alpha=0.35, region="torso"))
+    out.append(L(ell(CX, y["neck"] + 6.5, 2.4, 1.6), "skinS", alpha=0.5, region="torso"))
     return out
 
 
@@ -70,29 +105,42 @@ def arms(bt):
     out = []
     for s in (1, -1):
         sp = arm_spine(bt, s)
-        out.append(L(limb(sp), "lin:skinL:skinS:" + f"{CX + s * 22}:200:{CX + s * 38}:200", region=arm_region(s)))
-        ex, ey = sp[2][0], sp[2][1]
-        out.append(L(path((ex - s * 2, ey - 1), [("C", (ex - s * 0.5, ey + 1), (ex + s * 1, ey + 1), (ex + s * 2.4, ey - 0.5))], close=False), stroke="skinD", width=0.7, alpha=0.35, region=arm_region(s)))
+        reg = arm_region(s)
+        out.append(L(limb(sp), "lin:skinL:skinS:" + f"{CX + s * (sp[0][0] - 8)}:220:{CX + s * (sp[0][0] + 10)}:220", region=reg))
+        # deltoid edge and the elbow crease
+        out.append(L(path((sp[0][0] + s * 5, sp[0][1] + 6), [("C", (sp[1][0] + s * 3, sp[1][1] + 4), (sp[2][0] + s * 1, sp[2][1] - 6), (sp[2][0] - s * 1.5, sp[2][1]))], close=False),
+                     stroke="skinS", width=1.1, alpha=0.35, region=reg))
+        ex, ey = sp[4][0], sp[4][1]
+        out.append(L(path((ex - s * 3, ey - 1), [("C", (ex - s * 1, ey + 1.5), (ex + s * 1, ey + 1.5), (ex + s * 3, ey - 0.5))], close=False), stroke="skinD", width=0.8, alpha=0.4, region=reg))
     return out
 
 
 def hands(bt):
-    """Relaxed hands (drawn over the clothes so sleeves and hips never hide them)."""
+    """Relaxed hands seen from the front: palm towards the thigh, so the hand shows its thumb side --
+    a narrow back of the hand, the thumb resting in front and fingers gently curled towards the body.
+    ~0.55 head long; drawn over the clothes so sleeves and hips never hide them."""
     out = []
     for s in (1, -1):
         hx, hy, hw = arm_spine(bt, s)[-1]
-        k = 1.08 if bt == "F" else 1.2
+        k = 1.0 if bt == "F" else 1.15
+        reg = arm_region(s)
+
         def h(dx, dy):
-            return (hx + s * dx * k, hy + dy * k)
-        palm = smooth([h(-3.6, -2), h(3.4, -2), h(4.6, 4), h(4.4, 9.5), h(2.6, 13.6), h(0, 14.6), h(-2.6, 13.4), h(-3.8, 9), h(-4.2, 3)], closed=True, t=0.9)
-        out.append(L(palm, "lin:skinL:skinS:" + f"{f(hx)}:{f(hy)}:{f(hx)}:{f(hy + 15 * k)}", region=arm_region(s)))
-        # thumb in front, finger lines
-        thumb = smooth([h(-3.6, 1), h(-1.2, 3.5), h(-0.6, 8), h(-2, 10), h(-4.2, 7.5), h(-4.6, 3.5)], closed=True, t=0.9)
-        out.append(L(thumb, "skin", region=arm_region(s)))
-        out.append(L(thumb, stroke="skinD", width=0.6, alpha=0.45, region=arm_region(s)))
-        for dx in (0.9, 2.6):
-            out.append(L(path(h(dx, 9), [("L", h(dx + 0.2, 13.2))], close=False), stroke="skinD", width=0.5, alpha=0.4, region=arm_region(s)))
-        out.append(L(palm, stroke="skinD", width=0.6, alpha=0.45, region=arm_region(s)))
+            return (hx + s * dx * k, hy - 3 + dy * k)
+        # back of the hand and the curled fingers (index finger in front)
+        hand = smooth([h(-3.8, 0), h(3.8, 0), h(5, 7), h(5.4, 15), h(4.6, 23), h(2.8, 31), h(0.6, 37), h(-1.8, 39.5), h(-3.6, 37.5), h(-3.4, 33),
+                       h(-4.6, 26), h(-5.2, 16), h(-4.8, 7)], closed=True, t=0.9)
+        out.append(L(hand, "lin:skinL:skinS:" + f"{f(hx + s * 5 * k)}:{f(hy)}:{f(hx - s * 5 * k)}:{f(hy)}", region=reg))
+        # finger joints: three soft creases where the fingers bend
+        for (x0, y0, x1, y1) in [(4.4, 22, 1.4, 25), (3, 29, 0.2, 31.5), (1.4, 34, -1.4, 35.5)]:
+            out.append(L(path(h(x0, y0), [("C", h(x0 - 1, y0 + 1.6), h(x1 + 1, y1 - 0.4), h(x1, y1))], close=False), stroke="skinD", width=0.6, alpha=0.45, region=reg))
+        out.append(L(path(h(-2.6, 18), [("C", h(-1.8, 25), h(-0.8, 31), h(-1.2, 37))], close=False), stroke="skinS", width=1.1, alpha=0.45, region=reg))
+        # thumb lying along the front of the hand
+        thumb = smooth([h(-4.4, 5), h(-2.2, 8), h(-1.6, 15), h(-2.4, 22), h(-4, 25), h(-5.6, 22.5), h(-6, 14), h(-5.6, 8)], closed=True, t=0.9)
+        out.append(L(thumb, "lin:skin:skinS:" + f"{f(hx)}:{f(hy)}:{f(hx)}:{f(hy + 25 * k)}", region=reg))
+        out.append(L(thumb, stroke="skinD", width=0.6, alpha=0.5, region=reg))
+        out.append(L(ell(*h(-3.8, 22.2), 1.1, 1.0), "skinL", alpha=0.7, region=reg))
+        out.append(L(hand, stroke="skinD", width=0.6, alpha=0.5, region=reg))
     return out
 
 

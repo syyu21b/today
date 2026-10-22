@@ -10,7 +10,7 @@ from render import roles, layers, CHROME, D
 
 RES = os.path.join(D, "..", "..", "app", "src", "main", "res", "drawable")
 # Head and shoulders of the 200 x 545 art, mapped onto the 108 x 108 adaptive canvas.
-CROP_X, CROP_Y, CROP = 32.0, 10.0, 136.0
+CROP_X, CROP_Y, CROP = 46.0, 26.0, 108.0
 INSET = 16.0  # keeps the head inside the 66dp safe zone
 SCALE = (108 - 2 * INSET) / CROP
 
@@ -22,7 +22,7 @@ PRESETS = {
     "sunset": dict(hair="#B4462E", top="#FF8C42", acc="#FFE066", bottom="#5B2A4E", shoes="#2A1A26", hairStyle="long", sleeve="short"),
     "neon": dict(hair="#FF4FD8", top="#1B1B2F", acc="#3DFFB4", bottom="#3D2EFF", shoes="#3DFFB4", stripe="#3DFFB4", hairStyle="long"),
 }
-BASE = dict(body="F", skin="#F5C9A3", iris="#6B4FD0", lip="#E8707E", hairStyle="short", topKind="tee", sleeve="long",
+BASE = dict(body="F", skin="#F5C9A3", iris="#6B4FD0", lip="#E8707E", hairStyle="pixie", topKind="tee", sleeve="long",
             bottomKind="pants", eyes="almond", mood="normal")
 
 # Themed (monochrome) icons only use alpha: hair solid, face and clothes lighter, features cut darker.
@@ -30,7 +30,7 @@ MONO_ALPHA = {"hair": 1.0, "skin": 0.55, "top": 0.8, "line": 1.0, "eyeLine": 1.0
 
 
 # The same presets drawn as a boy (AppIconManager picks the "_m" alias for male characters).
-MALE_HAIR = {"default": "comma", "street": "short", "ocean": "spiky", "forest": "parted", "sunset": "slicked", "neon": "spiky"}
+MALE_HAIR = {"default": "comma", "street": "short", "ocean": "curtain", "forest": "parted", "sunset": "wolf", "neon": "leaf"}
 BASE_M = dict(body="M", skin="#F0CDB0", iris="#3E3A5A", lip="#C08080", topKind="tee", sleeve="long", bottomKind="pants", eyes="almond", mood="normal")
 
 

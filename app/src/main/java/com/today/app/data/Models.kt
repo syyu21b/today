@@ -44,8 +44,13 @@ private val M = setOf(Gender.MALE)
 
 /** Hair shapes drawn by the avatar (art in character_art.json); [genders] = who the creator offers them to. */
 enum class HairStyle(val long: Boolean, val genders: Set<Gender>) {
-    SHORT(false, BOTH), LONG(true, F), BOB(true, F), PONYTAIL(true, F), TWINTAIL(true, F), BUN(false, F), SPIKY(false, M), CURLY(false, BOTH),
-    BUZZ(false, M), COMMA(false, M), PARTED(false, M), SLICKED(false, M), WAVY(true, F),
+    // Women (2025-26 trends): long layers + curtain bangs, hush cut, build perm, Elizabeth waves, hime cut, tassel bob, pixie...
+    LONG(true, F), HUSH(true, F), BUILD(true, F), WAVY(true, F), HIME(true, F), BOB(true, F), PIXIE(false, F), PONYTAIL(true, F), BUN(false, F), TWINTAIL(true, F),
+    // Men: soft two-block, comma hair, 6:4 parted perm, curtain hair, leaf cut, textured crop, wolf cut, slick-back...
+    SHORT(false, M), COMMA(false, M), PARTED(false, M), CURTAIN(false, M), LEAF(false, M), CROP(false, M), WOLF(false, M), SLICKED(false, M),
+    CURLY(false, BOTH), BUZZ(false, M),
+    /** Old saves only; no longer offered. */
+    SPIKY(false, emptySet()),
     ;
 
     companion object {
@@ -65,6 +70,13 @@ enum class BrowStyle { NATURAL, ARCHED, STRAIGHT, THICK }
 enum class TopStyle(val genders: Set<Gender> = BOTH) { TEE, SHIRT, KNIT, HOODIE, JACKET, DRESS(F) }
 enum class BottomStyle(val genders: Set<Gender> = BOTH) { PANTS, SHORTS, SKIRT(F) }
 enum class ShoeStyle { SNEAKERS, BOOTS }
+
+/** The hair photo styles and presets without a chosen style get: long or short for [g]. */
+fun defaultHair(g: Gender, long: Boolean) = when {
+    g == Gender.MALE -> HairStyle.SHORT
+    long -> HairStyle.LONG
+    else -> HairStyle.PIXIE
+}
 
 /** Which creator tab a fine-tune slider sits in. */
 enum class TuneGroup { BODY, FACE, EYES, BROWS, NOSE_MOUTH }
@@ -127,7 +139,7 @@ data class Outfit(
     val tune: Map<Tune, Float> = emptyMap(),
     val gender: Gender = Gender.FEMALE,
 ) {
-    val style: HairStyle get() = hairStyle ?: if (longHair && gender == Gender.FEMALE) HairStyle.LONG else HairStyle.SHORT
+    val style: HairStyle get() = hairStyle ?: defaultHair(gender, longHair)
     val bottom: BottomStyle get() = bottomStyle ?: if (shorts) BottomStyle.SHORTS else BottomStyle.PANTS
 
     fun tuned(t: Tune): Float = tune[t] ?: 0f
@@ -167,8 +179,8 @@ data class Outfit(
         var o = this
         if (gender !in o.topStyle.genders) o = o.copy(topStyle = TopStyle.TEE)
         if (gender !in o.bottom.genders) o = o.copy(bottomStyle = BottomStyle.PANTS, shorts = false)
-        if (o.hairStyle != null && gender !in o.hairStyle!!.genders) o = o.copy(hairStyle = HairStyle.SHORT, longHair = false)
-        return o
+        if (o.hairStyle != null && gender !in o.hairStyle!!.genders) o = o.copy(hairStyle = defaultHair(gender, o.longHair))
+        return o.copy(longHair = o.style.long)
     }
 }
 
@@ -370,13 +382,16 @@ object DummyData {
     }
 
     val friends = listOf(
-        Friend("f1", "민지", "Minji", "minji.daily", Outfits.presets[2], online = true, level = 12),
-        Friend("f2", "준호", "Junho", "junho_dev", Outfits.presets[3].copy(gender = Gender.MALE), online = true, level = 8),
-        Friend("f6", "Alex", "Alex", "alex.levelup", Outfits.presets[1].copy(gender = Gender.MALE), online = true, level = 9),
-        Friend("f3", "서연", "Seoyeon", "seoyeon.run", Outfits.presets[4], online = false, level = 15),
-        Friend("f4", "도윤", "Doyoon", "doyoon.gg", Outfits.presets[5].copy(gender = Gender.MALE), online = true, level = 5),
-        Friend("f5", "하은", "Haeun", "haeun_reads", Outfits.presets[0], online = false, level = 10),
-    ).map { it.copy(outfit = Looks.forFriend(it.outfit, it.id)) }
+        Friend("f1", "민지", "Minji", "minji.daily", demoLook(Outfits.presets[2], Looks.female[1], 0xFF5A3A2C), online = true, level = 12),
+        Friend("f2", "준호", "Junho", "junho_dev", demoLook(Outfits.presets[3], Looks.male[0], 0xFF2A2430), online = true, level = 8),
+        Friend("f6", "Alex", "Alex", "alex.levelup", demoLook(Outfits.presets[1], Looks.male[3], 0xFF8A6A50), online = true, level = 9),
+        Friend("f3", "서연", "Seoyeon", "seoyeon.run", demoLook(Outfits.presets[4], Looks.female[2], 0xFF8A3A2E), online = false, level = 15),
+        Friend("f4", "도윤", "Doyoon", "doyoon.gg", demoLook(Outfits.presets[5], Looks.male[2], 0xFF1E1A22), online = true, level = 5),
+        Friend("f5", "하은", "Haeun", "haeun_reads", demoLook(Outfits.presets[0], Looks.female[5], 0xFF3B2A20), online = false, level = 10),
+    )
+
+    /** A scripted friend: a face preset on an outfit preset, with natural hair colour. */
+    private fun demoLook(clothes: Outfit, look: Look, hair: Long) = look.copy(hair = hair).applyTo(clothes)
 
     fun demoFriend(id: String) = friends.firstOrNull { it.id == id }
 

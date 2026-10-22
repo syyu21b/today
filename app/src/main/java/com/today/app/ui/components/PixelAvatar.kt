@@ -58,13 +58,13 @@ const val AVATAR_ASPECT = CharacterArt.W / CharacterArt.H
 /** Crops of the art box (art coordinates) used for portraits; they grow and shrink with the head-size slider. */
 enum class HeadBox(val rect: Rect) {
     /** Whole face and hair with a little air around it, square (also fits a circle). */
-    FACE(Rect(36f, 10f, 164f, 138f)),
+    FACE(Rect(45f, 21f, 155f, 131f)),
     /** Head with room for tall hats. */
-    HAT(Rect(28f, -38f, 172f, 154f)),
-    /** Head and upper body. */
-    BUST(Rect(22f, -15f, 178f, 235f)),
+    HAT(Rect(36f, -24f, 164f, 132f)),
+    /** Head and upper body, down to the waist. */
+    BUST(Rect(8f, 14f, 192f, 262f)),
     /** Close-up of the eyes and brows. */
-    EYES(Rect(60f, 68f, 140f, 116f)),
+    EYES(Rect(69f, 70f, 131f, 103f)),
 }
 
 private val Ink = Color(0xFF281622)
@@ -125,9 +125,11 @@ private fun partKeys(o: Outfit, mood: Mood, blink: Boolean): List<PartRef> {
     keys += PartRef("body.$bt", head = false)
     if (o.topStyle != TopStyle.DRESS) keys += PartRef("bottom.$bt.${o.bottom.name.lowercase()}", head = false)
     keys += PartRef("shoes.$bt.${o.shoeStyle.name.lowercase()}", head = false)
-    keys += PartRef("arms.$bt", head = false)
     keys += PartRef("top.$bt.$top.$sleeve", head = false)
     if (o.striped) keys += PartRef("stripes.$bt.$top.$sleeve", head = false)
+    // Arms hang in front of the garment's body; its sleeves cover them; hands go over everything.
+    keys += PartRef("arms.$bt", head = false)
+    keys += PartRef("sleeves.$bt.$top.$sleeve", head = false)
     keys += PartRef("hands.$bt", head = false)
     keys += PartRef("head.$bt.${o.faceShape.name.lowercase()}", head = true)
     // Boys only get rosy cheeks when they ask for them (makeup tab).
@@ -291,8 +293,8 @@ private fun DrawScope.drawCharacter(
     }
 }
 
-private val CROWN_GLINTS = listOf(Offset(76f, 7f), Offset(100f, -1f), Offset(124f, 7f))
-private val HALO_GLINTS = listOf(Offset(76f, -1f), Offset(124f, 2f), Offset(100f, -5f))
+private val CROWN_GLINTS = listOf(Offset(81f, 21f), Offset(100f, 15f), Offset(119f, 21f))
+private val HALO_GLINTS = listOf(Offset(81f, 15f), Offset(119f, 17f), Offset(100f, 12f))
 
 private fun DrawScope.drawGlints(points: List<Offset>, time: Float) {
     points.forEachIndexed { i, p ->
@@ -337,8 +339,8 @@ private fun fit(centerX: Float, centerY: Float, height: Float, aspect: Float) =
 fun CharacterStage(outfit: Outfit, modifier: Modifier = Modifier, mood: Mood = Mood.NORMAL, zoom: Float = 0f) {
     CharacterCanvas(outfit, modifier, animateColors = true, mood = mood, dropIn = null, portrait = false) { size ->
         val aspect = size.width / size.height
-        val h = 570f + (175f - 570f) * zoom
-        val cy = (CharacterArt.TOP + CharacterArt.H / 2 - 6f) + (68f - (CharacterArt.TOP + CharacterArt.H / 2 - 6f)) * zoom
+        val h = 580f + (140f - 580f) * zoom
+        val cy = (CharacterArt.TOP + CharacterArt.H / 2 - 6f) + (76f - (CharacterArt.TOP + CharacterArt.H / 2 - 6f)) * zoom
         fit(100f, cy, h, aspect)
     }
 }

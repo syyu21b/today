@@ -80,12 +80,13 @@ def accessory(name):
             fr.append(L(smooth([(CX + s * 34, 66), (CX + s * 45, 64), (CX + s * 48, 82), (CX + s * 45, 98), (CX + s * 34, 96), (CX + s * 33, 82)], t=0.9), "lin:#B3A8FF:#5246B8:100:64:100:98"))
             fr.append(L(ell(CX + s * 42, 81, 3, 7), "#3A3A4A", alpha=0.5))
     elif name == "cape":
-        b.append(L(smooth([(CX - 30, 140), (CX + 30, 140), (CX + 42, 220), (CX + 52, 330), (CX + 30, 338), (CX, 334), (CX - 30, 338), (CX - 52, 330), (CX - 42, 220)], t=0.8),
-                   "lin:#D0344A:#7A1A28:100:140:100:338"))
-        for k in (-30, -12, 12, 30):
-            b.append(L(path((CX + k * 0.6, 160), [("C", (CX + k * 0.8, 230), (CX + k * 1.1, 290), (CX + k * 1.4, 332))], close=False), stroke="#5E1220", width=1.2, alpha=0.5))
-        fr.append(L(smooth([(CX - 26, 140), (CX - 10, 146), (CX, 148), (CX + 10, 146), (CX + 26, 140), (CX + 20, 137), (CX, 141), (CX - 20, 137)], t=0.8), "#B0283A"))
-        fr.append(L(ell(CX, 147, 5, 5), "lin:#FFF2A8:#E0A100:100:142:100:152"))
+        # hangs from the shoulders (y ~140) to below the knees
+        b.append(L(smooth([(CX - 36, 138), (CX + 36, 138), (CX + 52, 230), (CX + 64, 400), (CX + 36, 410), (CX, 405), (CX - 36, 410), (CX - 64, 400), (CX - 52, 230)], t=0.8),
+                   "lin:#D0344A:#7A1A28:100:138:100:410"))
+        for k in (-36, -14, 14, 36):
+            b.append(L(path((CX + k * 0.6, 160), [("C", (CX + k * 0.8, 260), (CX + k * 1.1, 340), (CX + k * 1.45, 404))], close=False), stroke="#5E1220", width=1.3, alpha=0.5))
+        fr.append(L(smooth([(CX - 30, 138), (CX - 12, 144), (CX, 146), (CX + 12, 144), (CX + 30, 138), (CX + 24, 134), (CX, 139), (CX - 24, 134)], t=0.8), "#B0283A"))
+        fr.append(L(ell(CX, 145, 5.5, 5.5), "lin:#FFF2A8:#E0A100:100:140:100:150"))
     elif name == "crown":
         pts = [(CX - 22, 22), (CX - 24, 2), (CX - 13, 12), (CX, -6), (CX + 13, 12), (CX + 24, 2), (CX + 22, 22)]
         fr.append(L(path(pts[0], [("L", p) for p in pts[1:]]), "lin:#FFF2A8:#E0A100:100:-6:100:22"))

@@ -53,8 +53,10 @@ def layers(o):
     out += tagged(parts.body(bt), "torso")
     out += tagged(clothes.bottom(bt, o.get("bottomKind", "pants")), "torso") if o.get("topKind") != "dress" else []
     out += tagged(clothes.shoes(bt, o.get("shoesKind", "sneakers")), "torso")
+    top = tagged(clothes.top(bt, o.get("topKind", "tee"), o.get("sleeve", "short")), "torso")
+    out += [l for l in top if not l.region.startswith("arm")]
     out += tagged(parts.arms(bt), "torso")
-    out += tagged(clothes.top(bt, o.get("topKind", "tee"), o.get("sleeve", "short")), "torso")
+    out += [l for l in top if l.region.startswith("arm")]  # sleeves go over the arms
     out += tagged(parts.hands(bt), "torso")
     face = parts.head(o.get("face", "oval"), bt) + (parts.blush(o.get("blushStrong", False)) if bt == "F" or o.get("blushStrong") else []) + parts.nose(bt) + acc.features(o.get("features", []))         + parts.mouth(mood, bt) + parts.eyes(o.get("eyes", "almond"), mood, bt) + front + parts.brows(o.get("brows", "natural"), mood, g=bt)
     out += tagged(face, "head")
@@ -99,7 +101,7 @@ def svg_body(o, gid):
 
 def sheet(configs, out, scale=2.0, cols=None, crop=None):
     cols = cols or len(configs)
-    vw, vh = crop[2] if crop else 200, crop[3] if crop else 545
+    vw, vh = crop[2] if crop else 200, crop[3] if crop else 560
     ox, oy = (crop[0], crop[1]) if crop else (0, -45)
     W, H = int(vw * scale), int(vh * scale)
     rows = (len(configs) + cols - 1) // cols
@@ -130,7 +132,10 @@ if __name__ == "__main__":
         sheet([dict(BASE_F, acc_items=["cape"]), dict(BASE_M, features=["beard", "wrinkles"], hair="#9E9EA8", acc_items=["strawhat"]),
                dict(BASE_M, features=["mustache"], hairStyle="curly"), dict(BASE_F, features=["freckles"], hairStyle="twintail", hair="#E8B45A")], "feat.png", scale=1.8, cols=4)
     elif what == "hair":
-        hs = ["short", "long", "bob", "ponytail", "twintail", "bun", "spiky", "curly", "buzz"]
-        sheet([dict(BASE_F if i % 2 == 0 else BASE_M, hairStyle=h, hair=["#7A5038", "#D9A84E", "#2E2A3A"][i % 3]) for i, h in enumerate(hs)], "hair.png", scale=2.4, crop=(20, -15, 160, 160), cols=5)
+        fem = ["long", "hush", "build", "wavy", "hime", "bob", "pixie", "ponytail", "bun", "twintail"]
+        men = ["short", "comma", "parted", "curtain", "leaf", "crop", "wolf", "slicked", "curly", "buzz"]
+        cols = ["#5A3A2C", "#2B2430", "#8A6040", "#C9A27A", "#3A2A40"]
+        sheet([dict(BASE_F, hairStyle=h, hair=cols[i % 5]) for i, h in enumerate(fem)], "hair_f.png", scale=2.6, crop=(32, 20, 136, 150), cols=5)
+        sheet([dict(BASE_M, hairStyle=h, hair=cols[(i + 1) % 5]) for i, h in enumerate(men)], "hair_m.png", scale=2.6, crop=(32, 20, 136, 150), cols=5)
     elif what == "face":
         sheet([BASE_F, BASE_M], "face.png", scale=6, crop=(55, 0, 90, 130))

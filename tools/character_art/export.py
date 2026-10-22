@@ -12,7 +12,7 @@ from geo import L, CX
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "app", "src", "main", "assets", "character_art.json")
 GENDERS = ["F", "M"]
 MOODS = ["normal", "happy", "sleepy", "sad", "excited", "calm", "love", "angry", "sick"]
-HAIRS = ["short", "long", "bob", "ponytail", "twintail", "bun", "spiky", "curly", "buzz", "comma", "parted", "slicked", "wavy"]
+HAIRS = hair.ALL
 EYES = ["almond", "round", "sharp", "gentle"]
 BROWS = ["natural", "arched", "straight", "thick"]
 FACES = ["oval", "round", "sharp", "square"]
@@ -87,7 +87,10 @@ def main():
         for k in ("sneakers", "boots"):
             p[f"shoes.{bt}.{k}"] = enc(clothes.shoes(bt, k), "torso", bt)
         for kind, sl in TOPS:
-            p[f"top.{bt}.{kind}.{sl}"] = enc(clothes.top(bt, kind, sl), "torso", bt)
+            layers = clothes.top(bt, kind, sl)
+            # the garment body goes under the arms, the sleeves over them
+            p[f"top.{bt}.{kind}.{sl}"] = enc([l for l in layers if not (l.region or "").startswith("arm")], "torso", bt)
+            p[f"sleeves.{bt}.{kind}.{sl}"] = enc([l for l in layers if (l.region or "").startswith("arm")], "torso", bt)
             p[f"stripes.{bt}.{kind}.{sl}"] = enc(clothes.stripes(bt, kind, sl), "torso", bt)
         for e in EYES:
             for m in MOODS + ["blink"]:

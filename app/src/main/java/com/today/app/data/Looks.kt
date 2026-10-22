@@ -32,17 +32,16 @@ private const val LIP_M = 0xFFC08080
 
 object Looks {
     val female = listOf(
-        Look(Gender.FEMALE, FaceShape.OVAL, EyeStyle.ALMOND, BrowStyle.NATURAL, HairStyle.LONG, 0xFF3B2A3E, 0xFFF6D5C3, 0xFF6B4FD0),
-        Look(Gender.FEMALE, FaceShape.ROUND, EyeStyle.ROUND, BrowStyle.ARCHED, HairStyle.TWINTAIL, 0xFFE8B45A, 0xFFFBE0CC, 0xFF3E6FB8, blush = true),
-        Look(Gender.FEMALE, FaceShape.SHARP, EyeStyle.SHARP, BrowStyle.STRAIGHT, HairStyle.BOB, 0xFF151218, 0xFFF5C9A3, 0xFFE94B5A, lip = 0xFFD94F6A),
-        Look(Gender.FEMALE, FaceShape.OVAL, EyeStyle.GENTLE, BrowStyle.NATURAL, HairStyle.PONYTAIL, 0xFFB4462E, 0xFFE8B98F, 0xFF3F8F4E),
-        Look(Gender.FEMALE, FaceShape.OVAL, EyeStyle.ALMOND, BrowStyle.ARCHED, HairStyle.WAVY, 0xFF7A5038, 0xFFF6D5C3, 0xFF8A5A2B, lip = 0xFFE8707E),
-        Look(Gender.FEMALE, FaceShape.OVAL, EyeStyle.ALMOND, BrowStyle.ARCHED, HairStyle.BUN, 0xFFD8D8E0, 0xFFFFEDE0, 0xFF9E9EA8, lip = 0xFFFF8FA3),
+        Look(Gender.FEMALE, FaceShape.OVAL, EyeStyle.ALMOND, BrowStyle.NATURAL, HairStyle.LONG, 0xFF4A3028, 0xFFF6D5C3, 0xFF6B4FD0),
+        Look(Gender.FEMALE, FaceShape.OVAL, EyeStyle.ROUND, BrowStyle.STRAIGHT, HairStyle.HUSH, 0xFF2B2430, 0xFFFBE0CC, 0xFF3E3A5A, lip = 0xFFE07A86),
+        Look(Gender.FEMALE, FaceShape.OVAL, EyeStyle.GENTLE, BrowStyle.NATURAL, HairStyle.BUILD, 0xFF6A4632, 0xFFF5D2B8, 0xFF8A5A2B, blush = true),
+        Look(Gender.FEMALE, FaceShape.ROUND, EyeStyle.ALMOND, BrowStyle.ARCHED, HairStyle.WAVY, 0xFFB08A64, 0xFFF6D5C3, 0xFF3E6FB8, lip = 0xFFE8707E),
+        Look(Gender.FEMALE, FaceShape.SHARP, EyeStyle.SHARP, BrowStyle.STRAIGHT, HairStyle.HIME, 0xFF151218, 0xFFF5C9A3, 0xFFE94B5A, lip = 0xFFD94F6A),
+        Look(Gender.FEMALE, FaceShape.ROUND, EyeStyle.ROUND, BrowStyle.NATURAL, HairStyle.BOB, 0xFF3B2A20, 0xFFFBE0CC, 0xFF3B2A20, blush = true),
+        Look(Gender.FEMALE, FaceShape.OVAL, EyeStyle.SHARP, BrowStyle.ARCHED, HairStyle.PIXIE, 0xFFD8C4A8, 0xFFFFEDE0, 0xFF6B4FD0, lip = 0xFFFF8FA3),
+        Look(Gender.FEMALE, FaceShape.OVAL, EyeStyle.GENTLE, BrowStyle.NATURAL, HairStyle.PONYTAIL, 0xFF8A3A2E, 0xFFE8B98F, 0xFF3F8F4E),
         Look(Gender.FEMALE, FaceShape.ROUND, EyeStyle.ROUND, BrowStyle.NATURAL, HairStyle.CURLY, 0xFF3B2A20, 0xFF8D5A3B, 0xFF8A5A2B, lip = 0xFFC97A7A),
-        Look(Gender.FEMALE, FaceShape.OVAL, EyeStyle.SHARP, BrowStyle.ARCHED, HairStyle.LONG, 0xFFFF7FC8, 0xFFFBE0CC, 0xFF6B4FD0, blush = true),
-        Look(Gender.FEMALE, FaceShape.ROUND, EyeStyle.ROUND, BrowStyle.NATURAL, HairStyle.SHORT, 0xFF5A3B22, 0xFFFBE0CC, 0xFF3B2A20, blush = true,
-            features = setOf(FaceFeature.FRECKLES)),
-        Look(Gender.FEMALE, FaceShape.OVAL, EyeStyle.GENTLE, BrowStyle.NATURAL, HairStyle.BOB, 0xFFF4F4F8, 0xFFF5C9A3, 0xFF9E9EA8,
+        Look(Gender.FEMALE, FaceShape.OVAL, EyeStyle.GENTLE, BrowStyle.NATURAL, HairStyle.BUN, 0xFFF4F4F8, 0xFFF5C9A3, 0xFF9E9EA8,
             features = setOf(FaceFeature.WRINKLES)),
     )
 
@@ -50,14 +49,13 @@ object Looks {
         Look(Gender.MALE, FaceShape.OVAL, EyeStyle.ALMOND, BrowStyle.NATURAL, HairStyle.COMMA, 0xFF2A2430, 0xFFF0CDB0, 0xFF3E3A5A, lip = LIP_M),
         Look(Gender.MALE, FaceShape.SQUARE, EyeStyle.SHARP, BrowStyle.THICK, HairStyle.SHORT, 0xFF2A2430, 0xFFE9C2A6, 0xFF3E6FB8, lip = LIP_M, body = BodyType.BROAD),
         Look(Gender.MALE, FaceShape.SHARP, EyeStyle.SHARP, BrowStyle.STRAIGHT, HairStyle.PARTED, 0xFF5A3B22, 0xFFF5D2B8, 0xFF8A5A2B, lip = LIP_M),
-        Look(Gender.MALE, FaceShape.OVAL, EyeStyle.ALMOND, BrowStyle.STRAIGHT, HairStyle.SPIKY, 0xFFD9A441, 0xFFF5C9A3, 0xFF2E9BDA, lip = LIP_M),
-        Look(Gender.MALE, FaceShape.SQUARE, EyeStyle.GENTLE, BrowStyle.THICK, HairStyle.SLICKED, 0xFF111111, 0xFFE0A985, 0xFF3B2A20, lip = LIP_M, body = BodyType.BROAD),
-        Look(Gender.MALE, FaceShape.SQUARE, EyeStyle.GENTLE, BrowStyle.THICK, HairStyle.BUZZ, 0xFF111111, 0xFF5C3A24, 0xFF3B2A20, lip = 0xFFA0525A, body = BodyType.BROAD),
+        Look(Gender.MALE, FaceShape.OVAL, EyeStyle.GENTLE, BrowStyle.NATURAL, HairStyle.CURTAIN, 0xFF3B2A20, 0xFFF5C9A3, 0xFF3B2A20, lip = LIP_M),
+        Look(Gender.MALE, FaceShape.OVAL, EyeStyle.ROUND, BrowStyle.NATURAL, HairStyle.LEAF, 0xFF8A6A50, 0xFFFBE0CC, 0xFF3E6FB8, lip = LIP_M),
+        Look(Gender.MALE, FaceShape.SQUARE, EyeStyle.ALMOND, BrowStyle.THICK, HairStyle.CROP, 0xFF111111, 0xFFE0A985, 0xFF3B2A20, lip = LIP_M, body = BodyType.BROAD),
+        Look(Gender.MALE, FaceShape.SHARP, EyeStyle.SHARP, BrowStyle.STRAIGHT, HairStyle.WOLF, 0xFFB8B8C4, 0xFFFBE0CC, 0xFFE94B5A, lip = LIP_M),
+        Look(Gender.MALE, FaceShape.SQUARE, EyeStyle.GENTLE, BrowStyle.THICK, HairStyle.SLICKED, 0xFF1E1A22, 0xFFE9C2A6, 0xFF3B2A20, lip = LIP_M, body = BodyType.BROAD),
         Look(Gender.MALE, FaceShape.ROUND, EyeStyle.ROUND, BrowStyle.NATURAL, HairStyle.CURLY, 0xFF7A4E2D, 0xFFC68A5E, 0xFF3F8F4E, lip = 0xFFA0525A),
-        Look(Gender.MALE, FaceShape.OVAL, EyeStyle.ROUND, BrowStyle.NATURAL, HairStyle.COMMA, 0xFFB8B8C4, 0xFFFBE0CC, 0xFFE94B5A, lip = LIP_M),
-        Look(Gender.MALE, FaceShape.OVAL, EyeStyle.GENTLE, BrowStyle.NATURAL, HairStyle.SHORT, 0xFF9E9EA8, 0xFFE8B98F, 0xFF8A5A2B, lip = LIP_M,
-            features = setOf(FaceFeature.WRINKLES, FaceFeature.MUSTACHE)),
-        Look(Gender.MALE, FaceShape.SQUARE, EyeStyle.ALMOND, BrowStyle.THICK, HairStyle.PARTED, 0xFF3B2A20, 0xFFE0A985, 0xFF3F8F4E, lip = LIP_M,
+        Look(Gender.MALE, FaceShape.SQUARE, EyeStyle.ALMOND, BrowStyle.THICK, HairStyle.BUZZ, 0xFF3B2A20, 0xFF5C3A24, 0xFF3F8F4E, lip = 0xFFA0525A,
             features = setOf(FaceFeature.BEARD), body = BodyType.BROAD),
     )
 
