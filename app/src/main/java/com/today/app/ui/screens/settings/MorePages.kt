@@ -457,3 +457,23 @@ fun AboutPage(vm: TodayViewModel, onBack: () -> Unit) {
         )
     }
 }
+
+/** How each feature works, one card per feature (Settings > User guide). */
+@Composable
+fun GuidePage(onBack: () -> Unit) {
+    val s = LocalStrings.current
+    SettingsSubPage(s.guideTitle, onBack) {
+        Text(s.guideIntro, color = TextMuted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 8.dp))
+        s.guideSections.forEach { (emoji, title, body) ->
+            SettingsGroup {
+                Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Text(emoji, fontSize = 24.sp)
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(title, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                        Text(body, color = TextMuted, fontSize = 13.sp, lineHeight = 19.sp)
+                    }
+                }
+            }
+        }
+    }
+}

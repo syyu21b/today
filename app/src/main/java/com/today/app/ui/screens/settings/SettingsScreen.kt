@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.TaskAlt
@@ -125,6 +126,7 @@ fun SettingsScreen(
             SettingsPage.ABOUT -> AboutPage(vm, back)
             SettingsPage.APPEARANCE -> AppearancePage(vm, back)
             SettingsPage.PRIVACY -> PrivacyPage(vm, back, onNavigate = { page = it })
+            SettingsPage.GUIDE -> GuidePage(back)
         }
     }
 }
@@ -187,6 +189,11 @@ private fun SettingsHome(vm: TodayViewModel, onOpenOutfit: () -> Unit, onNavigat
             )
         }
         SettingsGroup(s.groupMore) {
+            SettingsRow(
+                s.guideTitle, s.guideRowDesc, Icons.Filled.Lightbulb, Gold,
+                onClick = { onNavigate(SettingsPage.GUIDE) },
+            )
+            SettingsDivider()
             SettingsRow(
                 s.sectionData, s.dataSummary(vm.recordedDays, vm.totalQuests), Icons.Filled.Storage, Teal,
                 onClick = { onNavigate(SettingsPage.DATA) },

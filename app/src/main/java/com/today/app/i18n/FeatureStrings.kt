@@ -189,6 +189,13 @@ interface FeatureStrings {
     val secOutfitPresets: String
     val sleeveShort: String
     val sleeveLong: String
+
+    // Usage guide (Settings)
+    val guideTitle: String
+    val guideRowDesc: String
+    val guideIntro: String
+    /** One card per feature: emoji, title, how to use it. */
+    val guideSections: List<Triple<String, String, String>>
 }
 
 /** Picks 이/가, 을/를, 은/는, 와/과, (으)로 by whether [word] ends in a final consonant. */
@@ -485,6 +492,22 @@ object KoFeatureStrings : FeatureStrings {
     override val secOutfitPresets = "추천 코디"
     override val sleeveShort = "반팔"
     override val sleeveLong = "긴팔"
+
+    override val guideTitle = "사용 가이드"
+    override val guideRowDesc = "기능별 사용 방법"
+    override val guideIntro = "Today는 매일의 습관을 퀘스트로 만들고, 완료할 때마다 캐릭터와 펫이 함께 성장하는 습관 관리 앱이에요. 주요 기능을 이렇게 쓸 수 있어요."
+    override val guideSections = listOf(
+        Triple("✅", "퀘스트 (습관 관리)", "퀘스트 탭의 '퀘스트 추가'나 루틴 템플릿으로 할 일을 넣어요 (하루 최대 10개). 체크하거나 오른쪽으로 밀면 완료되어 XP를 얻고, 왼쪽으로 밀면 삭제해요. '순서 변경'으로 순서를 바꾸고, 반복 요일과 알림 시간도 정할 수 있어요."),
+        Triple("📅", "캘린더와 기록", "달력에서 날짜를 눌러 지난 기록이나 앞으로의 계획을 볼 수 있어요. 복사·붙여넣기로 다른 날의 퀘스트를 그대로 옮길 수 있어요."),
+        Triple("⭐", "레벨 · 연속 기록 · 보상", "XP가 쌓이면 레벨이 오르고, 매일 퀘스트를 완료하면 연속 기록(🔥)이 이어져요. 레벨업 보상으로 쉴드·액세서리·칭호·보상 상자를 받아요."),
+        Triple("🎯", "오늘의 미션 · 이벤트", "매일 바뀌는 미션 3개를 모두 끝내면 보상 상자를 받고, 기간 한정 이벤트에 참여할 수 있어요."),
+        Triple("🧑‍🎨", "캐릭터 꾸미기", "옷장 탭의 '캐릭터 꾸미기'에서 성별·얼굴·눈·헤어·메이크업·체형을 고르고 슬라이더로 세밀하게 조정해요. 마음에 드는 외형은 5개 슬롯에 저장할 수 있어요."),
+        Triple("📷", "사진으로 옷 입히기", "옷장 탭에서 전신 사진을 찍거나 고르면 머리·상의·하의·신발 색과 종류를 인식해 캐릭터에 입혀 줘요. 인터넷 없이 기기 안에서만 처리돼요."),
+        Triple("🐾", "펫 키우기", "퀘스트로 XP를 모으면 알이 부화하고 아기 → 어린이 → 어른으로 자라요. 펫을 누르면 쓰다듬을 수 있어요."),
+        Triple("💬", "메시지 · 친구", "친구와 메시지를 주고받고, 친구의 레벨과 캐릭터를 볼 수 있어요. 설정에서 친구를 추가하거나 차단할 수 있어요."),
+        Triple("📊", "통계", "통계 탭에서 완료율, 요일별 기록, 가장 꾸준한 습관을 한눈에 확인해요."),
+        Triple("💾", "백업과 위젯", "설정 > 데이터에서 백업 파일을 만들고, '백업 불러오기'로 다른 기기에서 이어서 쓸 수 있어요. 홈 화면 위젯으로 오늘의 진행 상황을 바로 볼 수 있어요."),
+    )
 }
 
 object EnFeatureStrings : FeatureStrings {
@@ -771,4 +794,20 @@ object EnFeatureStrings : FeatureStrings {
     override val secOutfitPresets = "Suggested outfits"
     override val sleeveShort = "Short sleeve"
     override val sleeveLong = "Long sleeve"
+
+    override val guideTitle = "User guide"
+    override val guideRowDesc = "How to use each feature"
+    override val guideIntro = "Today turns your daily habits into quests; every one you finish helps your character and pet grow. Here's how to use the main features."
+    override val guideSections = listOf(
+        Triple("✅", "Quests (habits)", "Add tasks on the Quests tab with 'Add quest' or a routine template (up to 10 a day). Check one off or swipe it right to finish it and earn XP; swipe left to delete. 'Reorder' changes the order, and you can set repeat days and reminder times."),
+        Triple("📅", "Calendar & history", "Tap a date on the calendar to see past records or plan ahead. Copy and paste moves a day's quests to another day."),
+        Triple("⭐", "Levels, streaks & rewards", "XP raises your level, and finishing your quests every day keeps your streak (🔥) going. Level-ups give shields, accessories, titles and reward boxes."),
+        Triple("🎯", "Daily missions & events", "Finish all three daily missions for a reward box and to take part in limited-time events."),
+        Triple("🧑‍🎨", "Character creator", "Open the character creator from the Wardrobe tab to pick gender, face, eyes, hair, makeup and body, and fine-tune them with sliders. Save up to 5 looks."),
+        Triple("📷", "Outfit from a photo", "Take or pick a full-body photo on the Wardrobe tab: hair, top, bottom and shoes are recognised and put on your character. It all runs on the device, offline."),
+        Triple("🐾", "Your pet", "XP from quests hatches the egg, and the pet grows from baby to child to adult. Tap it to pet it."),
+        Triple("💬", "Messages & friends", "Chat with friends and see their levels and characters. Add or block friends in Settings."),
+        Triple("📊", "Stats", "The Stats tab shows your completion rate, records by weekday and your most consistent habits."),
+        Triple("💾", "Backup & widget", "Settings > Data makes a backup file you can restore on another device. The home-screen widget shows today's progress at a glance."),
+    )
 }

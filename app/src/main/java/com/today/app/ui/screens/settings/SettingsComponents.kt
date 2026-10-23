@@ -48,7 +48,7 @@ import com.today.app.ui.theme.Ink
 import com.today.app.ui.theme.TextMuted
 
 /** Pages inside the Settings tab. */
-enum class SettingsPage { HOME, REWARDS, LANGUAGE, NOTIFICATIONS, FRIENDS, MESSAGES, QUESTS, DATA, ABOUT, APPEARANCE, PRIVACY }
+enum class SettingsPage { HOME, REWARDS, LANGUAGE, NOTIFICATIONS, FRIENDS, MESSAGES, QUESTS, DATA, ABOUT, APPEARANCE, PRIVACY, GUIDE }
 
 /** Scrolling detail page with a back arrow + title. */
 @Composable

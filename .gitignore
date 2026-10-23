@@ -13,3 +13,8 @@
 # Character art tool previews
 tools/character_art/*.png
 tools/character_art/__pycache__/
+
+# Release signing (keep a private backup; never commit)
+/keystore/
+/keystore.properties
+/release/
